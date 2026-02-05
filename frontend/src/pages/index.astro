@@ -166,6 +166,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
         }
       } catch (error) {
         console.error('[GardenApp] Failed to load garden:', error);
+        this.showNotification('Failed to load garden data. Please try again.', 'error');
       } finally {
         this.state.isLoading = false;
         // Delay UI update to ensure Custom Elements are fully defined and connected
