@@ -23,7 +23,7 @@ import type {
 } from '@chaos-garden/shared';
 import { queryFirst, queryAll, executeQuery, executeBatch } from './connection';
 import type { D1Database } from '../types/worker';
-import { countEntitiesByType } from '../simulation/helpers';
+import { countEntitiesByType } from '../simulation/environment/helpers';
 
 // ==========================================
 // Garden State Queries

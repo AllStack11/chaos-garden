@@ -17,10 +17,10 @@ import type { ApplicationLogger } from '../logging/application-logger';
 import {
   createTimestamp,
   countEntitiesByType
-} from './helpers';
+} from './environment/helpers';
 import { updateEnvironmentForNextTick } from './environment';
-import { processPlantBehaviorDuringTick, isPlantDead, getPlantCauseOfDeath } from './entities/plants';
-import { processHerbivoreBehaviorDuringTick, isHerbivoreDead, getHerbivoreCauseOfDeath } from './entities/herbivores';
+import { processPlantBehaviorDuringTick, isPlantDead, getPlantCauseOfDeath } from './creatures/plants';
+import { processHerbivoreBehaviorDuringTick, isHerbivoreDead, getHerbivoreCauseOfDeath } from './creatures/herbivores';
 import {
   getLatestGardenStateFromDatabase,
   saveGardenStateToDatabase,

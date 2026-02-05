@@ -20,8 +20,8 @@ import {
   moveEntityTowardTarget,
   calculateDistanceBetweenEntities,
   calculateMovementEnergyCost
-} from '../helpers';
-import { calculateTemperatureMetabolismMultiplier } from '../environment';
+} from '../environment/helpers';
+import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 
 // Constants
 const BASE_METABOLISM_COST = DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick;
@@ -39,13 +39,17 @@ export function createNewHerbivoreEntity(
   position: { x: number; y: number },
   gardenStateId: number,
   traits?: Partial<Traits>,
-  parentId: string = 'origin'
+  parentId: string = 'origin',
+  bornAtTick: number = 0
 ): Entity {
   const now = createTimestamp();
   
   return {
     id: generateEntityId(),
     gardenStateId,
+    bornAtTick,
+    deathTick: undefined,
+    isAlive: true,
     type: 'herbivore',
     species: 'Grazer',
     position: { ...position },
@@ -133,7 +137,7 @@ export function processHerbivoreBehaviorDuringTick(
   // 4. Reproduction
   if (herbivore.energy >= REPRODUCTION_THRESHOLD) {
     if (willRandomEventOccur(herbivore.traits.reproductionRate)) {
-      const child = attemptHerbivoreReproduction(herbivore, herbivore.gardenStateId, eventLogger);
+      const child = attemptHerbivoreReproduction(herbivore, herbivore.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
       }

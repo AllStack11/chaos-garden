@@ -14,10 +14,10 @@ import {
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
   generatePositionNearParent,
-  clampValueToRange,
-  calculateMoistureGrowthMultiplier
-} from '../helpers';
-import { calculateSunlightForTick } from '../environment';
+  clampValueToRange
+} from '../environment/helpers';
+import { calculateSunlightForTick } from '../environment/sunlight-calculator';
+import { calculateMoistureGrowthMultiplier } from '../environment/creature-effects';
 
 // Constants
 const BASE_PHOTOSYNTHESIS_RATE = DEFAULT_SIMULATION_CONFIG.basePhotosynthesisRate;
@@ -35,13 +35,17 @@ export function createNewPlantEntity(
   position: { x: number; y: number },
   gardenStateId: number,
   traits?: Partial<Traits>,
-  parentId: string = 'origin'
+  parentId: string = 'origin',
+  bornAtTick: number = 0
 ): Entity {
   const now = createTimestamp();
   
   return {
     id: generateEntityId(),
     gardenStateId,
+    bornAtTick,
+    deathTick: undefined,
+    isAlive: true,
     type: 'plant',
     species: 'Greenleaf',
     position: { ...position },
@@ -106,7 +110,7 @@ export function processPlantBehaviorDuringTick(
   // Reproduction
   if (doesPlantHaveEnoughEnergyToReproduce(plant)) {
     if (willRandomEventOccur(plant.traits.reproductionRate)) {
-      const child = attemptPlantReproduction(plant, plant.gardenStateId, eventLogger);
+      const child = attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
       }

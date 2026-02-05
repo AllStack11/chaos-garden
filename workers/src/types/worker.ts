@@ -11,9 +11,6 @@ import type {
   ApplicationLog,
   SimulationEvent,
   GardenResponse,
-  TickResponse,
-  InterventionRequest,
-  InterventionResponse,
   PopulationSummary
 } from '@chaos-garden/shared';
 
@@ -147,8 +144,5 @@ export type {
   ApplicationLog,
   SimulationEvent,
   GardenResponse,
-  TickResponse,
-  InterventionRequest,
-  InterventionResponse,
   PopulationSummary
 };

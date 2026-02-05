@@ -388,18 +388,3 @@ export function countEntitiesByType(entities: Entity[]): PopulationSummary {
   };
 }
 
-/**
- * Calculate the effect of moisture on plant growth.
- * Moisture affects photosynthesis efficiency.
- * 
- * @param moisture - Current moisture level
- * @returns Multiplier for photosynthesis (0.5 to 1.5)
- */
-export function calculateMoistureGrowthMultiplier(moisture: number): number {
-  // Plants grow best at 50% moisture
-  const optimalMoisture = 0.5;
-  const deviation = Math.abs(moisture - optimalMoisture);
-  
-  // Linear decrease from optimal: 1.5 at optimal, 0.5 at extremes
-  return clampValueToRange(1.5 - deviation, 0.5, 1.5);
-}
