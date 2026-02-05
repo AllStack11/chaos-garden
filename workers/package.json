@@ -1,0 +1,26 @@
+{
+  "name": "@chaos-garden/workers",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers backend for Chaos Garden simulation",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.local.toml --persist-to .wrangler/local-state",
+    "backend": "npm run dev",
+    "frontend": "echo '🎨 Workers: This script should be run from the root workspace' && exit 0",
+    "deploy": "wrangler deploy",
+    "db:init:local": "node scripts/init-local-db.js",
+    "tail": "wrangler tail",
+    "clean": "echo '🧹 Workers: No build artifacts to clean'",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chaos-garden/shared": "file:../shared",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20231218.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^4.62.0"
+  }
+}

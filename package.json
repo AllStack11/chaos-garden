@@ -1,0 +1,30 @@
+{
+  "name": "chaos-garden",
+  "version": "1.0.0",
+  "description": "A living digital ecosystem running on Cloudflare's edge network",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "workers",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"🌿 WORKERS,🎨 FRONTEND\" -c \"cyan,magenta\" \"npm run dev -w @chaos-garden/workers\" \"npm run dev -w @chaos-garden/frontend\"",
+    "backend": "npm run dev -w @chaos-garden/workers",
+    "frontend": "npm run dev -w @chaos-garden/frontend",
+    "db:init:local": "npm run db:init:local -w @chaos-garden/workers",
+    "type-check:all": "npm run type-check -w @chaos-garden/shared && npm run type-check -w @chaos-garden/workers && npm run type-check -w @chaos-garden/frontend",
+    "deploy:workers": "npm run deploy -w @chaos-garden/workers",
+    "deploy:frontend": "npm run deploy -w @chaos-garden/frontend",
+    "clean": "npm run clean -w @chaos-garden/workers && npm run clean -w @chaos-garden/frontend",
+    "prepare": "npm run type-check:all"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "concurrently": "^8.2.2",
+    "wrangler": "^4.62.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

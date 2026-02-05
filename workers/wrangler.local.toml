@@ -1,0 +1,67 @@
+# Cloudflare Workers Local Development Configuration for Chaos Garden
+# This configuration enables local development with D1 emulator
+# No Cloudflare account or internet connection required
+
+name = "chaos-garden-api-local"
+main = "src/index.ts"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# ==========================================
+# Local D1 Database Binding
+# ==========================================
+# Uses local SQLite emulator for development
+[[d1_databases]]
+binding = "DB"
+database_name = "chaos-garden-db"
+database_id = "local"  # Local emulator identifier
+preview_database_id = "DB" # Required for Pages local development
+
+# ==========================================
+# Cron Triggers (Disabled Locally)
+# ==========================================
+# Cron triggers don't run in local development
+# but we keep the configuration for reference
+[triggers]
+crons = []
+
+# ==========================================
+# Environment Variables for Local Development
+# ==========================================
+[vars]
+# Allow connections from Astro dev server (port 4321)
+CORS_ORIGIN = "http://localhost:4321"
+
+# ==========================================
+# Development Environment
+# ==========================================
+[env.dev]
+vars = { CORS_ORIGIN = "http://localhost:4321" }
+
+# ==========================================
+# Build Configuration
+# ==========================================
+[build]
+command = ""
+
+# ==========================================
+# TypeScript Path Mapping
+# ==========================================
+[alias]
+"@chaos-garden/shared" = "../shared/types.ts"
+
+# ==========================================
+# Local Development Settings
+# ==========================================
+[dev]
+ip = "localhost"
+port = 8787
+local_protocol = "http"
+upstream_protocol = "http"
+
+# ==========================================
+# Logging Configuration
+# ==========================================
+[log_level]
+name = "info"
+# For debugging, set to "debug"
