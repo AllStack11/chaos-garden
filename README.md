@@ -59,7 +59,8 @@ git clone https://github.com/your-username/chaos-garden.git
 cd chaos-garden
 npm install
 npm run db:init:local
-npm run dev
+npm run backend
+npm run frontend
 ```
 
 **Two windows open:**
