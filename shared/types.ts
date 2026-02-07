@@ -140,6 +140,18 @@ export interface PopulationSummary {
   totalDead: number;
 }
 
+export interface HealthStatus {
+  status: 'healthy' | 'unhealthy' | 'degraded';
+  timestamp: string;
+  gardenState: {
+    tick: number;
+    timestamp: string;
+  } | null;
+  config: {
+    tickIntervalMinutes: number;
+  };
+}
+
 /**
  * Snapshot of the world at a point in time.
  * Like a photograph of the ecosystem, preserving a moment in history.

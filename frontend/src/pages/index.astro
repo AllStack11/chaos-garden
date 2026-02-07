@@ -75,22 +75,33 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
               System Status
             </h2>
             <div class="space-y-4">
-              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg transition-colors duration-500" id="system-status-container">
                 <div class="flex items-center">
-                  <div class="w-3 h-3 rounded-full bg-green-500 animate-pulse mr-3"></div>
+                  <div id="system-status-dot" class="w-3 h-3 rounded-full bg-gray-400 mr-3"></div>
                   <div>
-                    <div class="font-medium text-gray-900">Simulation</div>
-                    <div class="text-sm text-gray-600">Running (Cron: 15m)</div>
+                    <div id="system-status-title" class="font-medium text-gray-900">Connecting...</div>
+                    <div id="system-status-subtitle" class="text-sm text-gray-600">Checking API health</div>
                   </div>
                 </div>
-                <span class="text-green-700 font-medium">Active</span>
+                <span id="system-status-label" class="text-gray-500 font-medium">Pending</span>
               </div>
+              
               <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div class="text-sm text-blue-700 font-medium mb-1">Last Update</div>
-                <div data-last-update class="text-lg font-bold text-blue-900">
+                <div class="text-sm text-blue-700 font-medium mb-1">Time Until Next Tick</div>
+                <div id="next-tick-countdown" class="text-2xl font-mono font-bold text-blue-900">
+                  --:--
+                </div>
+                <div class="text-xs text-blue-600 mt-1" id="last-tick-time">
+                  Waiting for data...
+                </div>
+              </div>
+
+              <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="text-sm text-gray-700 font-medium mb-1">Last Data Fetch</div>
+                <div data-last-update class="text-lg font-bold text-gray-900">
                   --:--:--
                 </div>
-                <div class="text-xs text-blue-600 mt-1">Auto-refresh: 30s</div>
+                <div class="text-xs text-gray-600 mt-1">Auto-refresh: 30s</div>
               </div>
             </div>
           </div>
@@ -101,24 +112,31 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
 </Layout>
 
 <script>
-  import type { GardenState, Entity, SimulationEvent } from '../env.d.ts';
+  import type { GardenState, Entity, SimulationEvent, HealthStatus } from '../env.d.ts';
   import { GardenService } from '../services/garden-service';
 
   class GardenApp extends HTMLElement {
     private gardenService: GardenService;
     private refreshInterval = 30000;
+    private healthInterval = 10000;
+    private countdownTimer: number | null = null;
+    
     private state: {
       gardenState: GardenState | null;
       entities: Entity[];
       selectedEntity: Entity | null;
       recentEvents: SimulationEvent[];
       isLoading: boolean;
+      health: HealthStatus | null;
+      lastTickTime: Date | null;
     } = {
       gardenState: null,
       entities: [],
       selectedEntity: null,
       recentEvents: [],
-      isLoading: true
+      isLoading: true,
+      health: null,
+      lastTickTime: null
     };
 
     constructor() {
@@ -133,7 +151,17 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
       console.log('[GardenApp] Connected to DOM');
       // Trigger load immediately
       this.loadGardenData();
+      this.checkHealth();
+      
       setInterval(() => this.loadGardenData(), this.refreshInterval);
+      setInterval(() => this.checkHealth(), this.healthInterval);
+      
+      // Start countdown timer (every second)
+      this.countdownTimer = window.setInterval(() => this.updateCountdown(), 1000);
+    }
+
+    disconnectedCallback() {
+      if (this.countdownTimer) clearInterval(this.countdownTimer);
     }
 
     private setupEventListeners() {
@@ -161,6 +189,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
           this.state.gardenState = data.gardenState;
           this.state.entities = data.entities;
           this.state.recentEvents = data.events;
+          
+          if (data.gardenState.timestamp) {
+            const newTickTime = new Date(data.gardenState.timestamp);
+            if (!this.state.lastTickTime || newTickTime > this.state.lastTickTime) {
+              this.state.lastTickTime = newTickTime;
+            }
+          }
         } else {
           console.warn('[GardenApp] No data returned from service');
         }
@@ -215,6 +250,123 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
       // Update Last Update Time
       const lastUpdate = this.querySelector('[data-last-update]') as HTMLElement;
       if (lastUpdate) lastUpdate.textContent = new Date().toLocaleTimeString();
+
+      this.updateStatusUI();
+    }
+
+    private async checkHealth() {
+      try {
+        const health = await this.gardenService.checkHealth();
+        this.state.health = health;
+        if (health?.gardenState?.timestamp) {
+           const newTickTime = new Date(health.gardenState.timestamp);
+           if (!this.state.lastTickTime || newTickTime > this.state.lastTickTime) {
+             this.state.lastTickTime = newTickTime;
+           }
+        }
+      } catch (error) {
+        console.error('[GardenApp] Health check failed:', error);
+        this.state.health = { 
+          status: 'unhealthy', 
+          timestamp: new Date().toISOString(),
+          gardenState: null,
+          config: { tickIntervalMinutes: 15 }
+        };
+      } finally {
+        this.updateStatusUI();
+      }
+    }
+
+    private updateStatusUI() {
+      const isHealthy = this.state.health?.status === 'healthy';
+      
+      // Update Header Status
+      const headerStatus = document.getElementById('header-status');
+      const headerDot = document.getElementById('header-status-dot');
+      const headerText = document.getElementById('header-status-text');
+
+      if (headerStatus && headerDot && headerText) {
+        headerStatus.classList.remove('hidden');
+        if (isHealthy) {
+          headerStatus.className = 'sm:flex items-center space-x-2 px-3 py-1.5 bg-green-50 rounded-full transition-colors duration-500';
+          headerDot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse';
+          headerText.className = 'text-sm font-medium text-green-800';
+          headerText.textContent = 'Live';
+        } else {
+          headerStatus.className = 'sm:flex items-center space-x-2 px-3 py-1.5 bg-red-50 rounded-full transition-colors duration-500';
+          headerDot.className = 'w-2 h-2 rounded-full bg-red-500';
+          headerText.className = 'text-sm font-medium text-red-800';
+          headerText.textContent = 'Disconnected';
+        }
+      }
+
+      // Update Sidebar Status
+      const container = document.getElementById('system-status-container');
+      const dot = document.getElementById('system-status-dot');
+      const title = document.getElementById('system-status-title');
+      const subtitle = document.getElementById('system-status-subtitle');
+      const label = document.getElementById('system-status-label');
+
+      if (container && dot && title && subtitle && label) {
+        if (isHealthy) {
+          container.className = 'flex items-center justify-between p-3 bg-green-50 rounded-lg transition-colors duration-500 border border-green-100';
+          dot.className = 'w-3 h-3 rounded-full bg-green-500 animate-pulse mr-3';
+          title.textContent = 'Simulation';
+          
+          const currentTick = this.state.health?.gardenState?.tick ?? this.state.gardenState?.tick;
+          subtitle.textContent = `Tick #${currentTick ?? '?'}`;
+          
+          label.className = 'text-green-700 font-medium';
+          label.textContent = 'Active';
+        } else {
+          container.className = 'flex items-center justify-between p-3 bg-red-50 rounded-lg transition-colors duration-500 border border-red-100';
+          dot.className = 'w-3 h-3 rounded-full bg-red-500 mr-3';
+          title.textContent = 'API Offline';
+          subtitle.textContent = 'Connection lost';
+          label.className = 'text-red-700 font-medium';
+          label.textContent = 'Error';
+        }
+      }
+
+      // Update Last Tick Text
+      const lastTickEl = document.getElementById('last-tick-time');
+      if (lastTickEl && this.state.lastTickTime) {
+        lastTickEl.textContent = `Last tick: ${this.state.lastTickTime.toLocaleTimeString()}`;
+      }
+    }
+
+    private updateCountdown() {
+      if (!this.state.lastTickTime) return;
+
+      const countdownEl = document.getElementById('next-tick-countdown');
+      if (!countdownEl) return;
+
+      const intervalMs = (this.state.health?.config?.tickIntervalMinutes || 15) * 60 * 1000;
+      const gracePeriodMs = 60000; // 1 minute grace period before showing "Evolving..."
+      
+      const now = new Date().getTime();
+      const lastTickMs = this.state.lastTickTime.getTime();
+      const nextTickMs = lastTickMs + intervalMs;
+      
+      let remainingMs = nextTickMs - now;
+      
+      if (remainingMs < -gracePeriodMs) {
+        countdownEl.textContent = "Evolving...";
+        countdownEl.classList.add('animate-pulse');
+        return;
+      }
+
+      countdownEl.classList.remove('animate-pulse');
+
+      if (remainingMs < 0) {
+        countdownEl.textContent = "00:00";
+        return;
+      }
+      
+      const minutes = Math.floor(remainingMs / 60000);
+      const seconds = Math.floor((remainingMs % 60000) / 1000);
+      
+      countdownEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
     private showNotification(message: string, type: 'success' | 'error' | 'info') {
@@ -235,4 +387,3 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
 
   customElements.define('garden-app', GardenApp);
 </script>
-

@@ -18,6 +18,7 @@ import {
   getRecentSimulationEventsFromDatabase,
   getAllLivingEntitiesFromDatabase,
 } from './db/queries';
+import type { HealthStatus } from '@chaos-garden/shared';
 
 // ==========================================
 // Environment Type Definition
@@ -142,18 +143,19 @@ async function handleGetHealth(env: Env): Promise<Response> {
     // Get latest state to check if system is operational
     const gardenState = await getLatestGardenStateFromDatabase(env.DB);
     
-    const health = {
+    const health: HealthStatus = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       gardenState: gardenState ? {
         tick: gardenState.tick,
-        timestamp: gardenState.timestamp,
-        population: gardenState.populationSummary
+        timestamp: gardenState.timestamp
       } : null,
-      uptime: 0 // Cloudflare Workers don't expose process.uptime
+      config: {
+        tickIntervalMinutes: 15 // Current standard
+      }
     };
     
-    await logger.debug('api_health', 'Health check performed', health);
+    await logger.debug('api_health', 'Health check performed', health as any);
     
     return createSuccessResponse(health);
     

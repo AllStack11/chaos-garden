@@ -95,9 +95,12 @@ const { title = 'Chaos Garden' } = Astro.props;
             
             <!-- Status indicator -->
             <div class="flex items-center space-x-3">
-              <div class="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-garden-green-50 rounded-full">
-                <div class="w-2 h-2 rounded-full bg-garden-green-500 animate-pulse-slow"></div>
-                <span class="text-sm font-medium text-garden-green-800">Live</span>
+              <div 
+                id="header-status"
+                class="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-full transition-colors duration-500"
+              >
+                <div id="header-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></div>
+                <span id="header-status-text" class="text-sm font-medium text-gray-600">Connecting...</span>
               </div>
             </div>
           </div>

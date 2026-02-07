@@ -5,7 +5,8 @@ import type {
   GardenState as SharedGardenState, 
   Entity as SharedEntity, 
   SimulationEvent as SharedSimulationEvent,
-  PopulationSummary as SharedPopulationSummary
+  PopulationSummary as SharedPopulationSummary,
+  HealthStatus as SharedHealthStatus
 } from '../../shared/types';
 
 /**
@@ -30,6 +31,7 @@ export type GardenState = SharedGardenState;
 export type Entity = SharedEntity;
 export type SimulationEvent = SharedSimulationEvent;
 export type PopulationSummary = SharedPopulationSummary;
+export type HealthStatus = SharedHealthStatus;
 
 export interface GardenResponse {
   success: boolean;
