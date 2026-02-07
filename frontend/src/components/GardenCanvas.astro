@@ -11,75 +11,25 @@ export interface Props {
 }
 
 const {
-  width = 800,
-  height = 600
+  width = 1920,
+  height = 1080
 } = Astro.props;
 ---
 
-<garden-canvas data-width={width} data-height={height}>
-  <div class="relative">
-    <canvas 
-      width={width}
-      height={height}
-      class="w-full h-auto rounded-xl border-2 border-garden-brown-300 shadow-lg bg-gradient-to-b from-garden-green-50 to-garden-green-100"
-    ></canvas>
-    
-    <!-- Overlay instructions -->
-    <div class="absolute top-4 left-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 text-sm pointer-events-none">
-      <div class="flex items-center space-x-2">
-        <span class="text-garden-green-600 font-medium">Canvas Controls:</span>
-        <span class="text-garden-brown-600">Click entities to select</span>
-      </div>
-    </div>
-    
-    <!-- Legend -->
-    <div class="absolute bottom-4 left-4 bg-white/80 backdrop-blur-sm rounded-lg p-3 text-sm pointer-events-none">
-      <div class="grid grid-cols-2 gap-2">
-        <div class="flex items-center space-x-2">
-          <div class="w-3 h-3 rounded-full bg-green-500"></div>
-          <span class="text-garden-brown-700">Plants</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-          <span class="text-garden-brown-700">Herbivores</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-3 h-3 rounded-full bg-red-500"></div>
-          <span class="text-garden-brown-700">Carnivores</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <div class="w-3 h-3 rounded-full bg-purple-500"></div>
-          <span class="text-garden-brown-700">Fungi</span>
-        </div>
-      </div>
-    </div>
-  </div>
+<garden-canvas data-width={width} data-height={height} class="block h-full w-full overflow-hidden">
+  <canvas 
+    class="h-full w-full cursor-crosshair transition-opacity duration-1000"
+  ></canvas>
 </garden-canvas>
 
 <script>
   import type { Entity } from '../env.d.ts';
 
-  const ENTITY_COLORS = {
-    plant: {
-      fill: '#22c55e',
-      stroke: '#15803d',
-      selected: '#16a34a'
-    },
-    herbivore: {
-      fill: '#f59e0b',
-      stroke: '#d97706',
-      selected: '#eab308'
-    },
-    carnivore: {
-      fill: '#ef4444',
-      stroke: '#b91c1c',
-      selected: '#dc2626'
-    },
-    fungus: {
-      fill: '#8b5cf6',
-      stroke: '#7c3aed',
-      selected: '#7c3aed'
-    }
+  const COLORS = {
+    plant: { h: 135, s: 40, l: 40 },      // Mossy Sage
+    herbivore: { h: 42, s: 60, l: 55 },    // Lichen Amber
+    carnivore: { h: 12, s: 50, l: 45 },    // Earthy Rust
+    fungus: { h: 280, s: 20, l: 65 }       // Pale Mushroom
   };
 
   class GardenCanvas extends HTMLElement {
@@ -87,6 +37,12 @@ const {
     private ctx: CanvasRenderingContext2D | null;
     private entities: Entity[] = [];
     private selectedEntity: Entity | null = null;
+    private mousePos = { x: 0, y: 0 };
+    private targetMousePos = { x: 0, y: 0 };
+    private animationId: number | null = null;
+    private simWidth = 800;
+    private simHeight = 600;
+    private spores: Array<{ x: number, y: number, vx: number, vy: number, size: number, opacity: number }> = [];
 
     constructor() {
       super();
@@ -94,10 +50,56 @@ const {
       this.ctx = this.canvas.getContext('2d');
       
       this.setupEventListeners();
+      this.handleResize();
+    }
+
+    connectedCallback() {
+      // Force initialization on connect to ensure rect is available
+      setTimeout(() => {
+        this.handleResize();
+        this.startAnimation();
+      }, 0);
+    }
+
+    disconnectedCallback() {
+      if (this.animationId) cancelAnimationFrame(this.animationId);
     }
 
     private setupEventListeners() {
+      window.addEventListener('resize', () => this.handleResize());
+      
+      this.canvas.addEventListener('mousemove', (e) => {
+        const rect = this.canvas.getBoundingClientRect();
+        this.targetMousePos.x = e.clientX - rect.left;
+        this.targetMousePos.y = e.clientY - rect.top;
+      });
+
       this.canvas.addEventListener('click', (event) => this.handleCanvasClick(event));
+    }
+
+    private handleResize() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = this.getBoundingClientRect();
+      this.canvas.width = rect.width * dpr;
+      this.canvas.height = rect.height * dpr;
+      if (this.ctx) this.ctx.scale(dpr, dpr);
+      this.initSpores();
+    }
+
+    private initSpores() {
+      const rect = this.getBoundingClientRect();
+      // Ensure we have a valid width/height before initializing
+      const width = rect.width || window.innerWidth;
+      const height = rect.height || window.innerHeight;
+      
+      this.spores = Array.from({ length: 60 }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.12,
+        vy: (Math.random() - 0.5) * 0.12,
+        size: Math.random() * 1.4 + 0.6,
+        opacity: Math.random() * 0.15 + 0.08 // Balanced visibility
+      }));
     }
 
     private handleCanvasClick(event: MouseEvent) {
@@ -105,12 +107,8 @@ const {
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       
-      const scaleX = this.canvas.width / rect.width;
-      const scaleY = this.canvas.height / rect.height;
-      const canvasX = x * scaleX;
-      const canvasY = y * scaleY;
-      
-      const clickedEntity = this.findEntityAtPosition(canvasX, canvasY);
+      const worldPos = this.screenToWorld(x, y);
+      const clickedEntity = this.findEntityAtPosition(worldPos.x, worldPos.y);
       
       this.dispatchEvent(new CustomEvent('entity-selected', {
         detail: clickedEntity,
@@ -118,9 +116,30 @@ const {
       }));
     }
 
+    private worldToScreen(x: number, y: number) {
+      const scale = Math.min(this.canvas.clientWidth / this.simWidth, this.canvas.clientHeight / this.simHeight) * 0.9;
+      const offsetX = (this.canvas.clientWidth - this.simWidth * scale) / 2;
+      const offsetY = (this.canvas.clientHeight - this.simHeight * scale) / 2;
+      return {
+        x: x * scale + offsetX,
+        y: y * scale + offsetY,
+        scale
+      };
+    }
+
+    private screenToWorld(x: number, y: number) {
+      const scale = Math.min(this.canvas.clientWidth / this.simWidth, this.canvas.clientHeight / this.simHeight) * 0.9;
+      const offsetX = (this.canvas.clientWidth - this.simWidth * scale) / 2;
+      const offsetY = (this.canvas.clientHeight - this.simHeight * scale) / 2;
+      return {
+        x: (x - offsetX) / scale,
+        y: (y - offsetY) / scale
+      };
+    }
+
     private findEntityAtPosition(x: number, y: number): Entity | null {
       for (const entity of this.entities) {
-        const radius = this.calculateEntitySize(entity.energy);
+        const radius = this.calculateEntitySize(entity.energy) + 5;
         const distance = Math.sqrt(
           Math.pow(x - entity.position.x, 2) + 
           Math.pow(y - entity.position.y, 2)
@@ -132,83 +151,152 @@ const {
     }
 
     private calculateEntitySize(energy: number): number {
-      const baseSize = 8;
-      const energyMultiplier = Math.max(0.5, energy / 50);
-      return baseSize * energyMultiplier;
+      return 4 + (energy / 20);
     }
 
     public updateState(entities: Entity[], selectedEntity: Entity | null) {
       this.entities = entities;
       this.selectedEntity = selectedEntity;
-      this.render();
+    }
+
+    public getEntityCanvasPosition(entity: Entity) {
+      return this.worldToScreen(entity.position.x, entity.position.y);
+    }
+
+    private startAnimation() {
+      const loop = () => {
+        this.update();
+        this.render();
+        this.animationId = requestAnimationFrame(loop);
+      };
+      this.animationId = requestAnimationFrame(loop);
+    }
+
+    private update() {
+      // Smooth mouse follow for parallax/bloom effects
+      this.mousePos.x += (this.targetMousePos.x - this.mousePos.x) * 0.05;
+      this.mousePos.y += (this.targetMousePos.y - this.mousePos.y) * 0.05;
+
+      const rect = this.getBoundingClientRect();
+      this.spores.forEach(s => {
+        s.x += s.vx;
+        s.y += s.vy;
+        if (s.x < 0) s.x = rect.width;
+        if (s.x > rect.width) s.x = 0;
+        if (s.y < 0) s.y = rect.height;
+        if (s.y > rect.height) s.y = 0;
+      });
     }
 
     private render() {
       if (!this.ctx) return;
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      this.drawGrid();
+      const { width, height } = this.canvas.getBoundingClientRect();
+      this.ctx.clearRect(0, 0, width, height);
+
+      this.drawAtmosphere(width, height);
+      this.drawSpores();
+
       this.entities.forEach(entity => this.drawEntity(entity));
-      if (this.selectedEntity) this.drawSelection(this.selectedEntity);
     }
 
-    private drawGrid() {
+    private drawAtmosphere(width: number, height: number) {
       if (!this.ctx) return;
-      this.ctx.strokeStyle = 'rgba(139, 92, 246, 0.05)';
-      this.ctx.lineWidth = 0.5;
-      for (let x = 0; x <= this.canvas.width; x += 50) {
+
+      // Parallax Background elements (Subtle "Roots" or "Veins")
+      const px = (this.mousePos.x / width - 0.5) * 20;
+      const py = (this.mousePos.y / height - 0.5) * 20;
+
+      this.ctx.save();
+      this.ctx.translate(px, py);
+      this.ctx.strokeStyle = 'rgba(210, 230, 150, 0.02)';
+      this.ctx.lineWidth = 1;
+      
+      // Draw very faint network pattern
+      for (let i = 0; i < 5; i++) {
         this.ctx.beginPath();
-        this.ctx.moveTo(x, 0);
-        this.ctx.lineTo(x, this.canvas.height);
+        this.ctx.moveTo(0, height * 0.2 * i);
+        this.ctx.bezierCurveTo(width * 0.3, height * 0.5, width * 0.7, height * 0.1, width, height * 0.8 * i);
         this.ctx.stroke();
       }
-      for (let y = 0; y <= this.canvas.height; y += 50) {
-        this.ctx.beginPath();
-        this.ctx.moveTo(0, y);
-        this.ctx.lineTo(this.canvas.width, y);
-        this.ctx.stroke();
-      }
+      this.ctx.restore();
+
+      // Warm Sunlight Dappling (follows mouse smoothly)
+      const gradient = this.ctx.createRadialGradient(
+        this.mousePos.x, this.mousePos.y, 0,
+        this.mousePos.x, this.mousePos.y, 500
+      );
+      gradient.addColorStop(0, 'rgba(210, 230, 150, 0.07)'); 
+      gradient.addColorStop(1, 'rgba(210, 230, 150, 0)');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, width, height);
+    }
+
+    private drawSpores() {
+      if (!this.ctx) return;
+      this.spores.forEach(s => {
+        // Core Mote
+        this.ctx!.beginPath();
+        this.ctx!.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        this.ctx!.fillStyle = `rgba(220, 240, 160, ${s.opacity})`; // Slightly brighter
+        this.ctx!.fill();
+        
+        // Balanced Spore Glow
+        const glow = this.ctx!.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size * 5);
+        glow.addColorStop(0, `rgba(220, 240, 160, ${s.opacity * 0.4})`);
+        glow.addColorStop(1, 'rgba(220, 240, 160, 0)');
+        this.ctx!.fillStyle = glow;
+        this.ctx!.beginPath();
+        this.ctx!.arc(s.x, s.y, s.size * 5, 0, Math.PI * 2);
+        this.ctx!.fill();
+      });
     }
 
     private drawEntity(entity: Entity) {
       if (!this.ctx) return;
       const { type, position, energy, health } = entity;
-      const colors = ENTITY_COLORS[type as keyof typeof ENTITY_COLORS] || ENTITY_COLORS.plant;
       const isSelected = this.selectedEntity && this.selectedEntity.id === entity.id;
-      const radius = this.calculateEntitySize(energy);
-      const { x, y } = position;
-
-      this.ctx.beginPath();
-      this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-      this.ctx.fillStyle = isSelected ? colors.selected : colors.fill;
-      this.ctx.fill();
-      this.ctx.strokeStyle = colors.stroke;
-      this.ctx.lineWidth = Math.max(1, health / 25);
-      this.ctx.stroke();
-
-      if (isSelected) {
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
-        this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
-      }
-    }
-
-    private drawSelection(entity: Entity) {
-      if (!this.ctx) return;
-      const { position } = entity;
-      const radius = this.calculateEntitySize(entity.energy) + 8;
-      const time = Date.now() / 1000;
-      const pulse = (Math.sin(time * 3) + 1) / 2;
-
-      this.ctx.beginPath();
-      this.ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
-      this.ctx.strokeStyle = `rgba(59, 130, 246, ${0.3 + pulse * 0.4})`;
-      this.ctx.lineWidth = 3;
-      this.ctx.stroke();
+      const { x, y, scale } = this.worldToScreen(position.x, position.y);
+      const radius = this.calculateEntitySize(energy) * scale;
+      const color = COLORS[type as keyof typeof COLORS] || COLORS.plant;
       
-      // Request animation frame for pulsing effect if something is selected
-      requestAnimationFrame(() => this.render());
+      const time = Date.now() / 1000;
+      const sway = Math.sin(time + position.x) * 2;
+      const healthFactor = health / 100;
+
+      // Glow Layer
+      if (health > 50) {
+        this.ctx.beginPath();
+        this.ctx.arc(x + sway, y, radius * 2.5, 0, Math.PI * 2);
+        const glow = this.ctx.createRadialGradient(x + sway, y, 0, x + sway, y, radius * 2.5);
+        glow.addColorStop(0, `hsla(${color.h}, ${color.s}%, ${color.l}%, ${0.1 * healthFactor})`);
+        glow.addColorStop(1, 'transparent');
+        this.ctx.fillStyle = glow;
+        this.ctx.fill();
+      }
+
+      // Core Body
+      this.ctx.beginPath();
+      this.ctx.arc(x + sway, y, radius, 0, Math.PI * 2);
+      
+      // Dynamic Lighting based on mouse
+      const dx = this.mousePos.x - x;
+      const dy = this.mousePos.y - y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const lightIntense = Math.max(0, 1 - dist / 400);
+
+      this.ctx.fillStyle = `hsla(${color.h}, ${color.s - (1-healthFactor)*30}%, ${color.l + lightIntense * 15}%, ${0.7 + lightIntense * 0.3})`;
+      this.ctx.fill();
+
+      // Selection Ring
+      if (isSelected) {
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.lineWidth = 1;
+        this.ctx.setLineDash([2, 2]);
+        this.ctx.beginPath();
+        this.ctx.arc(x + sway, y, radius + 6, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+      }
     }
   }
 

@@ -55,97 +55,22 @@ const { title = 'Chaos Garden' } = Astro.props;
     </style>
   </head>
   
-  <body class="min-h-screen bg-gradient-to-br from-garden-brown-50 via-garden-green-50 to-garden-blue-50 font-sans text-gray-800">
+  <body class="overflow-hidden bg-[#0a140a] font-sans text-gray-100 antialiased selection:bg-garden-green-500/30 selection:text-white">
     <!-- Main container -->
-    <div class="min-h-screen flex flex-col">
-      <!-- Header -->
-      <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-sm border-b border-garden-brown-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div class="flex items-center justify-between">
-            <!-- Logo and title -->
-            <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 rounded-full bg-gradient-to-br from-garden-green-400 to-garden-green-600 flex items-center justify-center">
-                <span class="text-white text-xl">🌿</span>
-              </div>
-              <div>
-                <h1 class="text-2xl font-bold text-garden-green-900">
-                  Chaos Garden
-                </h1>
-                <p class="text-sm text-garden-brown-600 font-mono">
-                  A living digital ecosystem
-                </p>
-              </div>
-            </div>
-            
-            <!-- Navigation -->
-            <nav class="hidden md:flex items-center space-x-6">
-              <a href="/" class="text-garden-brown-700 hover:text-garden-green-600 font-medium transition-colors">
-                Garden
-              </a>
-              <a href="#" class="text-garden-brown-700 hover:text-garden-green-600 font-medium transition-colors">
-                Stats
-              </a>
-              <a href="#" class="text-garden-brown-700 hover:text-garden-green-600 font-medium transition-colors">
-                Events
-              </a>
-              <a href="#" class="text-garden-brown-700 hover:text-garden-green-600 font-medium transition-colors">
-                Guide
-              </a>
-            </nav>
-            
-            <!-- Status indicator -->
-            <div class="flex items-center space-x-3">
-              <div 
-                id="header-status"
-                class="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-full transition-colors duration-500"
-              >
-                <div id="header-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></div>
-                <span id="header-status-text" class="text-sm font-medium text-gray-600">Connecting...</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div class="relative h-screen w-screen overflow-hidden">
+      <!-- Ambient Noise Overlay -->
+      <div class="pointer-events-none fixed inset-0 z-[9999] opacity-[0.04] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
       
+      <!-- Background Atmosphere (Lush Forest) -->
+      <div class="fixed inset-0 z-0 bg-gradient-to-tr from-[#0a1a0a] via-[#0f1f0f] to-[#1a140f]"></div>
+      
+      <!-- Subtle Vignette -->
+      <div class="pointer-events-none fixed inset-0 z-[5] bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]"></div>
+
       <!-- Main content -->
-      <main class="flex-1">
+      <main class="relative z-10 h-full w-full">
         <slot />
       </main>
-      
-      <!-- Footer -->
-      <footer class="bg-white/60 border-t border-garden-brown-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div class="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
-            <div class="text-center md:text-left">
-              <p class="text-garden-brown-600 font-medium">
-                Chaos Garden v1.0.0
-              </p>
-              <p class="text-sm text-garden-brown-500">
-                A passion project teaching backend development through emergent systems
-              </p>
-            </div>
-            
-            <div class="flex items-center space-x-4">
-              <a href="#" class="text-garden-brown-500 hover:text-garden-green-600 transition-colors text-sm">
-                GitHub
-              </a>
-              <a href="#" class="text-garden-brown-500 hover:text-garden-green-600 transition-colors text-sm">
-                Documentation
-              </a>
-              <a href="#" class="text-garden-brown-500 hover:text-garden-green-600 transition-colors text-sm">
-                API Reference
-              </a>
-            </div>
-          </div>
-          
-          <div class="mt-6 pt-6 border-t border-garden-brown-200 text-center">
-            <p class="text-xs text-garden-brown-400">
-              🌿 This garden runs on Cloudflare's edge network and evolves every 15 minutes.
-              Witness the emergence of life from simple rules.
-            </p>
-          </div>
-        </div>
-      </footer>
     </div>
     
     <!-- Global scripts (non-Astro) -->
