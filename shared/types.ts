@@ -24,16 +24,53 @@ export interface Position {
 // ==========================================
 
 /**
- * Genetic traits that define an entity's behavior and can mutate across generations.
- * These are the building blocks of evolution in our ecosystem.
+ * Core traits shared by all entities.
  */
-export interface Traits {
+export interface BaseTraits {
   reproductionRate: number;     // 0-1, probability per tick
-  movementSpeed: number;        // pixels per tick (0 for plants)
   metabolismEfficiency: number; // energy conversion rate (0.5-1.5)
+}
+
+/**
+ * Traits specific to plants.
+ */
+export interface PlantTraits extends BaseTraits {
   photosynthesisRate: number;   // plants only (0.5-1.5)
+}
+
+/**
+ * Traits specific to herbivores.
+ */
+export interface HerbivoreTraits extends BaseTraits {
+  movementSpeed: number;        // pixels per tick
   perceptionRadius: number;     // detection range for food/predators (pixels)
 }
+
+/**
+ * Traits specific to carnivores.
+ */
+export interface CarnivoreTraits extends BaseTraits {
+  movementSpeed: number;        // pixels per tick
+  perceptionRadius: number;     // detection range for prey (pixels)
+}
+
+/**
+ * Traits specific to fungi.
+ */
+export interface FungusTraits extends BaseTraits {
+  decompositionRate: number;    // fungi only - how quickly they break down matter (0.5-1.5)
+  perceptionRadius: number;     // detection range for dead matter (pixels)
+}
+
+/**
+ * Discriminated union of all possible entity traits.
+ * This ensures that each entity type only carries traits relevant to its biology.
+ */
+export type Traits = 
+  | ({ type: 'plant' } & PlantTraits)
+  | ({ type: 'herbivore' } & HerbivoreTraits)
+  | ({ type: 'carnivore' } & CarnivoreTraits)
+  | ({ type: 'fungus' } & FungusTraits);
 
 // ==========================================
 // Entity Types - The Living Organisms
@@ -42,29 +79,29 @@ export interface Traits {
 /**
  * Entity type discriminator - the kingdom of life each entity belongs to.
  */
-export type EntityType = 'plant' | 'herbivore' | 'carnivore' | 'fungus';
+export type EntityType = Traits['type'];
 
 /**
  * The living organisms in our ecosystem.
  * Each entity carries its genetic code, state, and history.
+ * 
+ * Using a generic T allows for stricter type checking when the entity type is known.
  */
-export interface Entity {
+export type Entity = {
   id: string;                   // UUID - unique identifier
   gardenStateId?: number;       // Optional FK to garden state snapshot (born at)
   bornAtTick: number;           // The tick this entity was born
   deathTick?: number;           // The tick this entity died
   isAlive: boolean;             // Whether the entity is currently living
-  type: EntityType;             // kingdom of life
   species: string;              // Display name, can evolve through mutations
   position: Position;           // spatial location
   energy: number;               // 0-100, dies at 0 (life force)
   health: number;               // 0-100, dies at 0 (physical condition)
   age: number;                  // ticks lived (time experienced)
-  traits: Traits;               // genetic blueprint
   lineage: string | 'origin';   // parent ID or 'origin' for first generation
   createdAt: string;            // ISO timestamp - birth moment
   updatedAt: string;            // ISO timestamp - last update
-}
+} & Traits;
 
 // ==========================================
 // Environment Types
@@ -325,11 +362,7 @@ export interface EntityRow {
   energy: number;
   health: number;
   age: number;
-  traits_reproduction_rate: number;
-  traits_movement_speed: number;
-  traits_metabolism_efficiency: number;
-  traits_photosynthesis_rate: number;
-  traits_perception_radius: number;
+  traits: string; // JSON string
   lineage: string;
   created_at: string;
   updated_at: string;

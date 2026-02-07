@@ -21,6 +21,7 @@ import {
 import { updateEnvironmentForNextTick } from './environment';
 import { processPlantBehaviorDuringTick, isPlantDead, getPlantCauseOfDeath } from './creatures/plants';
 import { processHerbivoreBehaviorDuringTick, isHerbivoreDead, getHerbivoreCauseOfDeath } from './creatures/herbivores';
+import { processFungusBehaviorDuringTick, isFungusDead, getFungusCauseOfDeath } from './creatures/fungi';
 import {
   getLatestGardenStateFromDatabase,
   saveGardenStateToDatabase,
@@ -203,7 +204,8 @@ export async function runSimulationTick(
 
 /**
  * Process all entities for one tick.
- * Order matters: plants first (create energy), then herbivores (consume plants).
+ * Order matters: plants first (create energy), then herbivores (consume plants),
+ * then fungi (decompose dead matter).
  */
 async function processEntitiesForTick(
   entities: Entity[],
@@ -213,13 +215,16 @@ async function processEntitiesForTick(
 ): Promise<{
   newEntities: Entity[];
   consumedPlantIds: string[];
+  decomposedEntityIds: string[];
 }> {
   const newEntities: Entity[] = [];
   const consumedPlantIds: string[] = [];
+  const decomposedEntityIds: string[] = [];
   
   // Separate entities by type
   const plants = entities.filter(e => e.type === 'plant');
   const herbivores = entities.filter(e => e.type === 'herbivore');
+  const fungi = entities.filter(e => e.type === 'fungus');
   
   // Process plants first (they create energy)
   for (const plant of plants) {
@@ -264,7 +269,29 @@ async function processEntitiesForTick(
     }
   }
   
-  return { newEntities, consumedPlantIds };
+  // Process fungi (they decompose dead matter)
+  for (const fungus of fungi) {
+    const result = processFungusBehaviorDuringTick(fungus, environment, entities, eventLogger);
+    // Link offspring to parent for lineage
+    for (const child of result.offspring) {
+      child.lineage = fungus.id;
+    }
+    newEntities.push(...result.offspring);
+    decomposedEntityIds.push(...result.decomposed);
+    
+    // Log fungus death if applicable
+    if (isFungusDead(fungus)) {
+      await appLogger.debug('fungus_death', `Fungus ${fungus.id.substring(0, 8)} died`, {
+        fungusId: fungus.id,
+        age: fungus.age,
+        energy: fungus.energy,
+        health: fungus.health,
+        cause: getFungusCauseOfDeath(fungus)
+      });
+    }
+  }
+  
+  return { newEntities, consumedPlantIds, decomposedEntityIds };
 }
 
 /**
@@ -274,6 +301,7 @@ function filterDeadEntities(entities: Entity[]): Entity[] {
   return entities.filter(entity => {
     if (entity.type === 'plant') return isPlantDead(entity);
     if (entity.type === 'herbivore') return isHerbivoreDead(entity);
+    if (entity.type === 'fungus') return isFungusDead(entity);
     return false; // Future types will be added here
   });
 }

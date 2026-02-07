@@ -5,7 +5,7 @@
  * that convert sunlight into energy through photosynthesis.
  */
 
-import type { Entity, Environment, Traits } from '@chaos-garden/shared';
+import type { Entity, Environment, Traits, PlantTraits } from '@chaos-garden/shared';
 import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import type { EventLogger } from '../../logging/event-logger';
 import {
@@ -34,7 +34,7 @@ const SEED_SPREAD_RADIUS = 30;
 export function createNewPlantEntity(
   position: { x: number; y: number },
   gardenStateId: number,
-  traits?: Partial<Traits>,
+  traits?: Partial<PlantTraits>,
   parentId: string = 'origin',
   bornAtTick: number = 0
 ): Entity {
@@ -47,18 +47,14 @@ export function createNewPlantEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'plant',
-    species: 'Greenleaf',
+    species: 'Flora',
     position: { ...position },
     energy: 50,
     health: 100,
     age: 0,
-    traits: {
-      reproductionRate: traits?.reproductionRate ?? 0.05,
-      movementSpeed: 0,
-      metabolismEfficiency: traits?.metabolismEfficiency ?? 1.0,
-      photosynthesisRate: traits?.photosynthesisRate ?? 1.0,
-      perceptionRadius: traits?.perceptionRadius ?? 0
-    },
+    reproductionRate: traits?.reproductionRate ?? 0.05,
+    metabolismEfficiency: traits?.metabolismEfficiency ?? 1.0,
+    photosynthesisRate: traits?.photosynthesisRate ?? 1.0,
     lineage: parentId,
     createdAt: now,
     updatedAt: now
@@ -93,6 +89,7 @@ export function processPlantBehaviorDuringTick(
   environment: Environment,
   eventLogger: EventLogger
 ): Entity[] {
+  if (plant.type !== 'plant') return [];
   const offspring: Entity[] = [];
   
   // Photosynthesis
@@ -109,7 +106,7 @@ export function processPlantBehaviorDuringTick(
   
   // Reproduction
   if (doesPlantHaveEnoughEnergyToReproduce(plant)) {
-    if (willRandomEventOccur(plant.traits.reproductionRate)) {
+    if (willRandomEventOccur(plant.reproductionRate)) {
       const child = attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
@@ -141,8 +138,9 @@ export function calculatePlantEnergyGainFromPhotosynthesis(
   plant: Entity,
   environment: Environment
 ): number {
+  if (plant.type !== 'plant') return 0;
   const sunlight = calculateSunlightForTick(environment.tick);
-  const plantEfficiency = plant.traits.photosynthesisRate;
+  const plantEfficiency = plant.photosynthesisRate;
   const moistureMultiplier = calculateMoistureGrowthMultiplier(environment.moisture);
   
   return BASE_PHOTOSYNTHESIS_RATE * sunlight * plantEfficiency * moistureMultiplier;
@@ -163,10 +161,11 @@ export function attemptPlantReproduction(
   gardenStateId: number,
   eventLogger: EventLogger
 ): Entity | null {
+  if (parent.type !== 'plant') return null;
   parent.energy -= REPRODUCTION_COST;
   
   const childPosition = generatePositionNearParent(parent.position, SEED_SPREAD_RADIUS);
-  const childTraits = copyTraitsWithPossibleMutations(parent.traits);
+  const childTraits = copyTraitsWithPossibleMutations(parent);
   
   const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id);
   
@@ -184,16 +183,17 @@ function checkAndLogMutations(
   child: Entity,
   eventLogger: EventLogger
 ): void {
-  const traits: (keyof typeof parent.traits)[] = [
+  if (parent.type !== 'plant' || child.type !== 'plant') return;
+
+  const traits = [
     'reproductionRate',
     'metabolismEfficiency',
-    'photosynthesisRate',
-    'perceptionRadius'
-  ];
+    'photosynthesisRate'
+  ] as const;
   
   for (const trait of traits) {
-    const oldValue = parent.traits[trait];
-    const newValue = child.traits[trait];
+    const oldValue = parent[trait];
+    const newValue = child[trait];
     
     if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
       eventLogger.logMutation(child, trait, oldValue, newValue);

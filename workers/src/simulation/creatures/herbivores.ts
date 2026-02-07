@@ -6,7 +6,7 @@
  * converting plant energy into animal energy.
  */
 
-import type { Entity, Environment, Traits } from '@chaos-garden/shared';
+import type { Entity, Environment, Traits, HerbivoreTraits } from '@chaos-garden/shared';
 import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import type { EventLogger } from '../../logging/event-logger';
 import {
@@ -38,7 +38,7 @@ const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
 export function createNewHerbivoreEntity(
   position: { x: number; y: number },
   gardenStateId: number,
-  traits?: Partial<Traits>,
+  traits?: Partial<HerbivoreTraits>,
   parentId: string = 'origin',
   bornAtTick: number = 0
 ): Entity {
@@ -51,18 +51,15 @@ export function createNewHerbivoreEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'herbivore',
-    species: 'Grazer',
+    species: 'Grazers',
     position: { ...position },
-    energy: 60, // Start with good energy
+    energy: 60,
     health: 100,
     age: 0,
-    traits: {
-      reproductionRate: traits?.reproductionRate ?? 0.03,
-      movementSpeed: traits?.movementSpeed ?? 3, // Herbivores move
-      metabolismEfficiency: traits?.metabolismEfficiency ?? 1.0,
-      photosynthesisRate: 0, // Animals don't photosynthesize
-      perceptionRadius: traits?.perceptionRadius ?? 100 // Can see plants from far
-    },
+    reproductionRate: traits?.reproductionRate ?? 0.03,
+    movementSpeed: traits?.movementSpeed ?? 2.0,
+    metabolismEfficiency: traits?.metabolismEfficiency ?? 1.0,
+    perceptionRadius: traits?.perceptionRadius ?? 100,
     lineage: parentId,
     createdAt: now,
     updatedAt: now
@@ -99,6 +96,7 @@ export function processHerbivoreBehaviorDuringTick(
   allEntities: Entity[],
   eventLogger: EventLogger
 ): { offspring: Entity[]; consumed: string[] } {
+  if (herbivore.type !== 'herbivore') return { offspring: [], consumed: [] };
   const offspring: Entity[] = [];
   const consumed: string[] = [];
   
@@ -120,8 +118,8 @@ export function processHerbivoreBehaviorDuringTick(
       
       // Pay movement cost
       const movementCost = calculateMovementEnergyCost(
-        herbivore.traits.movementSpeed,
-        herbivore.traits.metabolismEfficiency
+        herbivore.movementSpeed,
+        herbivore.metabolismEfficiency
       );
       herbivore.energy -= movementCost;
     }
@@ -136,7 +134,7 @@ export function processHerbivoreBehaviorDuringTick(
   
   // 4. Reproduction
   if (herbivore.energy >= REPRODUCTION_THRESHOLD) {
-    if (willRandomEventOccur(herbivore.traits.reproductionRate)) {
+    if (willRandomEventOccur(herbivore.reproductionRate)) {
       const child = attemptHerbivoreReproduction(herbivore, herbivore.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
@@ -180,10 +178,11 @@ function attemptHerbivoreReproduction(
   gardenStateId: number,
   eventLogger: EventLogger
 ): Entity | null {
+  if (parent.type !== 'herbivore') return null;
   parent.energy -= REPRODUCTION_COST;
   
   const childPosition = generatePositionNearParent(parent.position, 20);
-  const childTraits = copyTraitsWithPossibleMutations(parent.traits);
+  const childTraits = copyTraitsWithPossibleMutations(parent);
   
   const child = createNewHerbivoreEntity(childPosition, gardenStateId, childTraits, parent.id);
   
@@ -201,6 +200,8 @@ function checkAndLogMutations(
   child: Entity,
   eventLogger: EventLogger
 ): void {
+  if (parent.type !== 'herbivore' || child.type !== 'herbivore') return;
+
   const traits = [
     'reproductionRate',
     'movementSpeed',
@@ -209,8 +210,8 @@ function checkAndLogMutations(
   ] as const;
   
   for (const trait of traits) {
-    const oldValue = parent.traits[trait];
-    const newValue = child.traits[trait];
+    const oldValue = parent[trait];
+    const newValue = child[trait];
     
     if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
       eventLogger.logMutation(child, trait, oldValue, newValue);

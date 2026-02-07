@@ -10,7 +10,18 @@
  * reliable building blocks for emergent behavior.
  */
 
-import type { Position, Entity, Traits, SimulationConfig, PopulationSummary } from '@chaos-garden/shared';
+import type { 
+  Position, 
+  Entity, 
+  Traits, 
+  SimulationConfig, 
+  PopulationSummary,
+  BaseTraits,
+  PlantTraits,
+  HerbivoreTraits,
+  CarnivoreTraits,
+  FungusTraits
+} from '@chaos-garden/shared';
 import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 
 // Re-export config for convenience
@@ -161,29 +172,63 @@ export function applyRandomMutationToTrait(
 }
 
 /**
- * Copy traits with potential mutations.
- * Creates a new traits object, possibly modified from parent.
- * 
- * @param parentTraits - Parent's genetic traits
- * @param mutationProbability - Chance of each trait mutating (default: 0.1)
- * @returns New traits object (possibly mutated)
+ * Extract traits from an entity.
  */
-export function copyTraitsWithPossibleMutations(
-  parentTraits: Traits,
-  mutationProbability: number = DEFAULT_SIMULATION_CONFIG.mutationProbability
-): Traits {
-  const mutate = (value: number) => 
-    willRandomEventOccur(mutationProbability) 
-      ? applyRandomMutationToTrait(value) 
-      : value;
-  
-  return {
-    reproductionRate: clampValueToRange(mutate(parentTraits.reproductionRate), 0, 1),
-    movementSpeed: Math.max(0, mutate(parentTraits.movementSpeed)),
-    metabolismEfficiency: clampValueToRange(mutate(parentTraits.metabolismEfficiency), 0.5, 1.5),
-    photosynthesisRate: clampValueToRange(mutate(parentTraits.photosynthesisRate), 0.5, 1.5),
-    perceptionRadius: Math.max(0, mutate(parentTraits.perceptionRadius))
+export function extractTraits<T extends Entity>(entity: T): 
+  T extends { type: 'plant' } ? PlantTraits :
+  T extends { type: 'herbivore' } ? HerbivoreTraits :
+  T extends { type: 'carnivore' } ? CarnivoreTraits :
+  T extends { type: 'fungus' } ? FungusTraits : BaseTraits {
+  const traitKeysMap: Record<string, string[]> = {
+    plant: ['reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
+    herbivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
+    carnivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
+    fungus: ['reproductionRate', 'metabolismEfficiency', 'decompositionRate', 'perceptionRadius']
   };
+
+  const keys = traitKeysMap[entity.type] || ['reproductionRate', 'metabolismEfficiency'];
+  const traits: any = {};
+  for (const key of keys) {
+    traits[key] = (entity as any)[key];
+  }
+  return traits;
+}
+
+/**
+ * Create a new copy of traits with potential random mutations.
+ */
+export function copyTraitsWithPossibleMutations<T extends Entity>(
+  entity: T
+): T extends { type: 'plant' } ? PlantTraits :
+   T extends { type: 'herbivore' } ? HerbivoreTraits :
+   T extends { type: 'carnivore' } ? CarnivoreTraits :
+   T extends { type: 'fungus' } ? FungusTraits : BaseTraits {
+  const mutationProbability = DEFAULT_SIMULATION_CONFIG.mutationProbability;
+  const mutationRange = DEFAULT_SIMULATION_CONFIG.mutationRange;
+  
+  // Define which keys are traits for each entity type
+  const traitKeysMap: Record<string, string[]> = {
+    plant: ['reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
+    herbivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
+    carnivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
+    fungus: ['reproductionRate', 'metabolismEfficiency', 'decompositionRate', 'perceptionRadius']
+  };
+
+  const keysToCopy = traitKeysMap[entity.type] || ['reproductionRate', 'metabolismEfficiency'];
+  const mutatedTraits: any = {};
+  
+  for (const key of keysToCopy) {
+    const originalValue = (entity as any)[key];
+    if (typeof originalValue === 'number') {
+      if (willRandomEventOccur(mutationProbability)) {
+        mutatedTraits[key] = applyRandomMutationToTrait(originalValue, mutationRange);
+      } else {
+        mutatedTraits[key] = originalValue;
+      }
+    }
+  }
+  
+  return mutatedTraits;
 }
 
 /**
@@ -199,7 +244,7 @@ export function moveEntityTowardTarget(
   target: Position,
   speed?: number
 ): void {
-  const moveSpeed = speed ?? entity.traits.movementSpeed;
+  const moveSpeed = speed ?? (entity.type === 'herbivore' || entity.type === 'carnivore' ? entity.movementSpeed : 0);
   
   if (moveSpeed <= 0) {
     return; // Cannot move
@@ -272,7 +317,10 @@ export function isEntityWithinPerceptionRadius(
   target: Entity
 ): boolean {
   const distance = calculateDistanceBetweenEntities(observer, target);
-  return distance <= observer.traits.perceptionRadius;
+  const perceptionRadius = (observer.type === 'herbivore' || observer.type === 'carnivore' || observer.type === 'fungus') 
+    ? observer.perceptionRadius 
+    : 0;
+  return distance <= perceptionRadius;
 }
 
 /**

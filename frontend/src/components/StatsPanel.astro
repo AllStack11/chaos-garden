@@ -59,6 +59,34 @@ const { gardenState } = Astro.props;
             ></div>
           </div>
         </div>
+        
+        <div class="bg-purple-50 rounded-lg p-4 border border-purple-100">
+          <div class="text-purple-800 text-sm font-medium">Fungi</div>
+          <div class="text-3xl font-bold text-purple-900" id="stat-fungi">
+            {gardenState?.populationSummary.fungi || 0}
+          </div>
+          <div class="mt-2 w-full bg-purple-200 rounded-full h-1.5 overflow-hidden">
+            <div 
+              id="bar-fungi"
+              class="bg-purple-600 h-full transition-all duration-500" 
+              style={`width: ${Math.min(100, (gardenState?.populationSummary.fungi || 0) / 1)}%`}
+            ></div>
+          </div>
+        </div>
+        
+        <div class="bg-red-50 rounded-lg p-4 border border-red-100">
+          <div class="text-red-800 text-sm font-medium">Carnivores</div>
+          <div class="text-3xl font-bold text-red-900" id="stat-carnivores">
+            {gardenState?.populationSummary.carnivores || 0}
+          </div>
+          <div class="mt-2 w-full bg-red-200 rounded-full h-1.5 overflow-hidden">
+            <div 
+              id="bar-carnivores"
+              class="bg-red-600 h-full transition-all duration-500" 
+              style={`width: ${Math.min(100, (gardenState?.populationSummary.carnivores || 0) / 1)}%`}
+            ></div>
+          </div>
+        </div>
       </div>
       
       <!-- Living vs Fallen -->
@@ -115,11 +143,14 @@ const { gardenState } = Astro.props;
     }
 
     public updateState(gardenState: GardenState) {
+      if (!gardenState) return;
       const summary = gardenState.populationSummary;
       
       // Update text values
       this.updateText('stat-plants', summary.plants);
       this.updateText('stat-herbivores', summary.herbivores);
+      this.updateText('stat-fungi', summary.fungi);
+      this.updateText('stat-carnivores', summary.carnivores);
       this.updateText('stat-living', summary.totalLiving);
       this.updateText('stat-fallen', summary.totalDead);
       
@@ -132,6 +163,8 @@ const { gardenState } = Astro.props;
       // Update bars
       this.updateBar('bar-plants', summary.plants, 200);
       this.updateBar('bar-herbivores', summary.herbivores, 100);
+      this.updateBar('bar-fungi', summary.fungi, 100);
+      this.updateBar('bar-carnivores', summary.carnivores, 100);
       this.updateBar('bar-living', summary.totalLiving, summary.total);
       this.updateBar('bar-fallen', summary.totalDead, summary.total);
     }

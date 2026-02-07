@@ -23,7 +23,7 @@ import type {
 } from '@chaos-garden/shared';
 import { queryFirst, queryAll, executeQuery, executeBatch } from './connection';
 import type { D1Database } from '../types/worker';
-import { countEntitiesByType } from '../simulation/environment/helpers';
+import { countEntitiesByType, extractTraits } from '../simulation/environment/helpers';
 
 // ==========================================
 // Garden State Queries
@@ -72,10 +72,7 @@ export async function getAllEntitiesFromDatabase(
   const rows = await queryAll<EntityRow>(
     db,
     `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
-            energy, health, age,
-            traits_reproduction_rate, traits_movement_speed,
-            traits_metabolism_efficiency, traits_photosynthesis_rate,
-            traits_perception_radius, lineage, created_at, updated_at
+            energy, health, age, traits, lineage, created_at, updated_at
      FROM entities`
   );
 
@@ -168,10 +165,7 @@ export async function getAllLivingEntitiesFromDatabase(
   const rows = await queryAll<EntityRow>(
     db,
     `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
-            energy, health, age,
-            traits_reproduction_rate, traits_movement_speed,
-            traits_metabolism_efficiency, traits_photosynthesis_rate,
-            traits_perception_radius, lineage, created_at, updated_at
+            energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
      WHERE is_alive = 1`
   );
@@ -194,10 +188,7 @@ export async function getEntityByIdFromDatabase(
   const row = await queryFirst<EntityRow>(
     db,
     `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
-            energy, health, age,
-            traits_reproduction_rate, traits_movement_speed,
-            traits_metabolism_efficiency, traits_photosynthesis_rate,
-            traits_perception_radius, lineage, created_at, updated_at
+            energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
      WHERE id = ?`,
     [entityId]
@@ -227,37 +218,34 @@ export async function saveEntitiesToDatabase(
     return;
   }
 
-  const statements = entities.map(entity => ({
-    query: `INSERT OR REPLACE INTO entities (
-      id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
-      energy, health, age,
-      traits_reproduction_rate, traits_movement_speed,
-      traits_metabolism_efficiency, traits_photosynthesis_rate,
-      traits_perception_radius, lineage, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      entity.id,
-      entity.gardenStateId || gardenStateId || null,
-      entity.bornAtTick,
-      entity.deathTick || null,
-      entity.isAlive ? 1 : 0,
-      entity.type,
-      entity.species,
-      entity.position.x,
-      entity.position.y,
-      entity.energy,
-      entity.health,
-      entity.age,
-      entity.traits.reproductionRate,
-      entity.traits.movementSpeed,
-      entity.traits.metabolismEfficiency,
-      entity.traits.photosynthesisRate,
-      entity.traits.perceptionRadius,
-      entity.lineage,
-      entity.createdAt,
-      entity.updatedAt
-    ]
-  }));
+  const statements = entities.map(entity => {
+    const traits = extractTraits(entity);
+
+    return {
+      query: `INSERT OR REPLACE INTO entities (
+        id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
+        energy, health, age, traits, lineage, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        entity.id,
+        entity.gardenStateId || gardenStateId || null,
+        entity.bornAtTick,
+        entity.deathTick || null,
+        entity.isAlive ? 1 : 0,
+        entity.type,
+        entity.species,
+        entity.position.x,
+        entity.position.y,
+        entity.energy,
+        entity.health,
+        entity.age,
+        JSON.stringify(traits),
+        entity.lineage,
+        entity.createdAt,
+        entity.updatedAt
+      ]
+    };
+  });
 
   await executeBatch(db, statements);
 }
@@ -494,6 +482,7 @@ function mapRowToGardenState(row: GardenStateRow): GardenState {
  * Convert a database row to an Entity object.
  */
 function mapRowToEntity(row: EntityRow): Entity {
+  const traits = JSON.parse(row.traits);
   return {
     id: row.id,
     gardenStateId: row.garden_state_id || undefined,
@@ -509,17 +498,11 @@ function mapRowToEntity(row: EntityRow): Entity {
     energy: row.energy,
     health: row.health,
     age: row.age,
-    traits: {
-      reproductionRate: row.traits_reproduction_rate,
-      movementSpeed: row.traits_movement_speed,
-      metabolismEfficiency: row.traits_metabolism_efficiency,
-      photosynthesisRate: row.traits_photosynthesis_rate,
-      perceptionRadius: row.traits_perception_radius
-    },
+    ...traits,
     lineage: row.lineage,
     createdAt: row.created_at,
     updatedAt: row.updated_at
-  };
+  } as Entity;
 }
 
 /**

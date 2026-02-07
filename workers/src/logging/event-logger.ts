@@ -19,6 +19,7 @@ import type {
 } from '@chaos-garden/shared';
 import { logSimulationEventToDatabase } from '../db/queries';
 import type { D1Database } from '../types/worker';
+import { extractTraits } from '../simulation/environment/helpers';
 
 /**
  * Event logger instance returned by the factory.
@@ -100,7 +101,7 @@ export function createEventLogger(
           type: entity.type,
           species: entity.species,
           parentId: parentId || 'origin',
-          traits: entity.traits
+          traits: extractTraits(entity)
         }
       );
     },
@@ -138,8 +139,8 @@ export function createEventLogger(
         {
           parentType: parent.type,
           offspringType: offspring.type,
-          parentTraits: parent.traits,
-          offspringTraits: offspring.traits
+          parentTraits: extractTraits(parent),
+          offspringTraits: extractTraits(offspring)
         }
       );
     },

@@ -56,12 +56,8 @@ CREATE TABLE IF NOT EXISTS entities (
   health REAL NOT NULL DEFAULT 100.0,        -- 0-100, dies at 0
   age INTEGER NOT NULL DEFAULT 0,            -- Ticks survived
   
-  -- Genetic traits (can mutate across generations)
-  traits_reproduction_rate REAL NOT NULL DEFAULT 0.05,      -- 0-1 probability
-  traits_movement_speed REAL NOT NULL DEFAULT 0.0,          -- pixels per tick
-  traits_metabolism_efficiency REAL NOT NULL DEFAULT 1.0,   -- 0.5-1.5
-  traits_photosynthesis_rate REAL NOT NULL DEFAULT 1.0,     -- plants only
-  traits_perception_radius REAL NOT NULL DEFAULT 50.0,      -- detection range
+  -- Genetic traits (stored as JSON to support polymorphic entity types)
+  traits TEXT NOT NULL DEFAULT '{}',
   
   lineage TEXT NOT NULL DEFAULT 'origin',    -- Parent ID or 'origin'
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

@@ -42,11 +42,11 @@ function generateSeedEntities(gardenStateId) {
       energy: 80 + Math.random() * 20,
       health: 90 + Math.random() * 10,
       age: 0,
-      traits_reproduction_rate: 0.05 + (Math.random() * 0.03),
-      traits_movement_speed: 0,
-      traits_metabolism_efficiency: 1.0,
-      traits_photosynthesis_rate: 0.8 + (Math.random() * 0.4),
-      traits_perception_radius: 20 + (Math.random() * 30),
+      traits: {
+        reproductionRate: 0.05 + (Math.random() * 0.03),
+        metabolismEfficiency: 1.0,
+        photosynthesisRate: 0.8 + (Math.random() * 0.4)
+      },
       lineage: 'origin',
       created_at: now,
       updated_at: now
@@ -67,11 +67,38 @@ function generateSeedEntities(gardenStateId) {
       energy: 70 + Math.random() * 20,
       health: 85 + Math.random() * 10,
       age: 0,
-      traits_reproduction_rate: 0.03 + (Math.random() * 0.02),
-      traits_movement_speed: 2 + Math.random() * 3,
-      traits_metabolism_efficiency: 0.9 + (Math.random() * 0.2),
-      traits_photosynthesis_rate: 0,
-      traits_perception_radius: 40 + (Math.random() * 40),
+      traits: {
+        reproductionRate: 0.03 + (Math.random() * 0.02),
+        movementSpeed: 2 + Math.random() * 3,
+        metabolismEfficiency: 0.9 + (Math.random() * 0.2),
+        perceptionRadius: 40 + (Math.random() * 40)
+      },
+      lineage: 'origin',
+      created_at: now,
+      updated_at: now
+    });
+  }
+
+  // Generate 3 fungi
+  for (let i = 0; i < 3; i++) {
+    entities.push({
+      id: uuidv4(),
+      garden_state_id: gardenStateId,
+      born_at_tick: 0,
+      is_alive: 1,
+      type: 'fungus',
+      species: `Silent Recycler ${i + 1}`,
+      position_x: Math.random() * 800,
+      position_y: Math.random() * 600,
+      energy: 40 + Math.random() * 20,
+      health: 100,
+      age: 0,
+      traits: {
+        reproductionRate: 0.04 + (Math.random() * 0.02),
+        metabolismEfficiency: 1.2,
+        decompositionRate: 1.0 + (Math.random() * 0.4),
+        perceptionRadius: 50 + (Math.random() * 20)
+      },
       lineage: 'origin',
       created_at: now,
       updated_at: now
@@ -88,17 +115,12 @@ function generateEntityInsertSQL(entities) {
   const inserts = entities.map(entity => `
     INSERT INTO entities (
       id, garden_state_id, born_at_tick, is_alive, type, species, position_x, position_y,
-      energy, health, age,
-      traits_reproduction_rate, traits_movement_speed,
-      traits_metabolism_efficiency, traits_photosynthesis_rate,
-      traits_perception_radius, lineage, created_at, updated_at
+      energy, health, age, traits, lineage, created_at, updated_at
     ) VALUES (
       '${entity.id}', ${entity.garden_state_id}, ${entity.born_at_tick}, ${entity.is_alive}, '${entity.type}', '${entity.species}',
       ${entity.position_x}, ${entity.position_y},
       ${entity.energy}, ${entity.health}, ${entity.age},
-      ${entity.traits_reproduction_rate}, ${entity.traits_movement_speed},
-      ${entity.traits_metabolism_efficiency}, ${entity.traits_photosynthesis_rate},
-      ${entity.traits_perception_radius}, '${entity.lineage}',
+      '${JSON.stringify(entity.traits)}', '${entity.lineage}',
       '${entity.created_at}', '${entity.updated_at}'
     );
   `).join('\n');
@@ -118,8 +140,8 @@ function generateSeedDataSQL(gardenStateId) {
       plants = 10,
       herbivores = 5,
       carnivores = 0,
-      fungi = 0,
-      total = 15,
+      fungi = 3,
+      total = 18,
       timestamp = '${now}'
     WHERE id = ${gardenStateId};
   `;
@@ -132,7 +154,8 @@ function generateSeedDataSQL(gardenStateId) {
     ) VALUES
       (${gardenStateId}, 0, '${now}', 'BIRTH', 'The Chaos Garden was created', '[]', 'LOW', '{"source": "initialization"}'),
       (${gardenStateId}, 0, '${now}', 'BIRTH', '10 plants sprouted from the fertile soil', '[]', 'LOW', '{"count": 10, "type": "plants"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '5 herbivores wandered into the garden', '[]', 'LOW', '{"count": 5, "type": "herbivores"}');
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '5 herbivores wandered into the garden', '[]', 'LOW', '{"count": 5, "type": "herbivores"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '3 fungi established their networks', '[]', 'LOW', '{"count": 3, "type": "fungi"}');
   `;
   
   // Create application logs
@@ -142,7 +165,7 @@ function generateSeedDataSQL(gardenStateId) {
       metadata, tick
     ) VALUES
       ('${now}', 'INFO', 'INITIALIZATION', 'database_setup', 'Local database initialized with schema', '{"schema_version": "1.0.0"}', 0),
-      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: 10 plants, 5 herbivores', '{"plants": 10, "herbivores": 5}', 0);
+      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: 10 plants, 5 herbivores, 3 fungi', '{"plants": 10, "herbivores": 5, "fungi": 3}', 0);
   `;
   
   return `
