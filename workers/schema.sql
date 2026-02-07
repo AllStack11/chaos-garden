@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS simulation_events (
   ),
   description TEXT NOT NULL,                 -- Human-readable story
   entities_affected TEXT NOT NULL DEFAULT '[]', -- JSON array of entity UUIDs
+  tags TEXT NOT NULL DEFAULT '[]',           -- JSON array of search/filter tags
   severity TEXT NOT NULL DEFAULT 'LOW' CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
   metadata TEXT,                             -- JSON for additional context
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

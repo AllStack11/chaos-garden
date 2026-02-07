@@ -46,7 +46,8 @@ export interface ApplicationLogger {
 export function createApplicationLogger(
   db: D1Database,
   component: LogComponent,
-  tick?: number
+  tick?: number,
+  mirrorToConsole: boolean = false
 ): ApplicationLogger {
   
   /**
@@ -59,6 +60,12 @@ export function createApplicationLogger(
     message: string,
     metadata?: Record<string, unknown>
   ): Promise<void> {
+    if (mirrorToConsole) {
+      const ts = new Date().toISOString();
+      const meta = metadata ? ` ${JSON.stringify(metadata)}` : '';
+      console.log(`[${ts}] [${level}] [${component}] ${operation}: ${message}${meta}`);
+    }
+
     const logEntry: ApplicationLog = {
       timestamp: new Date().toISOString(),
       level,
@@ -78,36 +85,36 @@ export function createApplicationLogger(
      * Debug-level logging for detailed tracing.
      * Use for: Entry/exit points, variable values, flow tracking.
      */
-    debug: (operation: string, message: string, metadata?: Record<string, unknown>) =>
-      log('DEBUG', operation, message, metadata),
+    debug: async (operation: string, message: string, metadata?: Record<string, unknown>) =>
+      await log('DEBUG', operation, message, metadata),
 
     /**
      * Info-level logging for normal operations.
      * Use for: Successful operations, state changes, milestones.
      */
-    info: (operation: string, message: string, metadata?: Record<string, unknown>) =>
-      log('INFO', operation, message, metadata),
+    info: async (operation: string, message: string, metadata?: Record<string, unknown>) =>
+      await log('INFO', operation, message, metadata),
 
     /**
      * Warning-level logging for potential issues.
      * Use for: Recoverable errors, unusual conditions, near-limits.
      */
-    warn: (operation: string, message: string, metadata?: Record<string, unknown>) =>
-      log('WARN', operation, message, metadata),
+    warn: async (operation: string, message: string, metadata?: Record<string, unknown>) =>
+      await log('WARN', operation, message, metadata),
 
     /**
      * Error-level logging for failures.
      * Use for: Operation failures, exceptions, data inconsistencies.
      */
-    error: (operation: string, message: string, metadata?: Record<string, unknown>) =>
-      log('ERROR', operation, message, metadata),
+    error: async (operation: string, message: string, metadata?: Record<string, unknown>) =>
+      await log('ERROR', operation, message, metadata),
 
     /**
      * Fatal-level logging for system-critical failures.
      * Use for: Unrecoverable errors, data corruption, system halt.
      */
-    fatal: (operation: string, message: string, metadata?: Record<string, unknown>) =>
-      log('FATAL', operation, message, metadata)
+    fatal: async (operation: string, message: string, metadata?: Record<string, unknown>) =>
+      await log('FATAL', operation, message, metadata)
   };
 }
 

@@ -156,7 +156,14 @@ export async function runSimulationTick(
     metrics.save_state_duration = Date.now() - stateSaveStart;
 
     // Update event logger with the real garden state ID
-    (eventLogger as any).gardenStateId = newGardenState.id;
+    if ((eventLogger as any).loggers) {
+      // Composite logger
+      for (const l of (eventLogger as any).loggers) {
+        l.gardenStateId = newGardenState.id;
+      }
+    } else {
+      (eventLogger as any).gardenStateId = newGardenState.id;
+    }
     
     // 8. Save updated entities and mark dead ones
     const entitySaveStart = Date.now();
@@ -477,6 +484,7 @@ async function logPopulationChanges(
       `Population shift: Plants (${plantDelta > 0 ? '+' : ''}${plantDelta}), Herbivores (${herbivoreDelta > 0 ? '+' : ''}${herbivoreDelta})`,
       [],
       'LOW',
+      ['ecology', 'population', 'delta'],
       { plantDelta, herbivoreDelta, total: current.total }
     );
   }

@@ -243,6 +243,7 @@ export interface SimulationEvent {
   eventType: SimulationEventType; // what happened
   description: string;            // human-readable story
   entitiesAffected: string[];     // array of entity IDs involved
+  tags: string[];                 // search/filter tags (e.g., 'biology', 'disaster')
   severity: EventSeverity;        // dramatic importance
   metadata?: string;              // JSON for additional context
 }
@@ -407,6 +408,7 @@ export interface SimulationEventRow {
   event_type: string;
   description: string;
   entities_affected: string;
+  tags: string; // JSON string
   severity: string;
   metadata: string | null;
 }

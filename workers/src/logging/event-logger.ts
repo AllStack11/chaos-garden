@@ -36,7 +36,7 @@ export interface EventLogger {
   logDisaster(type: 'FIRE' | 'FLOOD' | 'PLAGUE', description: string, affected: string[]): Promise<void>;
   logUserIntervention(action: string, description: string, affected: string[]): Promise<void>;
   logEnvironmentChange(description: string): Promise<void>;
-  logCustom(eventType: SimulationEventType, description: string, entities: string[], severity: EventSeverity, metadata?: Record<string, unknown>): Promise<void>;
+  logCustom(eventType: SimulationEventType, description: string, entities: string[], severity: EventSeverity, tags?: string[], metadata?: Record<string, unknown>): Promise<void>;
 }
 
 /**
@@ -47,10 +47,6 @@ export interface EventLogger {
  * @param tick - The current simulation tick
  * @param gardenStateId - The garden state ID for this tick
  * @returns Event logger instance
- * 
- * @example
- * const eventLogger = createEventLogger(db, 42, 5);
- * await eventLogger.logBirth(newPlant, parentPlant.id);
  */
 export function createEventLogger(
   db: D1Database,
@@ -66,6 +62,7 @@ export function createEventLogger(
     description: string,
     entitiesAffected: string[],
     severity: EventSeverity,
+    tags: string[] = [],
     metadata?: Record<string, unknown>
   ): Promise<void> {
     const event: SimulationEvent = {
@@ -75,6 +72,7 @@ export function createEventLogger(
       eventType,
       description,
       entitiesAffected,
+      tags: [eventType.toLowerCase(), ...tags],
       severity,
       metadata: metadata ? JSON.stringify(metadata) : undefined
     };
@@ -83,11 +81,7 @@ export function createEventLogger(
   }
 
   return {
-    /**
-     * Log the birth of a new entity.
-     * A new life enters the garden!
-     */
-    logBirth: async (entity: Entity, parentId?: string): Promise<void> => {
+    logBirth: async (entity, parentId) => {
       const description = parentId 
         ? `A new ${entity.species} is born from parent ${parentId.substring(0, 8)}`
         : `A new ${entity.species} springs into existence`;
@@ -97,6 +91,7 @@ export function createEventLogger(
         description,
         [entity.id],
         'LOW',
+        ['biology', entity.type, 'birth'],
         { 
           type: entity.type,
           species: entity.species,
@@ -106,16 +101,13 @@ export function createEventLogger(
       );
     },
 
-    /**
-     * Log the death of an entity.
-     * The cycle of life continues.
-     */
-    logDeath: async (entity: Entity, cause: string): Promise<void> => {
+    logDeath: async (entity, cause) => {
       await logEvent(
         'DEATH',
         `${entity.species} has died: ${cause}`,
         [entity.id],
         'MEDIUM',
+        ['biology', entity.type, 'death'],
         {
           type: entity.type,
           age: entity.age,
@@ -126,16 +118,13 @@ export function createEventLogger(
       );
     },
 
-    /**
-     * Log successful reproduction.
-     * Life finds a way to continue.
-     */
-    logReproduction: async (parent: Entity, offspring: Entity): Promise<void> => {
+    logReproduction: async (parent, offspring) => {
       await logEvent(
         'REPRODUCTION',
         `${parent.species} has reproduced, creating ${offspring.species}`,
         [parent.id, offspring.id],
         'LOW',
+        ['biology', parent.type, 'reproduction'],
         {
           parentType: parent.type,
           offspringType: offspring.type,
@@ -145,16 +134,7 @@ export function createEventLogger(
       );
     },
 
-    /**
-     * Log a genetic mutation.
-     * Evolution in action—traits shift across generations.
-     */
-    logMutation: async (
-      entity: Entity, 
-      trait: string, 
-      oldValue: number, 
-      newValue: number
-    ): Promise<void> => {
+    logMutation: async (entity, trait, oldValue, newValue) => {
       const percentChange = ((newValue - oldValue) / oldValue * 100).toFixed(1);
       
       await logEvent(
@@ -162,6 +142,7 @@ export function createEventLogger(
         `${entity.species} shows a ${percentChange}% change in ${trait}`,
         [entity.id],
         'LOW',
+        ['evolution', entity.type, 'mutation', trait],
         {
           trait,
           oldValue,
@@ -171,57 +152,40 @@ export function createEventLogger(
       );
     },
 
-    /**
-     * Log the extinction of a species.
-     * A somber moment—the last of its kind has perished.
-     */
-    logExtinction: async (species: string, type: Entity['type']): Promise<void> => {
+    logExtinction: async (species, type) => {
       await logEvent(
         'EXTINCTION',
         `The ${species} (${type}) have gone extinct from the garden`,
         [],
         'CRITICAL',
+        ['ecology', 'extinction', type],
         { species, type }
       );
     },
 
-    /**
-     * Log a population explosion.
-     * When conditions are perfect, life proliferates rapidly.
-     */
-    logPopulationExplosion: async (type: Entity['type'], count: number): Promise<void> => {
+    logPopulationExplosion: async (type, count) => {
       await logEvent(
         'POPULATION_EXPLOSION',
         `${type} population has exploded to ${count} individuals!`,
         [],
         'HIGH',
-        { type, count, threshold: count * 0.8 } // explosion threshold
+        ['ecology', 'population', type],
+        { type, count, threshold: count * 0.8 }
       );
     },
 
-    /**
-     * Log ecosystem collapse.
-     * A critical moment—the garden nearly empties.
-     */
-    logEcosystemCollapse: async (remainingEntities: number): Promise<void> => {
+    logEcosystemCollapse: async (remainingEntities) => {
       await logEvent(
         'ECOSYSTEM_COLLAPSE',
         `Ecosystem collapse! Only ${remainingEntities} entities remain alive`,
         [],
         'CRITICAL',
+        ['ecology', 'collapse'],
         { remainingEntities }
       );
     },
 
-    /**
-     * Log a natural disaster.
-     * The chaos that creates new opportunities for life.
-     */
-    logDisaster: async (
-      type: 'FIRE' | 'FLOOD' | 'PLAGUE',
-      description: string,
-      affected: string[]
-    ): Promise<void> => {
+    logDisaster: async (type, description, affected) => {
       const eventType = `DISASTER_${type}` as SimulationEventType;
       
       await logEvent(
@@ -229,6 +193,7 @@ export function createEventLogger(
         description,
         affected,
         'HIGH',
+        ['chaos', 'disaster', type.toLowerCase()],
         {
           disasterType: type,
           affectedCount: affected.length
@@ -236,20 +201,13 @@ export function createEventLogger(
       );
     },
 
-    /**
-     * Log user intervention.
-     * The gardener-god has acted upon the world.
-     */
-    logUserIntervention: async (
-      action: string,
-      description: string,
-      affected: string[]
-    ): Promise<void> => {
+    logUserIntervention: async (action, description, affected) => {
       await logEvent(
         'USER_INTERVENTION',
         `${action}: ${description}`,
         affected,
         'MEDIUM',
+        ['intervention', action.toLowerCase()],
         {
           action,
           affectedCount: affected.length
@@ -257,108 +215,73 @@ export function createEventLogger(
       );
     },
 
-    /**
-     * Log significant environmental changes.
-     * The world itself shifts and transforms.
-     */
-    logEnvironmentChange: async (description: string): Promise<void> => {
+    logEnvironmentChange: async (description) => {
       await logEvent(
         'ENVIRONMENT_CHANGE',
         description,
         [],
         'MEDIUM',
+        ['environment'],
         {}
       );
     },
 
-    /**
-     * Log a custom event.
-     * For events that don't fit the standard categories.
-     */
-    logCustom: async (
-      eventType: SimulationEventType,
-      description: string,
-      entities: string[],
-      severity: EventSeverity,
-      metadata?: Record<string, unknown>
-    ): Promise<void> => {
-      await logEvent(eventType, description, entities, severity, metadata);
+    logCustom: async (eventType, description, entities, severity, tags = [], metadata) => {
+      await logEvent(eventType, description, entities, severity, tags, metadata);
     }
   };
 }
 
 /**
- * Create a null event logger for testing.
- * All operations are no-ops but still return promises.
- */
-export function createNullEventLogger(): EventLogger {
-  return {
-    logBirth: async () => {},
-    logDeath: async () => {},
-    logReproduction: async () => {},
-    logMutation: async () => {},
-    logExtinction: async () => {},
-    logPopulationExplosion: async () => {},
-    logEcosystemCollapse: async () => {},
-    logDisaster: async () => {},
-    logUserIntervention: async () => {},
-    logEnvironmentChange: async () => {},
-    logCustom: async () => {}
-  };
-}
-
-/**
  * Create a console event logger for development.
- * Logs events to console instead of database.
+ * Logs events to console.
  */
 export function createConsoleEventLogger(tick: number, gardenStateId: number): EventLogger {
   async function logToConsole(
     eventType: SimulationEventType,
     description: string,
     entities: string[],
-    severity: EventSeverity
+    severity: EventSeverity,
+    tags: string[] = []
   ): Promise<void> {
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] [Tick ${tick}] [${severity}] ${eventType}: ${description} (${entities.length} entities)`);
+    const tagStr = tags.length > 0 ? ` [Tags: ${tags.join(', ')}]` : '';
+    console.log(`[${timestamp}] [Tick ${tick}] [${severity}] ${eventType}: ${description} (${entities.length} entities)${tagStr}`);
   }
 
   return {
     logBirth: async (entity, parentId) => {
-      const desc = parentId 
-        ? `A new ${entity.species} is born from parent ${parentId.substring(0, 8)}`
-        : `A new ${entity.species} springs into existence`;
-      await logToConsole('BIRTH', desc, [entity.id], 'LOW');
+      await logToConsole('BIRTH', `New ${entity.species} born`, [entity.id], 'LOW', ['biology', 'birth']);
     },
     logDeath: async (entity, cause) => {
-      await logToConsole('DEATH', `${entity.species} has died: ${cause}`, [entity.id], 'MEDIUM');
+      await logToConsole('DEATH', `${entity.species} died: ${cause}`, [entity.id], 'MEDIUM', ['biology', 'death']);
     },
     logReproduction: async (parent, offspring) => {
-      await logToConsole('REPRODUCTION', `${parent.species} has reproduced`, [parent.id, offspring.id], 'LOW');
+      await logToConsole('REPRODUCTION', `${parent.species} reproduced`, [parent.id, offspring.id], 'LOW', ['biology', 'reproduction']);
     },
     logMutation: async (entity, trait, oldValue, newValue) => {
-      const percent = ((newValue - oldValue) / oldValue * 100).toFixed(1);
-      await logToConsole('MUTATION', `${entity.species} shows ${percent}% change in ${trait}`, [entity.id], 'LOW');
+      await logToConsole('MUTATION', `${entity.species} mutated ${trait}`, [entity.id], 'LOW', ['evolution', 'mutation']);
     },
     logExtinction: async (species, type) => {
-      await logToConsole('EXTINCTION', `The ${species} (${type}) have gone extinct`, [], 'CRITICAL');
+      await logToConsole('EXTINCTION', `${species} extinct`, [], 'CRITICAL', ['ecology', 'extinction']);
     },
     logPopulationExplosion: async (type, count) => {
-      await logToConsole('POPULATION_EXPLOSION', `${type} population exploded to ${count}`, [], 'HIGH');
+      await logToConsole('POPULATION_EXPLOSION', `${type} explosion: ${count}`, [], 'HIGH', ['ecology', 'population']);
     },
     logEcosystemCollapse: async (remaining) => {
-      await logToConsole('ECOSYSTEM_COLLAPSE', `Only ${remaining} entities remain`, [], 'CRITICAL');
+      await logToConsole('ECOSYSTEM_COLLAPSE', `Collapse: ${remaining} left`, [], 'CRITICAL', ['ecology', 'collapse']);
     },
     logDisaster: async (type, description, affected) => {
-      await logToConsole(`DISASTER_${type}` as SimulationEventType, description, affected, 'HIGH');
+      await logToConsole(`DISASTER_${type}` as SimulationEventType, description, affected, 'HIGH', ['chaos', 'disaster']);
     },
     logUserIntervention: async (action, description, affected) => {
-      await logToConsole('USER_INTERVENTION', `${action}: ${description}`, affected, 'MEDIUM');
+      await logToConsole('USER_INTERVENTION', `${action}: ${description}`, affected, 'MEDIUM', ['intervention']);
     },
     logEnvironmentChange: async (description) => {
-      await logToConsole('ENVIRONMENT_CHANGE', description, [], 'MEDIUM');
+      await logToConsole('ENVIRONMENT_CHANGE', description, [], 'MEDIUM', ['environment']);
     },
-    logCustom: async (eventType, description, entities, severity) => {
-      await logToConsole(eventType, description, entities, severity);
+    logCustom: async (eventType, description, entities, severity, tags) => {
+      await logToConsole(eventType, description, entities, severity, tags);
     }
   };
 }
@@ -399,8 +322,27 @@ export function createCompositeEventLogger(loggers: EventLogger[]): EventLogger 
     logEnvironmentChange: async (description) => {
       await Promise.all(loggers.map(l => l.logEnvironmentChange(description)));
     },
-    logCustom: async (eventType, description, entities, severity, metadata) => {
-      await Promise.all(loggers.map(l => l.logCustom(eventType, description, entities, severity, metadata)));
+    logCustom: async (eventType, description, entities, severity, tags, metadata) => {
+      await Promise.all(loggers.map(l => l.logCustom(eventType, description, entities, severity, tags, metadata)));
     }
+  };
+}
+
+/**
+ * Create a null event logger for testing.
+ */
+export function createNullEventLogger(): EventLogger {
+  return {
+    logBirth: async () => {},
+    logDeath: async () => {},
+    logReproduction: async () => {},
+    logMutation: async () => {},
+    logExtinction: async () => {},
+    logPopulationExplosion: async () => {},
+    logEcosystemCollapse: async () => {},
+    logDisaster: async () => {},
+    logUserIntervention: async () => {},
+    logEnvironmentChange: async () => {},
+    logCustom: async () => {}
   };
 }

@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chaos-garden-api-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-07",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chaos-garden-db",
+      "database_id": "local", // Local emulator identifier
+      "preview_database_id": "DB" // Required for Pages local development
+    }
+  ],
+  "triggers": {
+    "crons": [] // Cron triggers don't run in local development
+  },
+  "vars": {
+    "CORS_ORIGIN": "http://localhost:4321"
+  },
+  "env": {
+    "dev": {
+      "vars": {
+        "CORS_ORIGIN": "http://localhost:4321",
+        "ENVIRONMENT": "development"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "chaos-garden-db",
+          "database_id": "local",
+          "preview_database_id": "DB"
+        }
+      ]
+    }
+  },
+  "build": {
+    "command": ""
+  },
+  "alias": {
+    "@chaos-garden/shared": "../shared/types.ts"
+  },
+  "dev": {
+    "ip": "localhost",
+    "port": 8787,
+    "local_protocol": "http",
+    "upstream_protocol": "http"
+  }
+}

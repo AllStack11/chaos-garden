@@ -367,8 +367,8 @@ export async function logSimulationEventToDatabase(
       db,
       `INSERT INTO simulation_events (
         garden_state_id, tick, timestamp, event_type, description,
-        entities_affected, severity, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        entities_affected, tags, severity, metadata
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         event.gardenStateId,
         event.tick,
@@ -376,6 +376,7 @@ export async function logSimulationEventToDatabase(
         event.eventType,
         event.description,
         JSON.stringify(event.entitiesAffected),
+        JSON.stringify(event.tags),
         event.severity,
         event.metadata || null
       ]
@@ -403,7 +404,7 @@ export async function getRecentSimulationEventsFromDatabase(
   const rows = await queryAll<SimulationEventRow>(
     db,
     `SELECT id, garden_state_id, tick, timestamp, event_type, description,
-            entities_affected, severity, metadata
+            entities_affected, tags, severity, metadata
      FROM simulation_events
      WHERE garden_state_id = ?
      ORDER BY tick DESC, timestamp DESC
@@ -431,7 +432,7 @@ export async function getSimulationEventsByTickRangeFromDatabase(
   const rows = await queryAll<SimulationEventRow>(
     db,
     `SELECT id, garden_state_id, tick, timestamp, event_type, description,
-            entities_affected, severity, metadata
+            entities_affected, tags, severity, metadata
      FROM simulation_events
      WHERE tick >= ? AND tick <= ?
      ORDER BY tick ASC, timestamp ASC`,
@@ -537,6 +538,7 @@ function mapRowToSimulationEvent(row: SimulationEventRow): SimulationEvent {
     eventType: row.event_type as SimulationEvent['eventType'],
     description: row.description,
     entitiesAffected: JSON.parse(row.entities_affected),
+    tags: JSON.parse(row.tags || '[]'),
     severity: row.severity as SimulationEvent['severity'],
     metadata: row.metadata || undefined
   };

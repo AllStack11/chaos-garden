@@ -106,8 +106,8 @@ function generateSeedEntities(gardenStateId) {
     });
   }
 
-  // Generate 3 fungi
-  for (let i = 0; i < 3; i++) {
+  // Generate 7 fungi
+  for (let i = 0; i < 7; i++) {
     entities.push({
       id: uuidv4(),
       garden_state_id: gardenStateId,
@@ -205,13 +205,13 @@ function generateSeedDataSQL(gardenStateId) {
   const createEventsSQL = `
     INSERT INTO simulation_events (
       garden_state_id, tick, timestamp, event_type, description,
-      entities_affected, severity, metadata
+      entities_affected, tags, severity, metadata
     ) VALUES
-      (${gardenStateId}, 0, '${now}', 'BIRTH', 'The Chaos Garden was created', '[]', 'LOW', '{"source": "initialization"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '10 plants sprouted from the fertile soil', '[]', 'LOW', '{"count": 10, "type": "plants"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '5 herbivores wandered into the garden', '[]', 'LOW', '{"count": 5, "type": "herbivores"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '3 fungi established their networks', '[]', 'LOW', '{"count": 3, "type": "fungi"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '2 carnivores claimed their territory', '[]', 'LOW', '{"count": 2, "type": "carnivores"}');
+      (${gardenStateId}, 0, '${now}', 'BIRTH', 'The Chaos Garden was created', '[]', '["genesis", "birth"]', 'LOW', '{"source": "initialization"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '10 plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": 10, "type": "plants"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '5 herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": 5, "type": "herbivores"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '3 fungi established their networks', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": 3, "type": "fungi"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '2 carnivores claimed their territory', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": 2, "type": "carnivores"}');
   `;
   
   // Create application logs
@@ -254,9 +254,9 @@ function executeSQLCommand(command, description) {
     
     // Execute using wrangler
     // We use --local to target the local D1 storage
-    // We must specify the config file if it's not wrangler.toml
-    const configFlag = require('fs').existsSync(path.resolve(WORKERS_DIR, 'wrangler.local.toml')) 
-      ? '--config wrangler.local.toml' 
+    // We must specify the config file if it's not wrangler.jsonc/toml
+    const configFlag = require('fs').existsSync(path.resolve(WORKERS_DIR, 'wrangler.local.jsonc')) 
+      ? '--config wrangler.local.jsonc' 
       : '';
     
     const result = execSync(
@@ -300,9 +300,9 @@ async function initializeDatabase() {
     
     // Step 2: Create the database if it doesn't exist
     console.log('🗄️  Setting up local D1 database...');
-    const localConfigPath = path.resolve(WORKERS_DIR, 'wrangler.local.toml');
+    const localConfigPath = path.resolve(WORKERS_DIR, 'wrangler.local.jsonc');
     const configFlag = require('fs').existsSync(localConfigPath) 
-      ? '--config wrangler.local.toml' 
+      ? '--config wrangler.local.jsonc' 
       : '';
       
     try {

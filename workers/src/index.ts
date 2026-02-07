@@ -89,7 +89,8 @@ function createNotFoundResponse(message = 'Resource not found'): Response {
  * Returns current garden state with all entities and recent events.
  */
 async function handleGetGarden(env: Env): Promise<Response> {
-  const logger = createApplicationLogger(env.DB, 'API');
+  const isDevelopment = env.ENVIRONMENT !== 'production';
+  const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
   
   try {
     await logger.info('api_get_garden', 'Fetching current garden state');
@@ -138,7 +139,8 @@ async function handleGetGarden(env: Env): Promise<Response> {
  * Returns system health status.
  */
 async function handleGetHealth(env: Env): Promise<Response> {
-  const logger = createApplicationLogger(env.DB, 'API');
+  const isDevelopment = env.ENVIRONMENT !== 'production';
+  const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
   
   try {
     // Get latest state to check if system is operational
@@ -200,6 +202,25 @@ export default {
     if (path === '/api/health' && request.method === 'GET') {
       return handleGetHealth(env);
     }
+
+    // Handle manual tick trigger (Development only)
+    if (path === '/api/tick' && request.method === 'POST') {
+      const isDevelopment = env.ENVIRONMENT !== 'production';
+      const logger = createApplicationLogger(env.DB, 'SIMULATION', undefined, isDevelopment);
+      
+      try {
+        await logger.info('api_tick_triggered', 'Manual simulation tick starting');
+        const result = await runSimulationTick(env.DB, logger, isDevelopment);
+        await logger.info('api_tick_complete', 'Manual simulation tick completed', result);
+        return createSuccessResponse(result);
+      } catch (error) {
+        return createErrorResponse(
+          'Manual tick failed',
+          500,
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
     
     // Handle root path
     if (path === '/' || path === '/api') {
@@ -227,7 +248,13 @@ export default {
    * Handle scheduled Cron triggers (every 15 minutes)
    */
   async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
-    const logger = createApplicationLogger(env.DB, 'SIMULATION'); // 'CRON' not in LogComponent type
+    const isDevelopment = env.ENVIRONMENT !== 'production';
+
+    if (isDevelopment) {
+      console.log(`[${new Date().toISOString()}] [SCHEDULED] Cron triggered: ${event.cron}`);
+    }
+
+    const logger = createApplicationLogger(env.DB, 'SIMULATION', undefined, isDevelopment);
     
     try {
       await logger.info('cron_triggered', 'Cron-triggered tick starting', {
@@ -235,7 +262,6 @@ export default {
         scheduledTime: event.scheduledTime
       });
       
-      const isDevelopment = env.ENVIRONMENT === 'development';
       const result = await runSimulationTick(env.DB, logger, isDevelopment);
       
       await logger.info('cron_complete', 'Cron-triggered tick completed', result);

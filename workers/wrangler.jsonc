@@ -1,0 +1,53 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chaos-garden-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-07",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chaos-garden-db",
+      "database_id": "", // Fill in after creating database with: wrangler d1 create chaos-garden-db
+      "preview_database_id": "DB" // Required for Pages local development
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "*/15 * * * *"
+    ]
+  },
+  "vars": {
+    "CORS_ORIGIN": "*",
+    "ENVIRONMENT": "production"
+  },
+  "env": {
+    "dev": {
+      "vars": {
+        "CORS_ORIGIN": "*",
+        "ENVIRONMENT": "development"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "chaos-garden-db",
+          "database_id": "",
+          "preview_database_id": "DB"
+        }
+      ]
+    }
+  },
+  "build": {
+    "command": ""
+  },
+  "alias": {
+    "@chaos-garden/shared": "../shared/types.ts"
+  },
+  "upload_source_maps": true
+}
