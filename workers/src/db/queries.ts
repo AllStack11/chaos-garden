@@ -71,7 +71,7 @@ export async function getAllEntitiesFromDatabase(
 ): Promise<Entity[]> {
   const rows = await queryAll<EntityRow>(
     db,
-    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
+    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
             energy, health, age, traits, lineage, created_at, updated_at
      FROM entities`
   );
@@ -164,7 +164,7 @@ export async function getAllLivingEntitiesFromDatabase(
 ): Promise<Entity[]> {
   const rows = await queryAll<EntityRow>(
     db,
-    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
+    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
             energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
      WHERE is_alive = 1`
@@ -187,7 +187,7 @@ export async function getEntityByIdFromDatabase(
 ): Promise<Entity | null> {
   const row = await queryFirst<EntityRow>(
     db,
-    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
+    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
             energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
      WHERE id = ?`,
@@ -223,9 +223,9 @@ export async function saveEntitiesToDatabase(
 
     return {
       query: `INSERT OR REPLACE INTO entities (
-        id, garden_state_id, born_at_tick, death_tick, is_alive, type, species, position_x, position_y,
+        id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
         energy, health, age, traits, lineage, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
         entity.id,
         entity.gardenStateId || gardenStateId || null,
@@ -233,6 +233,7 @@ export async function saveEntitiesToDatabase(
         entity.deathTick || null,
         entity.isAlive ? 1 : 0,
         entity.type,
+        entity.name,
         entity.species,
         entity.position.x,
         entity.position.y,
@@ -490,6 +491,7 @@ function mapRowToEntity(row: EntityRow): Entity {
     deathTick: row.death_tick || undefined,
     isAlive: row.is_alive === 1,
     type: row.type as Entity['type'],
+    name: row.name,
     species: row.species,
     position: {
       x: row.position_x,

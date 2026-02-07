@@ -13,6 +13,7 @@ import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
+  generateRandomName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -41,7 +42,8 @@ export function createNewFungusEntity(
   gardenStateId: number,
   traits?: Partial<FungusTraits>,
   parentId: string = 'origin',
-  bornAtTick: number = 0
+  bornAtTick: number = 0,
+  parentName?: string
 ): Entity {
   const now = createTimestamp();
   
@@ -52,6 +54,7 @@ export function createNewFungusEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'fungus',
+    name: generateRandomName('fungus', parentName),
     species: 'Mycelium',
     position: { ...position },
     energy: 40, // Start with moderate energy
@@ -184,7 +187,7 @@ function attemptFungusReproduction(
   const childPosition = generatePositionNearParent(parent.position, SPORE_SPREAD_RADIUS);
   const childTraits = copyTraitsWithPossibleMutations(parent);
   
-  const child = createNewFungusEntity(childPosition, gardenStateId, childTraits, parent.id);
+  const child = createNewFungusEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   eventLogger.logBirth(child, parent.id);
   checkAndLogMutations(parent, child, eventLogger);

@@ -14,6 +14,31 @@
 const { execSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 
+// Naming Utility for initialization
+function generateRandomName(type) {
+  const prefixes = {
+    plant: ['Leaf', 'Flora', 'Green', 'Root', 'Stem', 'Bloom', 'Thorn', 'Sprout', 'Vine', 'Moss'],
+    herbivore: ['Swift', 'Soft', 'Light', 'Sky', 'Cloud', 'Meadow', 'Graz', 'Hoof', 'Ear', 'Tail'],
+    carnivore: ['Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar'],
+    fungus: ['Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot']
+  };
+
+  const suffixes = {
+    plant: ['whisper', 'glow', 'heart', 'reach', 'shade', 'burst', 'thorn', 'bud', 'leaf', 'petal'],
+    herbivore: ['stride', 'dash', 'leap', 'bound', 'graze', 'fleet', 'fur', 'step', 'breeze', 'song'],
+    carnivore: ['strike', 'rip', 'tear', 'kill', 'fang', 'pounce', 'shade', 'hunter', 'stalker', 'howl'],
+    fungus: ['pulse', 'spread', 'bloom', 'rot', 'puff', 'creep', 'glow', 'web', 'drift', 'spore']
+  };
+
+  const p = prefixes[type];
+  const s = suffixes[type];
+  
+  const prefix = p[Math.floor(Math.random() * p.length)];
+  const suffix = s[Math.floor(Math.random() * s.length)];
+  
+  return `${prefix}-${suffix}`;
+}
+
 // Configuration
 const DATABASE_NAME = 'chaos-garden-db'; // Unified with wrangler.toml
 const SCHEMA_FILE = 'schema.sql';
@@ -36,6 +61,7 @@ function generateSeedEntities(gardenStateId) {
       born_at_tick: 0,
       is_alive: 1,
       type: 'plant',
+      name: generateRandomName('plant'),
       species: `Green Sprout ${i + 1}`,
       position_x: Math.random() * 800,
       position_y: Math.random() * 600,
@@ -61,6 +87,7 @@ function generateSeedEntities(gardenStateId) {
       born_at_tick: 0,
       is_alive: 1,
       type: 'herbivore',
+      name: generateRandomName('herbivore'),
       species: `Forest Grazer ${i + 1}`,
       position_x: Math.random() * 800,
       position_y: Math.random() * 600,
@@ -87,6 +114,7 @@ function generateSeedEntities(gardenStateId) {
       born_at_tick: 0,
       is_alive: 1,
       type: 'fungus',
+      name: generateRandomName('fungus'),
       species: `Silent Recycler ${i + 1}`,
       position_x: Math.random() * 800,
       position_y: Math.random() * 600,
@@ -104,6 +132,33 @@ function generateSeedEntities(gardenStateId) {
       updated_at: now
     });
   }
+
+  // Generate 2 carnivores
+  for (let i = 0; i < 2; i++) {
+    entities.push({
+      id: uuidv4(),
+      garden_state_id: gardenStateId,
+      born_at_tick: 0,
+      is_alive: 1,
+      type: 'carnivore',
+      name: generateRandomName('carnivore'),
+      species: `Apex Stalker ${i + 1}`,
+      position_x: Math.random() * 800,
+      position_y: Math.random() * 600,
+      energy: 60 + Math.random() * 20,
+      health: 100,
+      age: 0,
+      traits: {
+        reproductionRate: 0.02 + (Math.random() * 0.01),
+        movementSpeed: 3 + Math.random() * 2,
+        metabolismEfficiency: 1.1 + (Math.random() * 0.1),
+        perceptionRadius: 100 + (Math.random() * 50)
+      },
+      lineage: 'origin',
+      created_at: now,
+      updated_at: now
+    });
+  }
   
   return entities;
 }
@@ -114,10 +169,10 @@ function generateEntityInsertSQL(entities) {
   
   const inserts = entities.map(entity => `
     INSERT INTO entities (
-      id, garden_state_id, born_at_tick, is_alive, type, species, position_x, position_y,
+      id, garden_state_id, born_at_tick, is_alive, type, name, species, position_x, position_y,
       energy, health, age, traits, lineage, created_at, updated_at
     ) VALUES (
-      '${entity.id}', ${entity.garden_state_id}, ${entity.born_at_tick}, ${entity.is_alive}, '${entity.type}', '${entity.species}',
+      '${entity.id}', ${entity.garden_state_id}, ${entity.born_at_tick}, ${entity.is_alive}, '${entity.type}', '${entity.name}', '${entity.species}',
       ${entity.position_x}, ${entity.position_y},
       ${entity.energy}, ${entity.health}, ${entity.age},
       '${JSON.stringify(entity.traits)}', '${entity.lineage}',
@@ -139,9 +194,9 @@ function generateSeedDataSQL(gardenStateId) {
     SET 
       plants = 10,
       herbivores = 5,
-      carnivores = 0,
+      carnivores = 2,
       fungi = 3,
-      total = 18,
+      total = 20,
       timestamp = '${now}'
     WHERE id = ${gardenStateId};
   `;
@@ -155,7 +210,8 @@ function generateSeedDataSQL(gardenStateId) {
       (${gardenStateId}, 0, '${now}', 'BIRTH', 'The Chaos Garden was created', '[]', 'LOW', '{"source": "initialization"}'),
       (${gardenStateId}, 0, '${now}', 'BIRTH', '10 plants sprouted from the fertile soil', '[]', 'LOW', '{"count": 10, "type": "plants"}'),
       (${gardenStateId}, 0, '${now}', 'BIRTH', '5 herbivores wandered into the garden', '[]', 'LOW', '{"count": 5, "type": "herbivores"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '3 fungi established their networks', '[]', 'LOW', '{"count": 3, "type": "fungi"}');
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '3 fungi established their networks', '[]', 'LOW', '{"count": 3, "type": "fungi"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '2 carnivores claimed their territory', '[]', 'LOW', '{"count": 2, "type": "carnivores"}');
   `;
   
   // Create application logs
@@ -165,7 +221,7 @@ function generateSeedDataSQL(gardenStateId) {
       metadata, tick
     ) VALUES
       ('${now}', 'INFO', 'INITIALIZATION', 'database_setup', 'Local database initialized with schema', '{"schema_version": "1.0.0"}', 0),
-      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: 10 plants, 5 herbivores, 3 fungi', '{"plants": 10, "herbivores": 5, "fungi": 3}', 0);
+      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: 10 plants, 5 herbivores, 2 carnivores, 3 fungi', '{"plants": 10, "herbivores": 5, "carnivores": 2, "fungi": 3}', 0);
   `;
   
   return `
@@ -314,7 +370,7 @@ async function initializeDatabase() {
     console.log('\n🎉 Chaos Garden Local Database Initialization Complete!');
     console.log('===================================================');
     console.log('✅ Schema applied');
-    console.log('✅ Seed data created: 10 plants, 5 herbivores');
+    console.log('✅ Seed data created: 10 plants, 5 herbivores, 2 carnivores');
     console.log('✅ Garden state initialized at tick 0');
     console.log('✅ Events and logs created');
     console.log('\n🌱 Your local garden is ready to grow!');

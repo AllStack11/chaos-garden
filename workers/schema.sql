@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS entities (
   death_tick INTEGER,                        -- The tick this entity died
   is_alive INTEGER NOT NULL DEFAULT 1,       -- Boolean (0 or 1)
   type TEXT NOT NULL CHECK (type IN ('plant', 'herbivore', 'carnivore', 'fungus')),
+  name TEXT NOT NULL DEFAULT 'unnamed',      -- Individual name
   species TEXT NOT NULL DEFAULT 'unknown',   -- Display name, can evolve
   position_x REAL NOT NULL,                  -- X coordinate (0-800)
   position_y REAL NOT NULL,                  -- Y coordinate (0-600)

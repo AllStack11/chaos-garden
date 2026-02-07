@@ -10,6 +10,7 @@ import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
+  generateRandomName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -36,7 +37,8 @@ export function createNewPlantEntity(
   gardenStateId: number,
   traits?: Partial<PlantTraits>,
   parentId: string = 'origin',
-  bornAtTick: number = 0
+  bornAtTick: number = 0,
+  parentName?: string
 ): Entity {
   const now = createTimestamp();
   
@@ -47,6 +49,7 @@ export function createNewPlantEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'plant',
+    name: generateRandomName('plant', parentName),
     species: 'Flora',
     position: { ...position },
     energy: 50,
@@ -167,7 +170,7 @@ export function attemptPlantReproduction(
   const childPosition = generatePositionNearParent(parent.position, SEED_SPREAD_RADIUS);
   const childTraits = copyTraitsWithPossibleMutations(parent);
   
-  const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id);
+  const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   eventLogger.logBirth(child, parent.id);
   checkAndLogMutations(parent, child, eventLogger);

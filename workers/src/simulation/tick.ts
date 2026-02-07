@@ -21,6 +21,7 @@ import {
 import { updateEnvironmentForNextTick } from './environment';
 import { processPlantBehaviorDuringTick, isPlantDead, getPlantCauseOfDeath } from './creatures/plants';
 import { processHerbivoreBehaviorDuringTick, isHerbivoreDead, getHerbivoreCauseOfDeath } from './creatures/herbivores';
+import { processCarnivoreBehaviorDuringTick, isCarnivoreDead, getCarnivoreCauseOfDeath } from './creatures/carnivores';
 import { processFungusBehaviorDuringTick, isFungusDead, getFungusCauseOfDeath } from './creatures/fungi';
 import {
   getLatestGardenStateFromDatabase,
@@ -124,7 +125,12 @@ export async function runSimulationTick(
     // 6. Filter dead entities and log their passing
     const deadEntities = filterDeadEntities(livingEntities);
     for (const dead of deadEntities) {
-      const cause = dead.type === 'plant' ? getPlantCauseOfDeath(dead) : getHerbivoreCauseOfDeath(dead);
+      let cause = 'unknown cause';
+      if (dead.type === 'plant') cause = getPlantCauseOfDeath(dead);
+      else if (dead.type === 'herbivore') cause = getHerbivoreCauseOfDeath(dead);
+      else if (dead.type === 'carnivore') cause = getCarnivoreCauseOfDeath(dead);
+      else if (dead.type === 'fungus') cause = getFungusCauseOfDeath(dead);
+      
       await eventLogger.logDeath(dead, cause);
     }
     
@@ -235,6 +241,7 @@ async function processEntitiesForTick(
   // Separate entities by type
   const plants = entities.filter(e => e.type === 'plant');
   const herbivores = entities.filter(e => e.type === 'herbivore');
+  const carnivores = entities.filter(e => e.type === 'carnivore');
   const fungi = entities.filter(e => e.type === 'fungus');
   
   // Process plants first (they create energy)
@@ -279,6 +286,28 @@ async function processEntitiesForTick(
       });
     }
   }
+
+  // Process carnivores (they hunt herbivores)
+  for (const carnivore of carnivores) {
+    const result = processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger);
+    // Link offspring to parent for lineage
+    for (const child of result.offspring) {
+      child.lineage = carnivore.id;
+    }
+    newEntities.push(...result.offspring);
+    // Note: herbivores consumed are already marked dead within the behavior function
+    
+    // Log carnivore death if applicable
+    if (isCarnivoreDead(carnivore)) {
+      await appLogger.debug('carnivore_death', `Carnivore ${carnivore.id.substring(0, 8)} died`, {
+        carnivoreId: carnivore.id,
+        age: carnivore.age,
+        energy: carnivore.energy,
+        health: carnivore.health,
+        cause: getCarnivoreCauseOfDeath(carnivore)
+      });
+    }
+  }
   
   // Process fungi (they decompose dead matter)
   for (const fungus of fungi) {
@@ -312,8 +341,9 @@ function filterDeadEntities(entities: Entity[]): Entity[] {
   return entities.filter(entity => {
     if (entity.type === 'plant') return isPlantDead(entity);
     if (entity.type === 'herbivore') return isHerbivoreDead(entity);
+    if (entity.type === 'carnivore') return isCarnivoreDead(entity);
     if (entity.type === 'fungus') return isFungusDead(entity);
-    return false; // Future types will be added here
+    return false;
   });
 }
 
@@ -417,6 +447,9 @@ async function logPopulationChanges(
   if (previous.herbivores > 0 && current.herbivores === 0) {
     await eventLogger.logExtinction('herbivores', 'herbivore');
   }
+  if (previous.carnivores > 0 && current.carnivores === 0) {
+    await eventLogger.logExtinction('carnivores', 'carnivore');
+  }
   
   // Check for ecosystem collapse
   if (current.total < 10 && previous.total >= 10) {
@@ -432,6 +465,7 @@ async function logPopulationChanges(
   
   checkExplosion('plants', previous.plants, current.plants);
   checkExplosion('herbivores', previous.herbivores, current.herbivores);
+  checkExplosion('carnivores', previous.carnivores, current.carnivores);
 
   // Log population deltas if significant
   const plantDelta = current.plants - previous.plants;

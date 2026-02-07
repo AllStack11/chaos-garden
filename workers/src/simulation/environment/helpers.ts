@@ -13,6 +13,7 @@
 import type { 
   Position, 
   Entity, 
+  EntityType,
   Traits, 
   SimulationConfig, 
   PopulationSummary,
@@ -406,6 +407,50 @@ export function groupEntitiesByType(entities: Entity[]): Record<Entity['type'], 
   }
   
   return groups;
+}
+
+/**
+ * Generate a random name for an entity.
+ * If a parent name is provided, the child might inherit parts of it.
+ * 
+ * @param type - The type of entity
+ * @param parentName - Optional parent's name to inherit from
+ * @returns A unique moniker
+ */
+export function generateRandomName(type: EntityType, parentName?: string): string {
+  const prefixes: Record<EntityType, string[]> = {
+    plant: ['Leaf', 'Flora', 'Green', 'Root', 'Stem', 'Bloom', 'Thorn', 'Sprout', 'Vine', 'Moss'],
+    herbivore: ['Swift', 'Soft', 'Light', 'Sky', 'Cloud', 'Meadow', 'Graz', 'Hoof', 'Ear', 'Tail'],
+    carnivore: ['Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar'],
+    fungus: ['Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot']
+  };
+
+  const suffixes: Record<EntityType, string[]> = {
+    plant: ['whisper', 'glow', 'heart', 'reach', 'shade', 'burst', 'thorn', 'bud', 'leaf', 'petal'],
+    herbivore: ['stride', 'dash', 'leap', 'bound', 'graze', 'fleet', 'fur', 'step', 'breeze', 'song'],
+    carnivore: ['strike', 'rip', 'tear', 'kill', 'fang', 'pounce', 'shade', 'hunter', 'stalker', 'howl'],
+    fungus: ['pulse', 'spread', 'bloom', 'rot', 'puff', 'creep', 'glow', 'web', 'drift', 'spore']
+  };
+
+  const typePrefixes = prefixes[type];
+  const typeSuffixes = suffixes[type];
+
+  // Inheritance logic
+  if (parentName && parentName.includes('-') && willRandomEventOccur(0.7)) {
+    const parts = parentName.split('-');
+    if (parts.length === 2) {
+      if (willRandomEventOccur(0.5)) {
+        // Inherit prefix
+        return `${parts[0]}-${pickRandomElement(typeSuffixes)}`;
+      } else {
+        // Inherit suffix
+        return `${pickRandomElement(typePrefixes)}-${parts[1]}`;
+      }
+    }
+  }
+
+  // Pure random name
+  return `${pickRandomElement(typePrefixes)}-${pickRandomElement(typeSuffixes)}`;
 }
 
 /**

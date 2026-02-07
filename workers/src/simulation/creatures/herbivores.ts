@@ -11,6 +11,7 @@ import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
+  generateRandomName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -40,7 +41,8 @@ export function createNewHerbivoreEntity(
   gardenStateId: number,
   traits?: Partial<HerbivoreTraits>,
   parentId: string = 'origin',
-  bornAtTick: number = 0
+  bornAtTick: number = 0,
+  parentName?: string
 ): Entity {
   const now = createTimestamp();
   
@@ -51,6 +53,7 @@ export function createNewHerbivoreEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'herbivore',
+    name: generateRandomName('herbivore', parentName),
     species: 'Grazers',
     position: { ...position },
     energy: 60,
@@ -184,7 +187,7 @@ function attemptHerbivoreReproduction(
   const childPosition = generatePositionNearParent(parent.position, 20);
   const childTraits = copyTraitsWithPossibleMutations(parent);
   
-  const child = createNewHerbivoreEntity(childPosition, gardenStateId, childTraits, parent.id);
+  const child = createNewHerbivoreEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   eventLogger.logBirth(child, parent.id);
   checkAndLogMutations(parent, child, eventLogger);

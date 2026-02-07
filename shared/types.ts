@@ -93,7 +93,8 @@ export type Entity = {
   bornAtTick: number;           // The tick this entity was born
   deathTick?: number;           // The tick this entity died
   isAlive: boolean;             // Whether the entity is currently living
-  species: string;              // Display name, can evolve through mutations
+  name: string;                 // Individual name (unique moniker)
+  species: string;              // Species name, can evolve through mutations
   position: Position;           // spatial location
   energy: number;               // 0-100, dies at 0 (life force)
   health: number;               // 0-100, dies at 0 (physical condition)
@@ -288,11 +289,13 @@ export interface SimulationConfig {
   // Entity limits
   maxPlants: number;        // 200
   maxHerbivores: number;    // 100
+  maxCarnivores: number;    // 50
   maxTotalEntities: number; // 500
   
   // Energy thresholds
   plantReproductionThreshold: number;     // 80
   herbivoreReproductionThreshold: number; // 90
+  carnivoreReproductionThreshold: number; // 95
   
   // Metabolism costs
   baseEnergyCostPerTick: number;          // 1
@@ -319,9 +322,11 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   gardenHeight: 600,
   maxPlants: 200,
   maxHerbivores: 100,
+  maxCarnivores: 50,
   maxTotalEntities: 500,
   plantReproductionThreshold: 80,
   herbivoreReproductionThreshold: 90,
+  carnivoreReproductionThreshold: 95,
   baseEnergyCostPerTick: 1,
   movementEnergyCostPerPixel: 0.1,
   basePhotosynthesisRate: 2,
@@ -368,6 +373,7 @@ export interface EntityRow {
   death_tick: number | null;
   is_alive: number;
   type: string;
+  name: string;
   species: string;
   position_x: number;
   position_y: number;

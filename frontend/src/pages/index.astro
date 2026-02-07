@@ -53,7 +53,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
                   <span class="text-2xl"></span>
                 </div>
                 <div>
-                  <div data-selection-name class="text-xl font-bold text-garden-green-900"></div>
+                  <div class="flex items-center space-x-2">
+                    <div data-selection-name class="text-xl font-bold text-garden-green-900"></div>
+                    <span class="text-garden-brown-400 text-sm">•</span>
+                    <div data-selection-species class="text-sm font-medium text-garden-brown-500 uppercase tracking-wider"></div>
+                  </div>
                   <div data-selection-stats class="text-garden-brown-600"></div>
                 </div>
               </div>
@@ -229,15 +233,30 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
         selectionInfo.classList.toggle('hidden', !this.state.selectedEntity);
         if (this.state.selectedEntity) {
           const nameEl = this.querySelector('[data-selection-name]')!;
+          const speciesEl = this.querySelector('[data-selection-species]')!;
           const statsEl = this.querySelector('[data-selection-stats]')!;
           const iconEl = this.querySelector('[data-selection-icon]')!;
           
-          nameEl.textContent = this.state.selectedEntity.species;
+          nameEl.textContent = this.state.selectedEntity.name;
+          speciesEl.textContent = this.state.selectedEntity.species;
           statsEl.textContent = `Selected • Energy: ${Math.round(this.state.selectedEntity.energy)} • Age: ${this.state.selectedEntity.age} ticks`;
-          iconEl.className = `w-12 h-12 rounded-full flex items-center justify-center mr-4 ${
-            this.state.selectedEntity.type === 'plant' ? 'bg-green-100' : 'bg-yellow-100'
-          }`;
-          iconEl.querySelector('span')!.textContent = this.state.selectedEntity.type === 'plant' ? '🌿' : '🦌';
+          
+          const type = this.state.selectedEntity.type;
+          const colors = {
+            plant: 'bg-green-100',
+            herbivore: 'bg-yellow-100',
+            carnivore: 'bg-red-100',
+            fungus: 'bg-purple-100'
+          };
+          const icons = {
+            plant: '🌿',
+            herbivore: '🦌',
+            carnivore: '🐺',
+            fungus: '🍄'
+          };
+          
+          iconEl.className = `w-12 h-12 rounded-full flex items-center justify-center mr-4 ${colors[type] || 'bg-gray-100'}`;
+          iconEl.querySelector('span')!.textContent = icons[type] || '❓';
         }
       }
 
