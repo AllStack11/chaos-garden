@@ -362,3 +362,45 @@ export function createConsoleEventLogger(tick: number, gardenStateId: number): E
     }
   };
 }
+
+/**
+ * Create a composite event logger that delegates to multiple loggers.
+ * Like a river that branches into multiple streams, nourishing different lands.
+ */
+export function createCompositeEventLogger(loggers: EventLogger[]): EventLogger {
+  return {
+    logBirth: async (entity, parentId) => {
+      await Promise.all(loggers.map(l => l.logBirth(entity, parentId)));
+    },
+    logDeath: async (entity, cause) => {
+      await Promise.all(loggers.map(l => l.logDeath(entity, cause)));
+    },
+    logReproduction: async (parent, offspring) => {
+      await Promise.all(loggers.map(l => l.logReproduction(parent, offspring)));
+    },
+    logMutation: async (entity, trait, oldValue, newValue) => {
+      await Promise.all(loggers.map(l => l.logMutation(entity, trait, oldValue, newValue)));
+    },
+    logExtinction: async (species, type) => {
+      await Promise.all(loggers.map(l => l.logExtinction(species, type)));
+    },
+    logPopulationExplosion: async (type, count) => {
+      await Promise.all(loggers.map(l => l.logPopulationExplosion(type, count)));
+    },
+    logEcosystemCollapse: async (remainingEntities) => {
+      await Promise.all(loggers.map(l => l.logEcosystemCollapse(remainingEntities)));
+    },
+    logDisaster: async (type, description, affected) => {
+      await Promise.all(loggers.map(l => l.logDisaster(type, description, affected)));
+    },
+    logUserIntervention: async (action, description, affected) => {
+      await Promise.all(loggers.map(l => l.logUserIntervention(action, description, affected)));
+    },
+    logEnvironmentChange: async (description) => {
+      await Promise.all(loggers.map(l => l.logEnvironmentChange(description)));
+    },
+    logCustom: async (eventType, description, entities, severity, metadata) => {
+      await Promise.all(loggers.map(l => l.logCustom(eventType, description, entities, severity, metadata)));
+    }
+  };
+}

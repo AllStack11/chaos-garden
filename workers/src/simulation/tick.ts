@@ -12,7 +12,7 @@
 
 import type { Entity, GardenState, Environment, PopulationSummary } from '@chaos-garden/shared';
 import type { D1Database } from '../types/worker';
-import { createEventLogger, type EventLogger } from '../logging/event-logger';
+import { createEventLogger, createConsoleEventLogger, createCompositeEventLogger, type EventLogger } from '../logging/event-logger';
 import type { ApplicationLogger } from '../logging/application-logger';
 import {
   createTimestamp,
@@ -41,11 +41,13 @@ import {
  * 
  * @param db - D1 database instance
  * @param appLogger - Application logger for system observability
+ * @param isDevelopment - Whether the simulation is running in a development environment
  * @returns The result of the simulation tick
  */
 export async function runSimulationTick(
   db: D1Database,
-  appLogger: ApplicationLogger
+  appLogger: ApplicationLogger,
+  isDevelopment: boolean = false
 ): Promise<{
   tickNumber: number;
   duration: number;
@@ -78,7 +80,16 @@ export async function runSimulationTick(
     await appLogger.info('tick_progress', `Starting tick ${tickNumber}`, { previousTick: previousState.tick });
     
     // 2. Create event logger for this tick (Placeholder ID, updated after state save)
-    const eventLogger = createEventLogger(db, tickNumber, previousState.id);
+    // In development, we use a composite logger to mirror events to the console
+    let eventLogger: EventLogger;
+    const dbLogger = createEventLogger(db, tickNumber, previousState.id);
+    
+    if (isDevelopment) {
+      const consoleLogger = createConsoleEventLogger(tickNumber, previousState.id);
+      eventLogger = createCompositeEventLogger([dbLogger, consoleLogger]);
+    } else {
+      eventLogger = dbLogger;
+    }
     
     // 3. Update environment
     const envUpdateStart = Date.now();

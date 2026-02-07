@@ -26,6 +26,7 @@ import type { HealthStatus } from '@chaos-garden/shared';
 
 export interface Env {
   DB: D1Database;
+  ENVIRONMENT?: string;
 }
 
 // ==========================================
@@ -234,7 +235,8 @@ export default {
         scheduledTime: event.scheduledTime
       });
       
-      const result = await runSimulationTick(env.DB, logger);
+      const isDevelopment = env.ENVIRONMENT === 'development';
+      const result = await runSimulationTick(env.DB, logger, isDevelopment);
       
       await logger.info('cron_complete', 'Cron-triggered tick completed', result);
       
