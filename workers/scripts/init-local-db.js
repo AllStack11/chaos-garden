@@ -12,13 +12,22 @@
  */
 
 const { execSync } = require('child_process');
-const { v4: uuidv4 } = require('uuid');
 
-// Naming Utility for initialization
+// Inline UUID v4 generator — matches generateEntityId() in the simulation engine
+function generateEntityId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  });
+}
+
+// Naming Utility — matches generateRandomName() in the simulation engine (helpers.ts)
+// Prefixes map to visual renderers on the frontend
 function generateRandomName(type) {
   const prefixes = {
-    plant: ['Leaf', 'Flora', 'Green', 'Root', 'Stem', 'Bloom', 'Thorn', 'Sprout', 'Vine', 'Moss'],
-    herbivore: ['Swift', 'Soft', 'Light', 'Sky', 'Cloud', 'Meadow', 'Graz', 'Hoof', 'Ear', 'Tail'],
+    plant: ['Fern', 'Flower', 'Grass', 'Vine', 'Succulent', 'Lily', 'Moss', 'Cactus', 'Bush', 'Herb'],
+    herbivore: ['Butterfly', 'Beetle', 'Rabbit', 'Snail', 'Cricket', 'Ladybug', 'Grasshopper', 'Ant', 'Bee', 'Moth'],
     carnivore: ['Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar'],
     fungus: ['Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot']
   };
@@ -48,118 +57,206 @@ const WORKERS_DIR = path.resolve(__dirname, '..');
 console.log('🌿 Chaos Garden Local Database Initialization');
 console.log('===========================================\n');
 
-// Generate seed entities
+// ==========================================
+// Positioning Utilities
+// ==========================================
+
+// Three plant cluster centers — creates natural foraging grounds
+const PLANT_CLUSTERS = [
+  { x: 200, y: 300 },  // left-center
+  { x: 400, y: 300 },  // center
+  { x: 600, y: 300 },  // right-center
+];
+const CLUSTER_SPREAD = 120; // max distance from cluster center
+const MIN_PLANT_DISTANCE = 40; // minimum distance between plants (matches simulation)
+
+function generatePositionNearCluster(clusterCenter, spread) {
+  const angle = Math.random() * Math.PI * 2;
+  const distance = Math.random() * spread;
+  const x = Math.max(0, Math.min(800, clusterCenter.x + Math.cos(angle) * distance));
+  const y = Math.max(0, Math.min(600, clusterCenter.y + Math.sin(angle) * distance));
+  return { x, y };
+}
+
+function isPositionFarEnoughFromExisting(position, existingEntities, minDistance) {
+  for (const entity of existingEntities) {
+    const dx = position.x - entity.position_x;
+    const dy = position.y - entity.position_y;
+    if (Math.sqrt(dx * dx + dy * dy) < minDistance) return false;
+  }
+  return true;
+}
+
+function generatePlantPositionInCluster(clusterCenter, existingPlants) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const position = generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD);
+    if (isPositionFarEnoughFromExisting(position, existingPlants, MIN_PLANT_DISTANCE)) {
+      return position;
+    }
+  }
+  // Fallback: accept any position in the cluster
+  return generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD);
+}
+
+// ==========================================
+// Seed Entity Generation
+// ==========================================
+
+// Plant trait archetypes for natural selection
+const PLANT_ARCHETYPES = [
+  { name: 'standard',    count: 7, photosynthesisRate: 1.0, reproductionRate: 0.05, metabolismEfficiency: 1.0 },
+  { name: 'fast-growing', count: 7, photosynthesisRate: 1.3, reproductionRate: 0.04, metabolismEfficiency: 1.0 },
+  { name: 'prolific',    count: 6, photosynthesisRate: 0.8, reproductionRate: 0.07, metabolismEfficiency: 1.0 },
+];
+
+// Herbivore trait archetypes
+const HERBIVORE_ARCHETYPES = [
+  { name: 'fast',      count: 2, movementSpeed: 3.0, metabolismEfficiency: 0.9, reproductionRate: 0.03, perceptionRadius: 100 },
+  { name: 'efficient', count: 2, movementSpeed: 1.5, metabolismEfficiency: 1.2, reproductionRate: 0.03, perceptionRadius: 100 },
+  { name: 'balanced',  count: 1, movementSpeed: 2.0, metabolismEfficiency: 1.0, reproductionRate: 0.03, perceptionRadius: 100 },
+];
+
+// Fungus trait archetypes
+const FUNGUS_ARCHETYPES = [
+  { name: 'standard',   count: 2, decompositionRate: 1.0, reproductionRate: 0.04, metabolismEfficiency: 1.2, perceptionRadius: 50 },
+  { name: 'efficient',  count: 2, decompositionRate: 1.4, reproductionRate: 0.03, metabolismEfficiency: 1.2, perceptionRadius: 50 },
+];
+
 function generateSeedEntities(gardenStateId) {
   const entities = [];
   const now = new Date().toISOString();
-  
-  // Generate 10 plants
-  for (let i = 0; i < 10; i++) {
-    entities.push({
-      id: uuidv4(),
-      garden_state_id: gardenStateId,
-      born_at_tick: 0,
-      is_alive: 1,
-      type: 'plant',
-      name: generateRandomName('plant'),
-      species: `Green Sprout ${i + 1}`,
-      position_x: Math.random() * 800,
-      position_y: Math.random() * 600,
-      energy: 80 + Math.random() * 20,
-      health: 90 + Math.random() * 10,
-      age: 0,
-      traits: {
-        reproductionRate: 0.05 + (Math.random() * 0.03),
-        metabolismEfficiency: 1.0,
-        photosynthesisRate: 0.8 + (Math.random() * 0.4)
-      },
-      lineage: 'origin',
-      created_at: now,
-      updated_at: now
-    });
-  }
-  
-  // Generate 5 herbivores
-  for (let i = 0; i < 5; i++) {
-    entities.push({
-      id: uuidv4(),
-      garden_state_id: gardenStateId,
-      born_at_tick: 0,
-      is_alive: 1,
-      type: 'herbivore',
-      name: generateRandomName('herbivore'),
-      species: `Forest Grazer ${i + 1}`,
-      position_x: Math.random() * 800,
-      position_y: Math.random() * 600,
-      energy: 70 + Math.random() * 20,
-      health: 85 + Math.random() * 10,
-      age: 0,
-      traits: {
-        reproductionRate: 0.03 + (Math.random() * 0.02),
-        movementSpeed: 2 + Math.random() * 3,
-        metabolismEfficiency: 0.9 + (Math.random() * 0.2),
-        perceptionRadius: 40 + (Math.random() * 40)
-      },
-      lineage: 'origin',
-      created_at: now,
-      updated_at: now
-    });
+
+  // --- Plants (20 total) ---
+  // Distributed across three clusters with trait variety
+  let plantIndex = 0;
+  for (const archetype of PLANT_ARCHETYPES) {
+    for (let i = 0; i < archetype.count; i++) {
+      const cluster = PLANT_CLUSTERS[plantIndex % PLANT_CLUSTERS.length];
+      const position = generatePlantPositionInCluster(cluster, entities.filter(e => e.type === 'plant'));
+
+      entities.push({
+        id: generateEntityId(),
+        garden_state_id: gardenStateId,
+        born_at_tick: 0,
+        is_alive: 1,
+        type: 'plant',
+        name: generateRandomName('plant'),
+        species: 'Flora',
+        position_x: position.x,
+        position_y: position.y,
+        energy: 50,   // simulation default
+        health: 100,
+        age: 0,
+        traits: {
+          reproductionRate: archetype.reproductionRate,
+          metabolismEfficiency: archetype.metabolismEfficiency,
+          photosynthesisRate: archetype.photosynthesisRate
+        },
+        lineage: 'origin',
+        created_at: now,
+        updated_at: now
+      });
+      plantIndex++;
+    }
   }
 
-  // Generate 7 fungi
-  for (let i = 0; i < 7; i++) {
-    entities.push({
-      id: uuidv4(),
-      garden_state_id: gardenStateId,
-      born_at_tick: 0,
-      is_alive: 1,
-      type: 'fungus',
-      name: generateRandomName('fungus'),
-      species: `Silent Recycler ${i + 1}`,
-      position_x: Math.random() * 800,
-      position_y: Math.random() * 600,
-      energy: 40 + Math.random() * 20,
-      health: 100,
-      age: 0,
-      traits: {
-        reproductionRate: 0.04 + (Math.random() * 0.02),
-        metabolismEfficiency: 1.2,
-        decompositionRate: 1.0 + (Math.random() * 0.4),
-        perceptionRadius: 50 + (Math.random() * 20)
-      },
-      lineage: 'origin',
-      created_at: now,
-      updated_at: now
-    });
+  // --- Herbivores (5 total) ---
+  // Spawned near plant clusters so they find food immediately
+  let herbivoreIndex = 0;
+  for (const archetype of HERBIVORE_ARCHETYPES) {
+    for (let i = 0; i < archetype.count; i++) {
+      const cluster = PLANT_CLUSTERS[herbivoreIndex % PLANT_CLUSTERS.length];
+      const position = generatePositionNearCluster(cluster, 80);
+
+      entities.push({
+        id: generateEntityId(),
+        garden_state_id: gardenStateId,
+        born_at_tick: 0,
+        is_alive: 1,
+        type: 'herbivore',
+        name: generateRandomName('herbivore'),
+        species: 'Grazers',
+        position_x: position.x,
+        position_y: position.y,
+        energy: 60,   // simulation default
+        health: 100,
+        age: 0,
+        traits: {
+          reproductionRate: archetype.reproductionRate,
+          movementSpeed: archetype.movementSpeed,
+          metabolismEfficiency: archetype.metabolismEfficiency,
+          perceptionRadius: archetype.perceptionRadius
+        },
+        lineage: 'origin',
+        created_at: now,
+        updated_at: now
+      });
+      herbivoreIndex++;
+    }
   }
 
-  // Generate 2 carnivores
-  for (let i = 0; i < 2; i++) {
-    entities.push({
-      id: uuidv4(),
-      garden_state_id: gardenStateId,
-      born_at_tick: 0,
-      is_alive: 1,
-      type: 'carnivore',
-      name: generateRandomName('carnivore'),
-      species: `Apex Stalker ${i + 1}`,
-      position_x: Math.random() * 800,
-      position_y: Math.random() * 600,
-      energy: 60 + Math.random() * 20,
-      health: 100,
-      age: 0,
-      traits: {
-        reproductionRate: 0.02 + (Math.random() * 0.01),
-        movementSpeed: 3 + Math.random() * 2,
-        metabolismEfficiency: 1.1 + (Math.random() * 0.1),
-        perceptionRadius: 100 + (Math.random() * 50)
-      },
-      lineage: 'origin',
-      created_at: now,
-      updated_at: now
-    });
+  // --- Carnivore (1 total) ---
+  // Placed at garden edge, must hunt inward — gives herbivores time to eat and reproduce
+  entities.push({
+    id: generateEntityId(),
+    garden_state_id: gardenStateId,
+    born_at_tick: 0,
+    is_alive: 1,
+    type: 'carnivore',
+    name: generateRandomName('carnivore'),
+    species: 'Stalkers',
+    position_x: 750,
+    position_y: 300,
+    energy: 50,   // simulation default
+    health: 100,
+    age: 0,
+    traits: {
+      reproductionRate: 0.02,
+      movementSpeed: 3.5,
+      metabolismEfficiency: 1.1,
+      perceptionRadius: 150
+    },
+    lineage: 'origin',
+    created_at: now,
+    updated_at: now
+  });
+
+  // --- Fungi (4 total) ---
+  // Placed near plant clusters where herbivore-plant deaths are most likely
+  let fungusIndex = 0;
+  for (const archetype of FUNGUS_ARCHETYPES) {
+    for (let i = 0; i < archetype.count; i++) {
+      const cluster = PLANT_CLUSTERS[fungusIndex % PLANT_CLUSTERS.length];
+      // Place fungi very close to cluster centers (within 30px)
+      const position = generatePositionNearCluster(cluster, 30);
+
+      entities.push({
+        id: generateEntityId(),
+        garden_state_id: gardenStateId,
+        born_at_tick: 0,
+        is_alive: 1,
+        type: 'fungus',
+        name: generateRandomName('fungus'),
+        species: 'Mycelium',
+        position_x: position.x,
+        position_y: position.y,
+        energy: 40,   // simulation default
+        health: 100,
+        age: 0,
+        traits: {
+          reproductionRate: archetype.reproductionRate,
+          metabolismEfficiency: archetype.metabolismEfficiency,
+          decompositionRate: archetype.decompositionRate,
+          perceptionRadius: archetype.perceptionRadius
+        },
+        lineage: 'origin',
+        created_at: now,
+        updated_at: now
+      });
+      fungusIndex++;
+    }
   }
-  
+
   return entities;
 }
 
@@ -189,14 +286,20 @@ function generateSeedDataSQL(gardenStateId) {
   const now = new Date().toISOString();
   
   // Update garden state with population counts
+  const plantCount = entities.filter(e => e.type === 'plant').length;
+  const herbivoreCount = entities.filter(e => e.type === 'herbivore').length;
+  const carnivoreCount = entities.filter(e => e.type === 'carnivore').length;
+  const fungusCount = entities.filter(e => e.type === 'fungus').length;
+  const totalCount = entities.length;
+
   const updateGardenStateSQL = `
     UPDATE garden_state
-    SET 
-      plants = 10,
-      herbivores = 5,
-      carnivores = 2,
-      fungi = 3,
-      total = 20,
+    SET
+      plants = ${plantCount},
+      herbivores = ${herbivoreCount},
+      carnivores = ${carnivoreCount},
+      fungi = ${fungusCount},
+      total = ${totalCount},
       timestamp = '${now}'
     WHERE id = ${gardenStateId};
   `;
@@ -208,10 +311,10 @@ function generateSeedDataSQL(gardenStateId) {
       entities_affected, tags, severity, metadata
     ) VALUES
       (${gardenStateId}, 0, '${now}', 'BIRTH', 'The Chaos Garden was created', '[]', '["genesis", "birth"]', 'LOW', '{"source": "initialization"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '10 plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": 10, "type": "plants"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '5 herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": 5, "type": "herbivores"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '3 fungi established their networks', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": 3, "type": "fungi"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '2 carnivores claimed their territory', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": 2, "type": "carnivores"}');
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '${plantCount} plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": ${plantCount}, "type": "plants"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '${herbivoreCount} herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": ${herbivoreCount}, "type": "herbivores"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '${fungusCount} fungi established their networks', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": ${fungusCount}, "type": "fungi"}'),
+      (${gardenStateId}, 0, '${now}', 'BIRTH', '${carnivoreCount} carnivore claimed its territory', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${carnivoreCount}, "type": "carnivores"}');
   `;
   
   // Create application logs
@@ -221,7 +324,7 @@ function generateSeedDataSQL(gardenStateId) {
       metadata, tick
     ) VALUES
       ('${now}', 'INFO', 'INITIALIZATION', 'database_setup', 'Local database initialized with schema', '{"schema_version": "1.0.0"}', 0),
-      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: 10 plants, 5 herbivores, 2 carnivores, 3 fungi', '{"plants": 10, "herbivores": 5, "carnivores": 2, "fungi": 3}', 0);
+      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: ${plantCount} plants, ${herbivoreCount} herbivores, ${carnivoreCount} carnivores, ${fungusCount} fungi', '{"plants": ${plantCount}, "herbivores": ${herbivoreCount}, "carnivores": ${carnivoreCount}, "fungi": ${fungusCount}}', 0);
   `;
   
   return `
@@ -370,7 +473,7 @@ async function initializeDatabase() {
     console.log('\n🎉 Chaos Garden Local Database Initialization Complete!');
     console.log('===================================================');
     console.log('✅ Schema applied');
-    console.log('✅ Seed data created: 10 plants, 5 herbivores, 2 carnivores');
+    console.log('✅ Seed data created: 20 plants, 5 herbivores, 1 carnivore, 4 fungi');
     console.log('✅ Garden state initialized at tick 0');
     console.log('✅ Events and logs created');
     console.log('\n🌱 Your local garden is ready to grow!');
@@ -389,15 +492,6 @@ async function initializeDatabase() {
 
 // Run initialization if this script is executed directly
 if (require.main === module) {
-  // Check for uuid dependency
-  try {
-    require('uuid');
-  } catch {
-    console.error('Missing dependency: uuid');
-    console.log('Installing required dependencies...');
-    execSync('npm install uuid', { cwd: WORKERS_DIR, stdio: 'inherit' });
-  }
-  
   initializeDatabase();
 }
 

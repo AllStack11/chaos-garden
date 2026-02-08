@@ -410,21 +410,39 @@ export function groupEntitiesByType(entities: Entity[]): Record<Entity['type'], 
 }
 
 /**
+ * Extract the biological category from an entity name.
+ * e.g., "Fern-whisper" -> "Fern"
+ * 
+ * @param name - The lyrical name
+ * @returns The category prefix
+ */
+export function extractCategoryFromName(name: string): string {
+  if (!name.includes('-')) return name;
+  return name.split('-')[0];
+}
+
+/**
  * Generate a random name for an entity.
  * If a parent name is provided, the child might inherit parts of it.
  * 
+ * The prefixes include type-specific keywords that map to visual renderers:
+ * - Plants: Fern, Flower, Grass, Vine, Succulent, Lily, Moss, Cactus, Bush, Herb
+ * - Herbivores: Butterfly, Beetle, Rabbit, Snail, Cricket, Ladybug, Grasshopper, Ant, Bee, Moth
+ * 
  * @param type - The type of entity
  * @param parentName - Optional parent's name to inherit from
- * @returns A unique moniker
+ * @returns A unique moniker with type-specific keywords
  */
 export function generateRandomName(type: EntityType, parentName?: string): string {
+  // Type-specific prefixes that map to visual renderers
   const prefixes: Record<EntityType, string[]> = {
-    plant: ['Leaf', 'Flora', 'Green', 'Root', 'Stem', 'Bloom', 'Thorn', 'Sprout', 'Vine', 'Moss'],
-    herbivore: ['Swift', 'Soft', 'Light', 'Sky', 'Cloud', 'Meadow', 'Graz', 'Hoof', 'Ear', 'Tail'],
+    plant: ['Fern', 'Flower', 'Grass', 'Vine', 'Succulent', 'Lily', 'Moss', 'Cactus', 'Bush', 'Herb'],
+    herbivore: ['Butterfly', 'Beetle', 'Rabbit', 'Snail', 'Cricket', 'Ladybug', 'Grasshopper', 'Ant', 'Bee', 'Moth'],
     carnivore: ['Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar'],
     fungus: ['Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot']
   };
 
+  // Suffixes that work with any prefix
   const suffixes: Record<EntityType, string[]> = {
     plant: ['whisper', 'glow', 'heart', 'reach', 'shade', 'burst', 'thorn', 'bud', 'leaf', 'petal'],
     herbivore: ['stride', 'dash', 'leap', 'bound', 'graze', 'fleet', 'fur', 'step', 'breeze', 'song'],
@@ -435,12 +453,15 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
   const typePrefixes = prefixes[type];
   const typeSuffixes = suffixes[type];
 
-  // Inheritance logic
+  // Inheritance logic - 70% chance to inherit part of parent name
   if (parentName && parentName.includes('-') && willRandomEventOccur(0.7)) {
     const parts = parentName.split('-');
     if (parts.length === 2) {
       if (willRandomEventOccur(0.5)) {
-        // Inherit prefix
+        // Inherit prefix (with 30% chance of mutation to different type)
+        if (willRandomEventOccur(0.3)) {
+          return `${pickRandomElement(typePrefixes)}-${parts[1]}`;
+        }
         return `${parts[0]}-${pickRandomElement(typeSuffixes)}`;
       } else {
         // Inherit suffix

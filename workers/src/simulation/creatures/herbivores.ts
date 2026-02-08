@@ -12,6 +12,7 @@ import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
   generateRandomName,
+  extractCategoryFromName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -45,6 +46,8 @@ export function createNewHerbivoreEntity(
   parentName?: string
 ): Entity {
   const now = createTimestamp();
+  const name = generateRandomName('herbivore', parentName);
+  const species = extractCategoryFromName(name);
   
   return {
     id: generateEntityId(),
@@ -53,8 +56,8 @@ export function createNewHerbivoreEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'herbivore',
-    name: generateRandomName('herbivore', parentName),
-    species: 'Grazers',
+    name,
+    species,
     position: { ...position },
     energy: 60,
     health: 100,

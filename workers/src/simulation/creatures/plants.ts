@@ -11,6 +11,7 @@ import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
   generateRandomName,
+  extractCategoryFromName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -27,7 +28,7 @@ const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 30;
 const BASE_METABOLISM_COST = 0.5;
 const MAX_AGE = 200;
-const SEED_SPREAD_RADIUS = 30;
+const SEED_SPREAD_RADIUS = 50; // Increased from 30 for more spread out offspring
 
 /**
  * Create a new plant entity.
@@ -41,6 +42,8 @@ export function createNewPlantEntity(
   parentName?: string
 ): Entity {
   const now = createTimestamp();
+  const name = generateRandomName('plant', parentName);
+  const species = extractCategoryFromName(name);
   
   return {
     id: generateEntityId(),
@@ -49,8 +52,8 @@ export function createNewPlantEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'plant',
-    name: generateRandomName('plant', parentName),
-    species: 'Flora',
+    name,
+    species,
     position: { ...position },
     energy: 50,
     health: 100,
@@ -66,21 +69,59 @@ export function createNewPlantEntity(
 
 /**
  * Create initial plants for a new garden.
+ * Uses a minimum distance algorithm to ensure plants are well-distributed.
  */
 export function createInitialPlantPopulation(
   count: number,
   gardenStateId: number
 ): Entity[] {
   const plants: Entity[] = [];
-  
+  const minDistance = 40; // Minimum distance between plants
+  const maxAttempts = 30; // Max attempts to find a valid position
+
   for (let i = 0; i < count; i++) {
-    const position = {
-      x: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenWidth,
-      y: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenHeight
-    };
+    let position: { x: number; y: number } | null = null;
+    let attempts = 0;
+
+    // Try to find a position that's far enough from existing plants
+    while (attempts < maxAttempts) {
+      const candidatePosition = {
+        x: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenWidth,
+        y: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenHeight
+      };
+
+      // Check if this position is far enough from all existing plants
+      let isValidPosition = true;
+      for (const existingPlant of plants) {
+        const dx = candidatePosition.x - existingPlant.position.x;
+        const dy = candidatePosition.y - existingPlant.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < minDistance) {
+          isValidPosition = false;
+          break;
+        }
+      }
+
+      if (isValidPosition) {
+        position = candidatePosition;
+        break;
+      }
+
+      attempts++;
+    }
+
+    // If we couldn't find a valid position after max attempts, use a random one
+    if (!position) {
+      position = {
+        x: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenWidth,
+        y: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenHeight
+      };
+    }
+
     plants.push(createNewPlantEntity(position, gardenStateId));
   }
-  
+
   return plants;
 }
 

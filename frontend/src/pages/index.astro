@@ -47,15 +47,40 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
 
       <!-- Center: Selection Tooltip (Floating Contextual) -->
       <div data-selection-info class="hidden pointer-events-none absolute transition-all duration-300">
-        <div class="pointer-events-auto flex translate-y-8 flex-col items-center space-y-2 rounded-full bg-garden-green-900/10 px-6 py-3 backdrop-blur-md border border-garden-green-500/10 shadow-2xl">
-          <div class="flex items-center space-x-3">
-             <div data-selection-icon class="text-lg"></div>
+        <div class="pointer-events-auto flex translate-y-8 flex-col items-center space-y-3 rounded-2xl bg-garden-green-900/20 px-6 py-4 backdrop-blur-md border border-garden-green-500/10 shadow-2xl min-w-[180px]">
+          <div class="flex items-center space-x-4">
+             <div data-selection-icon class="text-2xl"></div>
              <div class="flex flex-col">
                <div data-selection-name class="text-sm font-medium text-white/90 tracking-tight"></div>
                <div data-selection-species class="text-[9px] text-white/40 uppercase tracking-widest"></div>
              </div>
           </div>
-          <div data-selection-stats class="text-[10px] text-white/30 font-mono"></div>
+          
+          <!-- Vital Indicators -->
+          <div class="w-full space-y-2 pt-1 border-t border-white/5">
+            <!-- Health Bar -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-[8px] font-mono text-white/30 uppercase tracking-tighter">
+                <span>Vigor</span>
+                <span data-selection-health-text>--%</span>
+              </div>
+              <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <div data-selection-health-bar class="h-full bg-green-400 transition-all duration-500"></div>
+              </div>
+            </div>
+            <!-- Energy Bar -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-[8px] font-mono text-white/30 uppercase tracking-tighter">
+                <span>Essence</span>
+                <span data-selection-energy-text>--%</span>
+              </div>
+              <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                <div data-selection-energy-bar class="h-full bg-yellow-400 transition-all duration-500"></div>
+              </div>
+            </div>
+          </div>
+
+          <div data-selection-stats class="text-[9px] text-white/30 font-mono text-center pt-1"></div>
         </div>
       </div>
 
@@ -158,8 +183,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
         this.updateUI();
       });
 
-      // Selection clearing handled by canvas clicks (in GardenCanvas.astro)
-
       // UI Fade out logic
       let uiTimeout: number;
       const overlay = this.querySelector('#ui-overlay');
@@ -234,24 +257,43 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
       if (selectionInfo) {
         selectionInfo.classList.toggle('hidden', !this.state.selectedEntity);
         if (this.state.selectedEntity) {
+          const entity = this.state.selectedEntity;
           const nameEl = this.querySelector('[data-selection-name]')!;
           const speciesEl = this.querySelector('[data-selection-species]')!;
           const statsEl = this.querySelector('[data-selection-stats]')!;
           const iconEl = this.querySelector('[data-selection-icon]')!;
           
-          nameEl.textContent = this.state.selectedEntity.name;
-          speciesEl.textContent = this.state.selectedEntity.species;
-          statsEl.textContent = `Energy: ${Math.round(this.state.selectedEntity.energy)} • Age: ${this.state.selectedEntity.age}t`;
+          // Vital bar elements
+          const healthBar = this.querySelector('[data-selection-health-bar]') as HTMLElement;
+          const healthText = this.querySelector('[data-selection-health-text]')!;
+          const energyBar = this.querySelector('[data-selection-energy-bar]') as HTMLElement;
+          const energyText = this.querySelector('[data-selection-energy-text]')!;
           
-          const type = this.state.selectedEntity.type;
+          nameEl.textContent = entity.name;
+          speciesEl.textContent = entity.species;
+          statsEl.textContent = `Age: ${entity.age} Evolution Ticks`;
+          
           const icons = {
             plant: '🌿',
             herbivore: '🦌',
             carnivore: '🐺',
             fungus: '🍄'
           };
-          
-          iconEl.textContent = icons[type] || '❓';
+          iconEl.textContent = icons[entity.type] || '❓';
+
+          // Update Vitals
+          if (healthBar) {
+            healthBar.style.width = `${entity.health}%`;
+            healthBar.className = `h-full transition-all duration-500 ${
+              entity.health > 60 ? 'bg-green-400' : entity.health > 30 ? 'bg-yellow-400' : 'bg-red-400'
+            }`;
+          }
+          healthText.textContent = `${Math.round(entity.health)}%`;
+
+          if (energyBar) {
+            energyBar.style.width = `${entity.energy}%`;
+          }
+          energyText.textContent = `${Math.round(entity.energy)}%`;
 
           // Update tooltip position if canvas knows it
           if (canvas && typeof canvas.getEntityCanvasPosition === 'function') {
