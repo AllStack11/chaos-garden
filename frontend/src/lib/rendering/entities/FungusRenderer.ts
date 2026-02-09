@@ -80,7 +80,7 @@ export class FungusRenderer {
     const stemWidth = size * 0.24 * visual.stemScale;
     const capWidth = size * 1.35;
     const capHeight = size * 0.55;
-    const sway = Math.sin(time * 1.4 + x * 0.01) * (1.5 + visual.droopFactor * 1.8);
+    const sway = 0;
 
     this.renderStem(x + sway * 0.3, y, stemWidth, stemHeight, visual, healthFactor);
     this.renderCap(x + sway, y - stemHeight, capWidth, capHeight, visual, healthFactor);
@@ -113,7 +113,7 @@ export class FungusRenderer {
     if (!this.ctx || !this.random) return;
 
     const layerCount = Math.max(2, visual.capLayers);
-    const baseTilt = Math.sin(time * 0.8 + x * 0.02) * (0.08 + visual.droopFactor * 0.12);
+    const baseTilt = 0;
 
     for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
       const progress = layerIndex / layerCount;
@@ -156,7 +156,7 @@ export class FungusRenderer {
     if (!this.ctx || !this.random) return;
 
     const bodyRadius = size * (0.7 + visual.capScale * 0.15);
-    const wobble = Math.sin(time * 1.6 + x * 0.02) * (0.8 + visual.droopFactor * 1.2);
+    const wobble = 0;
 
     this.ctx.fillStyle = this.getCapColor(visual, healthFactor);
     this.ctx.beginPath();
@@ -197,7 +197,7 @@ export class FungusRenderer {
   ): void {
     if (!this.ctx || !this.random) return;
 
-    const count = Math.max(3, visual.clusterCount);
+    const count = Math.max(3, Math.floor(visual.clusterCount * (0.8 + visual.genome.fungus.colonyTopology * 0.4)));
     const spread = size * visual.clusterSpread;
 
     for (let index = 0; index < count; index += 1) {
@@ -206,7 +206,7 @@ export class FungusRenderer {
       const offsetX = Math.cos(angle) * offsetRadius;
       const offsetY = Math.sin(angle) * offsetRadius * 0.45;
       const mushroomSize = size * this.random.range(0.35, 0.62);
-      const bob = Math.sin(time * 1.7 + index + x * 0.01) * (0.5 + visual.droopFactor * 0.8);
+      const bob = 0;
 
       const stemHeight = mushroomSize * (0.95 + visual.stemScale * 0.25);
       this.renderStem(

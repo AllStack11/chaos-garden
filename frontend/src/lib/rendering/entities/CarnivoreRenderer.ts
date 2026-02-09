@@ -34,7 +34,7 @@ export class CarnivoreRenderer {
     this.random = new SeededRandom(visual.visualSeed);
 
     const size = this.calculateSize(entity.energy, visual);
-    const bob = Math.sin(time * 5 + visual.visualSeed * 0.0006) * size * 0.08;
+    const bob = Math.sin(time * 3 + visual.visualSeed * 0.0006) * size * 0.02;
     const bodyX = x;
     const bodyY = y - bob;
     const isHunting = entity.energy < 50;
@@ -103,8 +103,8 @@ export class CarnivoreRenderer {
     const bodyWidth = size * 0.52;
     const bodyLength = size * visual.bodyLengthRatio;
     const headRadius = size * 0.24 * visual.headSize;
-    const tailSwing = Math.sin(time * 4 + x * 0.01) * size * 0.18;
-    const stance = size * 0.6 * visual.stanceWidth;
+    const tailSwing = Math.sin(time * (2.2 + visual.genome.carnivore.tailDynamics * 0.4) + x * 0.01) * size * 0.06;
+    const stance = size * 0.6 * visual.stanceWidth * visual.genome.carnivore.stanceProfile;
 
     this.renderLegs(x, y, size, visual, stance, time);
 
@@ -158,7 +158,9 @@ export class CarnivoreRenderer {
     this.ctx.lineWidth = Math.max(1, bodyWidth * 0.08);
 
     if (visual.patternType === 'striped' || visual.patternType === 'banded') {
-      const stripeCount = visual.patternType === 'banded' ? 3 : 5;
+      const stripeCount = visual.patternType === 'banded'
+        ? Math.max(2, Math.floor(visual.genome.carnivore.stripeMaskFrequency))
+        : Math.max(4, Math.floor(visual.genome.carnivore.stripeMaskFrequency) + 1);
       for (let index = 0; index < stripeCount; index += 1) {
         const offset = ((index + 1) / (stripeCount + 1) - 0.5) * bodyLength;
         this.ctx.beginPath();
@@ -169,7 +171,8 @@ export class CarnivoreRenderer {
       return;
     }
 
-    for (let index = 0; index < 5; index += 1) {
+    const spotCount = Math.max(4, Math.floor(visual.genome.carnivore.spotMaskFrequency));
+    for (let index = 0; index < spotCount; index += 1) {
       const spotX = x + (this.random?.range(-0.45, 0.45) ?? 0) * bodyLength;
       const spotY = y + (this.random?.range(-0.6, 0.6) ?? 0) * bodyWidth;
       const spotRadius = bodyWidth * (this.random?.range(0.08, 0.16) ?? 0.1);
@@ -200,7 +203,7 @@ export class CarnivoreRenderer {
       const progress = legCount <= 2 ? 0.5 : index / ((legCount / 2) - 1 || 1);
       const anchorX = x + (progress - 0.5) * stance;
       const phase = time * 7 + index;
-      const stepOffset = Math.sin(phase) * size * 0.08;
+      const stepOffset = Math.sin(phase) * size * 0.025;
 
       this.ctx.beginPath();
       this.ctx.moveTo(anchorX, y);

@@ -180,7 +180,10 @@ export async function runSimulationTick(
       newPopulations,
       eventLogger
     );
-    
+
+    // 10. Generate ambient narrative (guarantees at least one narrative event per tick)
+    await eventLogger.logAmbientNarrative(updatedEnvironment, newPopulations, allLivingEntitiesAfterTick);
+
     const duration = Date.now() - startTime;
     metrics.total_duration = duration;
     

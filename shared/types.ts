@@ -207,7 +207,8 @@ export type SimulationEventType =
   | 'DISASTER_PLAGUE'
   | 'USER_INTERVENTION'
   | 'ENVIRONMENT_CHANGE'
-  | 'POPULATION_DELTA';
+  | 'POPULATION_DELTA'
+  | 'AMBIENT';
 
 /**
  * Severity levels for simulation events - the drama of life.

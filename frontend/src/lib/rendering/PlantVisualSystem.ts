@@ -58,6 +58,7 @@ export interface PlantVisual {
   // Identity
   plantType: PlantType;
   visualSeed: number;
+  genome: VisualGenome;
   
   // Structural
   leafCount: number;
@@ -171,6 +172,16 @@ export function generatePlantVisual(entity: Entity): PlantVisual {
   const rng = new SeededRandom(seed);
   const traits = entity.traits as PlantTraits;
   const plantType = determinePlantType(entity.name, entity.species);
+  const genome = getVisualGenome({
+    id: entity.id,
+    species: entity.species,
+    type: 'plant',
+    traits: {
+      photosynthesisRate: traits.photosynthesisRate,
+      reproductionRate: traits.reproductionRate,
+      metabolismEfficiency: traits.metabolismEfficiency,
+    },
+  });
   
   // Base properties from type
   const typeConfigs: Record<PlantType, {
@@ -200,6 +211,7 @@ export function generatePlantVisual(entity: Entity): PlantVisual {
   return {
     plantType,
     visualSeed: seed,
+    genome,
     
     // Structural
     leafCount: rng.int(config.leafCount[0], config.leafCount[1]),
@@ -275,3 +287,5 @@ export function getPlantVisual(entity: Entity): PlantVisual {
 export function clearVisualCache(): void {
   visualCache.clear();
 }
+import type { VisualGenome } from './types.ts';
+import { getVisualGenome } from './VisualGenome.ts';

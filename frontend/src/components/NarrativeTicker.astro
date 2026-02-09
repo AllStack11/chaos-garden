@@ -1,0 +1,155 @@
+---
+/**
+ * Narrative Ticker Component
+ *
+ * Displays atmospheric narrative blurbs from simulation events,
+ * cycling through them with gentle fade transitions.
+ * Like nature documentary subtitles for a digital ecosystem.
+ */
+---
+
+<narrative-ticker class="block w-full">
+  <div id="narrative-container" class="flex justify-center">
+    <p id="narrative-text"
+       class="max-w-lg text-center text-sm italic font-light tracking-wide leading-relaxed
+              text-white/0 transition-all duration-1000 ease-in-out"
+       style="text-shadow: 0 1px 3px rgba(0,0,0,0.8);">
+    </p>
+  </div>
+</narrative-ticker>
+
+<script>
+  import type { SimulationEvent } from '../env.d.ts';
+
+  const NORMAL_DISPLAY_DURATION_MS = 6000;
+  const HIGH_SEVERITY_DISPLAY_DURATION_MS = 8000;
+  const FADE_DURATION_MS = 1000;
+  const MAX_QUEUE_SIZE = 5;
+
+  type EventSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+  const SEVERITY_PRIORITY: Record<EventSeverity, number> = {
+    CRITICAL: 4,
+    HIGH: 3,
+    MEDIUM: 2,
+    LOW: 1,
+  };
+
+  /**
+   * Prioritize events for narrative display.
+   * Higher severity events bubble to the top; AMBIENT events sink.
+   */
+  function prioritizeEventsForNarrativeDisplay(events: SimulationEvent[]): SimulationEvent[] {
+    return [...events]
+      .sort((a, b) => {
+        const severityDiff = (SEVERITY_PRIORITY[b.severity as EventSeverity] ?? 0)
+                           - (SEVERITY_PRIORITY[a.severity as EventSeverity] ?? 0);
+        if (severityDiff !== 0) return severityDiff;
+        return b.tick - a.tick;
+      })
+      .slice(0, MAX_QUEUE_SIZE);
+  }
+
+  /**
+   * Get the text color class based on event severity.
+   */
+  function getTextColorForSeverity(severity: EventSeverity): string {
+    switch (severity) {
+      case 'CRITICAL': return 'text-red-300/70';
+      case 'HIGH': return 'text-yellow-300/60';
+      case 'MEDIUM': return 'text-white/55';
+      case 'LOW':
+      default: return 'text-white/45';
+    }
+  }
+
+  class NarrativeTicker extends HTMLElement {
+    private eventQueue: SimulationEvent[] = [];
+    private currentIndex: number = 0;
+    private cycleTimer: ReturnType<typeof setTimeout> | null = null;
+    private textElement: HTMLParagraphElement | null = null;
+
+    connectedCallback() {
+      this.textElement = this.querySelector('#narrative-text');
+    }
+
+    disconnectedCallback() {
+      if (this.cycleTimer) {
+        clearTimeout(this.cycleTimer);
+        this.cycleTimer = null;
+      }
+    }
+
+    public updateNarrativeEvents(events: SimulationEvent[]) {
+      this.eventQueue = prioritizeEventsForNarrativeDisplay(events);
+      this.currentIndex = 0;
+
+      // Restart the cycle with fresh events
+      if (this.cycleTimer) {
+        clearTimeout(this.cycleTimer);
+        this.cycleTimer = null;
+      }
+
+      if (this.eventQueue.length > 0) {
+        this.displayCurrentNarrativeEvent();
+      }
+    }
+
+    private displayCurrentNarrativeEvent() {
+      if (!this.textElement || this.eventQueue.length === 0) return;
+
+      const event = this.eventQueue[this.currentIndex];
+      if (!event) return;
+
+      const severity = event.severity as EventSeverity;
+      const colorClass = getTextColorForSeverity(severity);
+      const displayDuration = severity === 'HIGH' || severity === 'CRITICAL'
+        ? HIGH_SEVERITY_DISPLAY_DURATION_MS
+        : NORMAL_DISPLAY_DURATION_MS;
+
+      // Fade out current text
+      this.textElement.className = this.textElement.className.replace(
+        /text-(white|red|yellow)-?\d*\/\d+/g, ''
+      );
+      this.textElement.classList.add('text-white/0');
+
+      // After fade out, swap text and fade in
+      setTimeout(() => {
+        if (!this.textElement) return;
+
+        this.textElement.textContent = event.description;
+
+        // Remove transparent class, add severity color
+        this.textElement.classList.remove('text-white/0');
+        // Reset to base classes then add color
+        this.textElement.className =
+          'max-w-lg text-center text-sm italic font-light tracking-wide leading-relaxed ' +
+          'transition-all duration-1000 ease-in-out ' +
+          colorClass;
+        this.textElement.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+      }, FADE_DURATION_MS);
+
+      // Schedule fade out and next event
+      this.cycleTimer = setTimeout(() => {
+        this.fadeOutAndAdvance();
+      }, FADE_DURATION_MS + displayDuration);
+    }
+
+    private fadeOutAndAdvance() {
+      if (!this.textElement) return;
+
+      // Fade out
+      this.textElement.className =
+        'max-w-lg text-center text-sm italic font-light tracking-wide leading-relaxed ' +
+        'transition-all duration-1000 ease-in-out text-white/0';
+
+      // After fade out, advance to next event
+      this.cycleTimer = setTimeout(() => {
+        this.currentIndex = (this.currentIndex + 1) % this.eventQueue.length;
+        this.displayCurrentNarrativeEvent();
+      }, FADE_DURATION_MS);
+    }
+  }
+
+  customElements.define('narrative-ticker', NarrativeTicker);
+</script>

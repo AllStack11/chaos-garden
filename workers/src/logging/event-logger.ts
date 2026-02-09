@@ -11,15 +11,18 @@
  * births, deaths, reproductions, mutations, disasters, and more.
  */
 
-import type { 
-  SimulationEvent, 
-  Entity, 
-  SimulationEventType, 
-  EventSeverity 
+import type {
+  SimulationEvent,
+  Entity,
+  Environment,
+  PopulationSummary,
+  SimulationEventType,
+  EventSeverity
 } from '@chaos-garden/shared';
 import { logSimulationEventToDatabase } from '../db/queries';
 import type { D1Database } from '../types/worker';
 import { extractTraits } from '../simulation/environment/helpers';
+import { generateAmbientNarrativeForTick } from './narrative-templates';
 
 const ANSI_RESET = '\x1b[0m';
 const ANSI_DIM = '\x1b[2m';
@@ -69,6 +72,8 @@ function getEventTypeColor(eventType: SimulationEventType): string {
       return ANSI_CYAN;
     case 'POPULATION_DELTA':
       return ANSI_BLUE;
+    case 'AMBIENT':
+      return ANSI_DIM;
   }
 
   return ANSI_RESET;
@@ -90,6 +95,7 @@ export interface EventLogger {
   logUserIntervention(action: string, description: string, affected: string[]): Promise<void>;
   logEnvironmentChange(description: string): Promise<void>;
   logCustom(eventType: SimulationEventType, description: string, entities: string[], severity: EventSeverity, tags?: string[], metadata?: Record<string, unknown>): Promise<void>;
+  logAmbientNarrative(environment: Environment, populations: PopulationSummary, entities: Entity[]): Promise<void>;
 }
 
 /**
@@ -281,6 +287,17 @@ export function createEventLogger(
 
     logCustom: async (eventType, description, entities, severity, tags = [], metadata) => {
       await logEvent(eventType, description, entities, severity, tags, metadata);
+    },
+
+    logAmbientNarrative: async (environment, populations, entities) => {
+      const { description, tags } = generateAmbientNarrativeForTick(environment, populations, entities);
+      await logEvent(
+        'AMBIENT',
+        description,
+        [],
+        'LOW',
+        ['ambient', 'narrative', ...tags]
+      );
     }
   };
 }
@@ -344,6 +361,11 @@ export function createConsoleEventLogger(tick: number, gardenStateId: number): E
     },
     logCustom: async (eventType, description, entities, severity, tags) => {
       await logToConsole(eventType, description, entities, severity, tags);
+    },
+
+    logAmbientNarrative: async (environment, populations, entities) => {
+      const { description, tags } = generateAmbientNarrativeForTick(environment, populations, entities);
+      await logToConsole('AMBIENT', description, [], 'LOW', ['ambient', 'narrative', ...tags]);
     }
   };
 }
@@ -386,6 +408,10 @@ export function createCompositeEventLogger(loggers: EventLogger[]): EventLogger 
     },
     logCustom: async (eventType, description, entities, severity, tags, metadata) => {
       await Promise.all(loggers.map(l => l.logCustom(eventType, description, entities, severity, tags, metadata)));
+    },
+
+    logAmbientNarrative: async (environment, populations, entities) => {
+      await Promise.all(loggers.map(l => l.logAmbientNarrative(environment, populations, entities)));
     }
   };
 }
@@ -405,6 +431,7 @@ export function createNullEventLogger(): EventLogger {
     logDisaster: async () => {},
     logUserIntervention: async () => {},
     logEnvironmentChange: async () => {},
-    logCustom: async () => {}
+    logCustom: async () => {},
+    logAmbientNarrative: async () => {}
   };
 }

@@ -33,6 +33,7 @@ export type CapShape = 'round' | 'flat' | 'conical' | 'lobed';
 export interface FungusVisual {
   fungusType: FungusType;
   visualSeed: number;
+  genome: VisualGenome;
 
   capScale: number;
   stemScale: number;
@@ -153,6 +154,17 @@ export function generateFungusVisual(entity: Entity): FungusVisual {
   const random = new SeededRandom(seed);
   const traits = entity.traits as FungusTraits;
   const fungusType = determineFungusType(entity.name, entity.species);
+  const genome = getVisualGenome({
+    id: entity.id,
+    species: entity.species,
+    type: 'fungus',
+    traits: {
+      reproductionRate: traits.reproductionRate,
+      metabolismEfficiency: traits.metabolismEfficiency,
+      decompositionRate: traits.decompositionRate,
+      perceptionRadius: traits.perceptionRadius,
+    },
+  });
 
   const typeConfigs: Record<FungusType, {
     capScale: [number, number];
@@ -248,6 +260,7 @@ export function generateFungusVisual(entity: Entity): FungusVisual {
   return {
     fungusType,
     visualSeed: seed,
+    genome,
 
     capScale: random.range(config.capScale[0], config.capScale[1]) * (0.8 + decompositionInfluence * 0.3),
     stemScale: random.range(config.stemScale[0], config.stemScale[1]) * (0.85 + traits.metabolismEfficiency * 0.2),
@@ -289,3 +302,5 @@ export function getFungusVisual(entity: Entity): FungusVisual {
 export function clearFungusVisualCache(): void {
   visualCache.clear();
 }
+import type { VisualGenome } from './types.ts';
+import { getVisualGenome } from './VisualGenome.ts';

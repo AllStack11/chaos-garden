@@ -52,7 +52,8 @@ export class HerbivoreRenderer {
     
     const size = this.calculateSize(entity.energy, visual);
     const healthFactor = entity.health / 100;
-    const bobOffset = Math.abs(Math.sin(time * 8)) * 3 * healthFactor;
+    const gaitProfile = visual.genome.herbivore.gaitProfile;
+    const bobOffset = Math.abs(Math.sin(time * (7 + gaitProfile * 2))) * (2 + visual.genome.herbivore.appendageStyle * 2) * healthFactor;
     
     switch (visual.creatureType) {
       case 'butterfly':

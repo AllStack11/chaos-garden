@@ -1,4 +1,5 @@
 import type { Entity } from '../../../env.d.ts';
+import type { LightingContext, QualityTier, TimePhase } from '../../rendering/types.ts';
 
 export interface EntityColor {
   h: number;
@@ -12,4 +13,8 @@ export interface EntityRenderConfig {
   worldToScreen: (x: number, y: number) => { x: number; y: number; scale: number };
   calculateEntitySize: (energy: number) => number;
   colors: Record<'plant' | 'herbivore' | 'carnivore' | 'fungus', EntityColor>;
+  lighting: LightingContext;
+  qualityTier: QualityTier;
+  timePhase: TimePhase;
+  frameTimestampMs: number;
 }

@@ -51,8 +51,15 @@ export class PlantRenderer {
     this.rng = new SeededRandom(visualSeed);
     
     const size = this.calculateSize(entity.energy, visual);
-    const sway = Math.sin(time * 2 + x * 0.01) * (2 + visual.stemCurvature * 0.5);
+    const genome = visual.genome.plant;
+    const sway = Math.sin(time * (1.8 + genome.veinDensity * 0.6) + x * 0.01) * (2 + visual.stemCurvature * 0.5 + genome.silhouetteNoise * 2);
     const healthFactor = entity.health / 100;
+    const branchPulse = 1 + Math.sin(time * (0.8 + genome.branchDepth * 0.1)) * 0.02;
+
+    this.ctx.save();
+    this.ctx.translate(x, y);
+    this.ctx.scale(branchPulse, branchPulse);
+    this.ctx.translate(-x, -y);
     
     switch (visual.plantType) {
       case 'fern':
@@ -91,6 +98,8 @@ export class PlantRenderer {
     if (entity.energy > 70) {
       this.renderEnergyGlow(x, y - size, size * 2, visual);
     }
+
+    this.ctx.restore();
   }
   
   /**
@@ -224,6 +233,7 @@ export class PlantRenderer {
     if (!this.ctx) return;
     
     const baseHue = 340 + visual.baseHue;
+    const petalStretch = 1 + visual.genome.plant.petalDeformation * 0.25;
     
     // Outer petals
     for (let i = 0; i < petalCount; i++) {
@@ -233,7 +243,7 @@ export class PlantRenderer {
       this.ctx.ellipse(
         x + Math.cos(angle) * size * 0.3,
         y + Math.sin(angle) * size * 0.3,
-        size * 0.35, size * 0.17, angle, 0, Math.PI * 2
+        size * 0.35 * petalStretch, size * 0.17, angle, 0, Math.PI * 2
       );
       this.ctx.fill();
     }
@@ -246,7 +256,7 @@ export class PlantRenderer {
       this.ctx.ellipse(
         x + Math.cos(angle) * size * 0.15,
         y + Math.sin(angle) * size * 0.15,
-        size * 0.22, size * 0.1, angle, 0, Math.PI * 2
+        size * 0.22 * petalStretch, size * 0.1, angle, 0, Math.PI * 2
       );
       this.ctx.fill();
     }

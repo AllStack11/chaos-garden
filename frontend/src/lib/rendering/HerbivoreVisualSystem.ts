@@ -65,6 +65,7 @@ export interface HerbivoreVisual {
   // Identity
   creatureType: HerbivoreType;
   visualSeed: number;
+  genome: VisualGenome;
   
   // Body
   bodyShape: BodyShape;
@@ -256,6 +257,17 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
   const traits = entity.traits as HerbivoreTraits;
   const creatureType = determineHerbivoreType(entity.name, entity.species);
   const colors = getBaseColorForType(creatureType, rng);
+  const genome = getVisualGenome({
+    id: entity.id,
+    species: entity.species,
+    type: 'herbivore',
+    traits: {
+      reproductionRate: traits.reproductionRate,
+      movementSpeed: traits.movementSpeed,
+      metabolismEfficiency: traits.metabolismEfficiency,
+      perceptionRadius: traits.perceptionRadius,
+    },
+  });
   
   // Speed influences body shape (faster = sleeker)
   const speedInfluence = traits.movementSpeed / 3; // normalize around typical speed
@@ -433,6 +445,7 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
   return {
     creatureType,
     visualSeed: seed,
+    genome,
     
     // Body
     bodyShape: rng.choice(config.bodyShape),
@@ -504,3 +517,5 @@ export function getHerbivoreColor(baseColor: string, visual: HerbivoreVisual): s
   // This is a placeholder for more complex color manipulation if needed
   return baseColor;
 }
+import type { VisualGenome } from './types.ts';
+import { getVisualGenome } from './VisualGenome.ts';

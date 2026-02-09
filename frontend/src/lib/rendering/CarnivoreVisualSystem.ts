@@ -33,6 +33,7 @@ export type CarnivorePatternType = 'solid' | 'striped' | 'spotted' | 'banded';
 export interface CarnivoreVisual {
   predatorType: CarnivoreType;
   visualSeed: number;
+  genome: VisualGenome;
 
   bodyScale: number;
   bodyLengthRatio: number;
@@ -164,6 +165,17 @@ export function generateCarnivoreVisual(entity: Entity): CarnivoreVisual {
   const seed = generateVisualSeed(entity);
   const random = new SeededRandom(seed);
   const traits = entity.traits as CarnivoreTraits;
+  const genome = getVisualGenome({
+    id: entity.id,
+    species: entity.species,
+    type: 'carnivore',
+    traits: {
+      reproductionRate: traits.reproductionRate,
+      movementSpeed: traits.movementSpeed,
+      metabolismEfficiency: traits.metabolismEfficiency,
+      perceptionRadius: traits.perceptionRadius,
+    },
+  });
 
   const predatorType = determineCarnivoreType(entity, random);
   const colors = getPalette(predatorType, random);
@@ -218,6 +230,7 @@ export function generateCarnivoreVisual(entity: Entity): CarnivoreVisual {
   return {
     predatorType,
     visualSeed: seed,
+    genome,
 
     bodyScale: random.range(0.82, 1.24) * (0.84 + metabolismInfluence * 0.22),
     bodyLengthRatio: random.range(config.bodyLengthRatio[0], config.bodyLengthRatio[1]) * speedInfluence,
@@ -258,3 +271,5 @@ export function getCarnivoreVisual(entity: Entity): CarnivoreVisual {
 export function clearCarnivoreVisualCache(): void {
   visualCache.clear();
 }
+import type { VisualGenome } from './types.ts';
+import { getVisualGenome } from './VisualGenome.ts';

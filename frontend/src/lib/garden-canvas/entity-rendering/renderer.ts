@@ -8,6 +8,7 @@ import { getHerbivoreVisual } from '../../rendering/HerbivoreVisualSystem.ts';
 import { getFungusVisual } from '../../rendering/FungusVisualSystem.ts';
 import { getCarnivoreVisual } from '../../rendering/CarnivoreVisualSystem.ts';
 import type { EntityRenderConfig } from './types.ts';
+import type { RuntimeVisualState } from '../../rendering/types.ts';
 
 interface PlantVisualEntity {
   id: string;
@@ -68,80 +69,284 @@ interface CarnivoreVisualEntity {
   };
 }
 
+type BehaviorState = 'idle' | 'move' | 'forage' | 'hunt' | 'flee' | 'recover';
+
+interface EntityMotionSnapshot {
+  lastX: number;
+  lastY: number;
+  lastEnergy: number;
+  lastTimestamp: number;
+  behavior: BehaviorState;
+  phaseOffset: number;
+  speed: number;
+}
+
+interface PreparedEntity {
+  entity: Entity;
+  x: number;
+  y: number;
+  scale: number;
+  radius: number;
+  runtime: RuntimeVisualState;
+  behavior: BehaviorState;
+  motionSpeed: number;
+  animationTime: number;
+}
+
 export class GardenEntityRenderer {
   private readonly plantRenderer = new PlantRenderer();
   private readonly herbivoreRenderer = new HerbivoreRenderer();
   private readonly fungusRenderer = new FungusRenderer();
   private readonly carnivoreRenderer = new CarnivoreRenderer();
+  private readonly motionSnapshots = new Map<string, EntityMotionSnapshot>();
+  private preparedEntitiesCache: PreparedEntity[] = [];
+  private preparedEntitiesCacheTimestamp = -1;
+  private preparedEntitiesSource: Entity[] | null = null;
 
-  renderEntities(
+  renderEntityShadows(
     ctx: CanvasRenderingContext2D,
     entities: Entity[],
     config: EntityRenderConfig,
   ): void {
-    const sortedEntities = [...entities].sort((left, right) => left.position.y - right.position.y);
-    const time = Date.now() / 1000;
+    const preparedEntities = this.prepareEntities(entities, config);
 
-    sortedEntities.forEach((entity) => {
-      this.drawEntity(ctx, entity, time, config);
+    preparedEntities.forEach((prepared) => {
+      if (!prepared.entity.isAlive) return;
+
+      const shadowDirectionX = Math.cos(config.lighting.sunDirection + Math.PI);
+      const shadowDirectionY = Math.sin(config.lighting.sunDirection + Math.PI);
+      const shadowLength = 8 + (1 - config.lighting.sunlight) * 18;
+
+      ctx.save();
+      ctx.fillStyle = `rgba(3, 8, 6, ${0.08 + config.lighting.shadowStrength * 0.18})`;
+      ctx.beginPath();
+      ctx.ellipse(
+        prepared.x + shadowDirectionX * shadowLength,
+        prepared.y + shadowDirectionY * shadowLength,
+        prepared.radius * 0.9,
+        prepared.radius * 0.35,
+        shadowDirectionX * 0.25,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.restore();
     });
   }
 
-  private drawEntity(
+  renderEntitiesBase(
     ctx: CanvasRenderingContext2D,
-    entity: Entity,
-    time: number,
+    entities: Entity[],
     config: EntityRenderConfig,
   ): void {
-    if (!entity.isAlive) return;
+    const preparedEntities = this.prepareEntities(entities, config);
 
-    const isSelected = config.selectedEntity?.id === entity.id;
-    const isHovered = config.hoveredEntity?.id === entity.id;
-    const { x, y, scale } = config.worldToScreen(entity.position.x, entity.position.y);
-    const radius = config.calculateEntitySize(entity.energy) * scale;
-
-    this.drawDetailedEntity(ctx, entity, x, y, time);
-
-    if (isHovered) {
-      this.drawNameTag(ctx, entity.name, x, y - radius - 15, false);
-    }
-
-    if (isSelected) {
-      drawSelectionRing(ctx, x, y, radius);
-    }
+    preparedEntities.forEach((prepared) => {
+      this.renderEntityBase(ctx, prepared, config);
+    });
   }
 
-  private calculateEntityTimeOffset(entityId: string): number {
-    let hash = 0;
-    for (let i = 0; i < entityId.length; i++) {
-      hash = ((hash << 5) - hash) + entityId.charCodeAt(i);
-      hash = hash & hash;
-    }
-    return (Math.abs(hash) % 628) / 100;
-  }
-
-  private drawDetailedEntity(
+  renderEntityOverlays(
     ctx: CanvasRenderingContext2D,
-    entity: Entity,
-    x: number,
-    y: number,
-    time: number,
+    entities: Entity[],
+    config: EntityRenderConfig,
   ): void {
-    const entityTime = time + this.calculateEntityTimeOffset(entity.id);
+    const preparedEntities = this.prepareEntities(entities, config);
 
-    switch (entity.type) {
+    preparedEntities.forEach((prepared) => {
+      if (!prepared.entity.isAlive) return;
+
+      this.drawStateOverlay(ctx, prepared, config);
+
+      const isHovered = config.hoveredEntity?.id === prepared.entity.id;
+      const isSelected = config.selectedEntity?.id === prepared.entity.id;
+
+      if (isHovered) {
+        this.drawNameTag(ctx, prepared.entity.name, prepared.x, prepared.y - prepared.radius - 15, false);
+      }
+
+      if (isSelected) {
+        drawSelectionRing(ctx, prepared.x, prepared.y, prepared.radius);
+        this.drawNameTag(ctx, prepared.entity.name, prepared.x, prepared.y - prepared.radius - 30, true);
+      }
+    });
+  }
+
+  private prepareEntities(
+    entities: Entity[],
+    config: EntityRenderConfig,
+  ): PreparedEntity[] {
+    if (
+      this.preparedEntitiesCacheTimestamp === config.frameTimestampMs &&
+      this.preparedEntitiesSource === entities
+    ) {
+      return this.preparedEntitiesCache;
+    }
+
+    const now = config.frameTimestampMs;
+    const sortedEntities = [...entities].sort((left, right) => left.position.y - right.position.y);
+
+    const preparedEntities = sortedEntities.map((entity) => {
+      const { x, y, scale } = config.worldToScreen(entity.position.x, entity.position.y);
+      const radius = config.calculateEntitySize(entity.energy) * scale;
+      const motion = this.updateMotionSnapshot(entity, now);
+      const runtime = buildRuntimeVisualState(entity, config);
+
+      return {
+        entity,
+        x,
+        y,
+        scale,
+        radius,
+        runtime,
+        behavior: motion.behavior,
+        motionSpeed: motion.speed,
+        animationTime: now / 1000 + motion.phaseOffset,
+      };
+    });
+
+    this.preparedEntitiesCache = preparedEntities;
+    this.preparedEntitiesCacheTimestamp = config.frameTimestampMs;
+    this.preparedEntitiesSource = entities;
+    return preparedEntities;
+  }
+
+  private updateMotionSnapshot(entity: Entity, now: number): EntityMotionSnapshot {
+    const previous = this.motionSnapshots.get(entity.id);
+    const phaseOffset = previous?.phaseOffset ?? this.calculateEntityPhaseOffset(entity.id);
+
+    if (!previous) {
+      const snapshot: EntityMotionSnapshot = {
+        lastX: entity.position.x,
+        lastY: entity.position.y,
+        lastEnergy: entity.energy,
+        lastTimestamp: now,
+        behavior: 'idle',
+        phaseOffset,
+        speed: 0,
+      };
+      this.motionSnapshots.set(entity.id, snapshot);
+      return snapshot;
+    }
+
+    const dt = Math.max(16, now - previous.lastTimestamp) / 1000;
+    const deltaX = entity.position.x - previous.lastX;
+    const deltaY = entity.position.y - previous.lastY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const speed = distance / dt;
+    const energyDelta = entity.energy - previous.lastEnergy;
+
+    const nextSnapshot: EntityMotionSnapshot = {
+      ...previous,
+      lastX: entity.position.x,
+      lastY: entity.position.y,
+      lastEnergy: entity.energy,
+      lastTimestamp: now,
+      speed,
+      behavior: this.inferBehavior(entity, speed, energyDelta),
+    };
+
+    this.motionSnapshots.set(entity.id, nextSnapshot);
+    return nextSnapshot;
+  }
+
+  private inferBehavior(entity: Entity, speed: number, energyDelta: number): BehaviorState {
+    if (entity.health < 30) return 'recover';
+
+    if (entity.type === 'carnivore') {
+      if (speed > 8) return 'hunt';
+      if (energyDelta < -1.5) return 'forage';
+      return speed > 2 ? 'move' : 'idle';
+    }
+
+    if (entity.type === 'herbivore') {
+      if (speed > 9) return 'flee';
+      if (energyDelta < -1.2) return 'forage';
+      return speed > 2 ? 'move' : 'idle';
+    }
+
+    if (entity.type === 'fungus') {
+      return energyDelta > 0.2 ? 'forage' : 'idle';
+    }
+
+    if (entity.type === 'plant') {
+      return entity.health < 40 ? 'recover' : 'idle';
+    }
+
+    return 'idle';
+  }
+
+  private renderEntityBase(
+    ctx: CanvasRenderingContext2D,
+    prepared: PreparedEntity,
+    config: EntityRenderConfig,
+  ): void {
+    if (!prepared.entity.isAlive) return;
+
+    ctx.save();
+    this.applyTypeMotionTransform(ctx, prepared, config);
+
+    switch (prepared.entity.type) {
       case 'plant':
-        this.drawPlantEntity(ctx, entity, x, y, entityTime);
+        this.drawPlantEntity(ctx, prepared.entity, prepared.x, prepared.y, prepared.animationTime, prepared.runtime);
         break;
       case 'herbivore':
-        this.drawHerbivoreEntity(ctx, entity, x, y, entityTime);
+        this.drawHerbivoreEntity(ctx, prepared.entity, prepared.x, prepared.y, prepared.animationTime, prepared.motionSpeed);
         break;
       case 'carnivore':
-        this.drawCarnivoreEntity(ctx, entity, x, y, entityTime);
+        this.drawCarnivoreEntity(ctx, prepared.entity, prepared.x, prepared.y, prepared.animationTime, prepared.behavior);
         break;
       case 'fungus':
-        this.drawFungusEntity(ctx, entity, x, y, entityTime);
+        this.drawFungusEntity(ctx, prepared.entity, prepared.x, prepared.y, prepared.animationTime, prepared.behavior);
         break;
+    }
+
+    ctx.restore();
+  }
+
+  private applyTypeMotionTransform(
+    ctx: CanvasRenderingContext2D,
+    prepared: PreparedEntity,
+    config: EntityRenderConfig,
+  ): void {
+    const basePulse = Math.sin(prepared.animationTime * 2.2) * 0.02;
+
+    switch (prepared.entity.type) {
+      case 'plant': {
+        const entity = toPlantVisualEntity(prepared.entity, prepared.x, prepared.y);
+        const visual = getPlantVisual(entity);
+        const tremor = prepared.entity.health < 35 ? Math.sin(prepared.animationTime * 24) * 0.8 : 0;
+        const sway = Math.sin(prepared.animationTime * (0.8 + visual.genome.plant.silhouetteNoise)) * (1.3 + visual.genome.plant.branchDepth * 0.2);
+        ctx.translate(sway + tremor, 0);
+        break;
+      }
+      case 'herbivore': {
+        const entity = toHerbivoreVisualEntity(prepared.entity, prepared.x, prepared.y);
+        const visual = getHerbivoreVisual(entity);
+        const gait = visual.genome.herbivore.gaitProfile;
+        const bob = Math.sin(prepared.animationTime * 10 * gait) * (0.7 + prepared.motionSpeed * 0.02);
+        ctx.translate(0, -bob);
+        ctx.scale(1 + basePulse * 0.4, 1 - basePulse * 0.3);
+        break;
+      }
+      case 'carnivore': {
+        const entity = toCarnivoreVisualEntity(prepared.entity, prepared.x, prepared.y);
+        const visual = getCarnivoreVisual(entity);
+        const crouch = prepared.behavior === 'hunt' ? 1 - visual.genome.carnivore.stanceProfile * 0.02 : 1;
+        const shoulderRoll = Math.sin(prepared.animationTime * (4 + visual.genome.carnivore.tailDynamics * 0.5)) * 0.008;
+        ctx.translate(0, prepared.behavior === 'hunt' ? 0.8 : 0);
+        ctx.scale(1, crouch);
+        ctx.rotate(shoulderRoll);
+        break;
+      }
+      case 'fungus': {
+        // Fungi stay rooted in place; no transform animation.
+        break;
+      }
+    }
+
+    if (config.qualityTier === 'low') {
+      ctx.globalAlpha = 0.96;
     }
   }
 
@@ -151,10 +356,16 @@ export class GardenEntityRenderer {
     x: number,
     y: number,
     time: number,
+    runtime: RuntimeVisualState,
   ): void {
     const plantVisualEntity = toPlantVisualEntity(entity, x, y);
     const visual = getPlantVisual(plantVisualEntity);
-    this.plantRenderer.render(ctx, entity, visual, x, y, time);
+
+    const growthPulse = 1 + runtime.sunlightOverlay * 0.03;
+    ctx.save();
+    ctx.scale(growthPulse, growthPulse);
+    this.plantRenderer.render(ctx, entity, visual, x / growthPulse, y / growthPulse, time);
+    ctx.restore();
   }
 
   private drawHerbivoreEntity(
@@ -163,10 +374,12 @@ export class GardenEntityRenderer {
     x: number,
     y: number,
     time: number,
+    motionSpeed: number,
   ): void {
     const herbivoreVisualEntity = toHerbivoreVisualEntity(entity, x, y);
     const visual = getHerbivoreVisual(herbivoreVisualEntity);
-    this.herbivoreRenderer.render(ctx, entity, visual, x, y, time);
+    const gaitTime = time * (1 + visual.genome.herbivore.gaitProfile * 0.12 + Math.min(0.35, motionSpeed * 0.01));
+    this.herbivoreRenderer.render(ctx, entity, visual, x, y, gaitTime);
   }
 
   private drawFungusEntity(
@@ -175,10 +388,12 @@ export class GardenEntityRenderer {
     x: number,
     y: number,
     time: number,
+    behavior: BehaviorState,
   ): void {
     const fungusVisualEntity = toFungusVisualEntity(entity, x, y);
     const visual = getFungusVisual(fungusVisualEntity);
-    this.fungusRenderer.render(ctx, entity, visual, x, y, time);
+    const ventCadenceBoost = behavior === 'forage' ? 1.2 : 1;
+    this.fungusRenderer.render(ctx, entity, visual, x, y, time * ventCadenceBoost);
   }
 
   private drawCarnivoreEntity(
@@ -187,10 +402,52 @@ export class GardenEntityRenderer {
     x: number,
     y: number,
     time: number,
+    behavior: BehaviorState,
   ): void {
     const carnivoreVisualEntity = toCarnivoreVisualEntity(entity, x, y);
     const visual = getCarnivoreVisual(carnivoreVisualEntity);
-    this.carnivoreRenderer.render(ctx, entity, visual, x, y, time);
+    const huntingTime = behavior === 'hunt' ? time * 1.2 : time;
+    this.carnivoreRenderer.render(ctx, entity, visual, x, y, huntingTime);
+  }
+
+  private drawStateOverlay(
+    ctx: CanvasRenderingContext2D,
+    prepared: PreparedEntity,
+    config: EntityRenderConfig,
+  ): void {
+    if (config.qualityTier === 'low' && prepared.runtime.energyOverlay < 0.75) {
+      return;
+    }
+
+    const overlayRadius = prepared.radius * (1.1 + prepared.runtime.sunlightOverlay * 0.15);
+    const alpha = 0.04 + prepared.runtime.energyOverlay * 0.07;
+    const hue = prepared.entity.type === 'fungus'
+      ? 185
+      : prepared.entity.type === 'carnivore'
+        ? 12
+        : prepared.entity.type === 'herbivore'
+          ? 46
+          : 132;
+
+    const gradient = ctx.createRadialGradient(prepared.x, prepared.y, prepared.radius * 0.2, prepared.x, prepared.y, overlayRadius);
+    gradient.addColorStop(0, `hsla(${hue}, 85%, 60%, ${alpha})`);
+    gradient.addColorStop(1, `hsla(${hue}, 85%, 60%, 0)`);
+
+    ctx.save();
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(prepared.x, prepared.y, overlayRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private calculateEntityPhaseOffset(entityId: string): number {
+    let hash = 0;
+    for (let index = 0; index < entityId.length; index += 1) {
+      hash = ((hash << 5) - hash) + entityId.charCodeAt(index);
+      hash |= 0;
+    }
+    return (Math.abs(hash) % 628) / 100;
   }
 
   private drawNameTag(
@@ -234,6 +491,20 @@ function drawSelectionRing(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.beginPath();
   ctx.arc(x, y, radius + 12, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+function buildRuntimeVisualState(entity: Entity, config: EntityRenderConfig): RuntimeVisualState {
+  const healthOverlay = Math.max(0, Math.min(1, entity.health / 100));
+  const energyOverlay = Math.max(0, Math.min(1, entity.energy / 100));
+  const sunlightOverlay = Math.max(0, Math.min(1, config.lighting.sunlight));
+  const lifecycleOverlay = Math.max(0, Math.min(1, entity.age / 100));
+
+  return {
+    healthOverlay,
+    energyOverlay,
+    sunlightOverlay,
+    lifecycleOverlay,
+  };
 }
 
 function toPlantVisualEntity(

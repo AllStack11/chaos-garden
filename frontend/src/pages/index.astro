@@ -8,6 +8,7 @@
 import Layout from '../layouts/Layout.astro';
 import GardenCanvas from '../components/GardenCanvas.astro';
 import StatsPanel from '../components/StatsPanel.astro';
+import NarrativeTicker from '../components/NarrativeTicker.astro';
 
 // API URL (will be overridden by environment variable)
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
@@ -43,6 +44,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
              <div class="mt-1 text-[10px] text-white/40 uppercase tracking-[0.2em]">Next Evolution</div>
           </div>
         </div>
+      </div>
+
+      <!-- Narrative Ticker (top center, below title) -->
+      <div class="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-xl pointer-events-none">
+        <NarrativeTicker />
       </div>
 
       <!-- Center: Selection Tooltip (Floating Contextual) -->
@@ -243,9 +249,20 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
       // Update canvas
       const canvas = this.querySelector('garden-canvas') as any;
       if (canvas && typeof canvas.updateState === 'function') {
-        canvas.updateState(this.state.entities, this.state.selectedEntity);
+        canvas.updateState(
+          this.state.entities,
+          this.state.selectedEntity,
+          this.state.gardenState,
+          this.state.recentEvents,
+        );
       } else if (canvas) {
         console.warn('[GardenApp] garden-canvas found but updateState is not yet available');
+      }
+
+      // Update Narrative Ticker
+      const narrativeTicker = this.querySelector('narrative-ticker') as HTMLElement & { updateNarrativeEvents?: (events: SimulationEvent[]) => void };
+      if (narrativeTicker && typeof narrativeTicker.updateNarrativeEvents === 'function') {
+        narrativeTicker.updateNarrativeEvents(this.state.recentEvents);
       }
 
       // Update Loading

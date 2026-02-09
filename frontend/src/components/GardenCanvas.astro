@@ -23,16 +23,20 @@ const {
 </garden-canvas>
 
 <script>
-  import type { Entity } from '../env.d.ts';
+  import type { Entity, GardenState, SimulationEvent } from '../env.d.ts';
   import {
     createBackgroundAnimationState,
     resizeBackgroundAnimationState,
+    syncBackgroundEventEffects,
     updateBackgroundAnimationState,
     type BackgroundAnimationState,
   } from '../lib/garden-canvas/background-effects/state.ts';
-  import { renderBackgroundEffects } from '../lib/garden-canvas/background-effects/renderer.ts';
-  import type { ViewportSize } from '../lib/garden-canvas/background-effects/types.ts';
+  import { renderBackgroundPass } from '../lib/garden-canvas/background-effects/renderer.ts';
+  import type { BackgroundPass, BackgroundWorldState, ViewportSize } from '../lib/garden-canvas/background-effects/types.ts';
   import { GardenEntityRenderer } from '../lib/garden-canvas/entity-rendering/renderer.ts';
+  import { createLightingContext, getTimePhaseFromSunlight } from '../lib/rendering/lighting.ts';
+  import { AdaptiveQualityController } from '../lib/rendering/performance.ts';
+  import type { LightingContext, QualityTier, TimePhase } from '../lib/rendering/types.ts';
 
   const COLORS = {
     plant: { h: 135, s: 40, l: 40 },
@@ -41,12 +45,25 @@ const {
     fungus: { h: 280, s: 20, l: 65 },
   };
 
+  const RENDER_PASSES: BackgroundPass[] = [
+    'farBackground',
+    'terrain',
+    'ambientAtmosphere',
+    'entityShadows',
+    'entitiesBase',
+    'entityOverlays',
+    'foregroundParticles',
+    'postLightVeil',
+  ];
+
   class GardenCanvas extends HTMLElement {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D | null;
     private entities: Entity[] = [];
     private selectedEntity: Entity | null = null;
     private hoveredEntity: Entity | null = null;
+    private gardenState: GardenState | null = null;
+    private recentEvents: SimulationEvent[] = [];
     private mousePos = { x: 0, y: 0 };
     private targetMousePos = { x: 0, y: 0 };
     private animationId: number | null = null;
@@ -54,6 +71,19 @@ const {
     private simHeight = 600;
     private backgroundState: BackgroundAnimationState;
     private entityRenderer = new GardenEntityRenderer();
+    private qualityController = new AdaptiveQualityController();
+    private qualityTier: QualityTier = 'high';
+    private lighting: LightingContext = createLightingContext(0.5, 0);
+    private timePhase: TimePhase = 'day';
+    private worldState: BackgroundWorldState = {
+      tick: 0,
+      temperature: 20,
+      moisture: 0.5,
+      sunlight: 0.5,
+      totalLiving: 0,
+      totalEntities: 0,
+    };
+    private frameStartTime = performance.now();
 
     private readonly handleWindowResize = () => this.handleResize();
 
@@ -61,7 +91,7 @@ const {
       super();
       this.canvas = this.querySelector('canvas')!;
       this.ctx = this.canvas.getContext('2d');
-      this.backgroundState = createBackgroundAnimationState(this.getViewportSize());
+      this.backgroundState = createBackgroundAnimationState(this.getViewportSize(), this.qualityTier);
       this.handleResize();
     }
 
@@ -131,7 +161,7 @@ const {
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
 
-      resizeBackgroundAnimationState(this.backgroundState, viewport);
+      resizeBackgroundAnimationState(this.backgroundState, viewport, this.qualityTier);
     }
 
     private getViewportSize(): ViewportSize {
@@ -184,9 +214,20 @@ const {
       return 4 + (energy / 20);
     }
 
-    public updateState(entities: Entity[], selectedEntity: Entity | null) {
+    public updateState(
+      entities: Entity[],
+      selectedEntity: Entity | null,
+      gardenState?: GardenState | null,
+      recentEvents?: SimulationEvent[],
+    ) {
       this.entities = entities;
       this.selectedEntity = selectedEntity;
+      this.gardenState = gardenState ?? this.gardenState;
+      this.recentEvents = recentEvents ?? this.recentEvents;
+
+      if (this.recentEvents.length > 0) {
+        syncBackgroundEventEffects(this.backgroundState, this.recentEvents, this.getViewportSize());
+      }
     }
 
     public getEntityCanvasPosition(entity: Entity) {
@@ -197,6 +238,11 @@ const {
       const loop = () => {
         this.update();
         this.render();
+
+        const frameEnd = performance.now();
+        this.qualityTier = this.qualityController.recordFrame(frameEnd - this.frameStartTime);
+        this.frameStartTime = frameEnd;
+
         this.animationId = requestAnimationFrame(loop);
       };
       this.animationId = requestAnimationFrame(loop);
@@ -204,12 +250,31 @@ const {
 
     private update() {
       const viewport = this.getViewportSize();
+      const sunlight = this.gardenState?.environment.sunlight ?? 0.5;
+      const tick = this.gardenState?.tick ?? 0;
+      const temperature = this.gardenState?.environment.temperature ?? 20;
+      const moisture = this.gardenState?.environment.moisture ?? 0.5;
+      const totalLiving = this.gardenState?.populationSummary.totalLiving ?? this.entities.filter((entity) => entity.isAlive).length;
+      const totalEntities = this.gardenState?.populationSummary.total ?? this.entities.length;
+
+      this.lighting = createLightingContext(sunlight, tick);
+      this.timePhase = getTimePhaseFromSunlight(sunlight);
+      this.worldState = {
+        tick,
+        temperature,
+        moisture,
+        sunlight,
+        totalLiving,
+        totalEntities,
+      };
+
       updateBackgroundAnimationState(
         this.backgroundState,
         viewport,
         this.mousePos,
         this.targetMousePos,
         Date.now(),
+        this.qualityTier,
       );
     }
 
@@ -218,23 +283,55 @@ const {
 
       const width = this.canvas.clientWidth || 800;
       const height = this.canvas.clientHeight || 600;
+      const frameTimestampMs = performance.now();
       this.ctx.clearRect(0, 0, width, height);
 
-      renderBackgroundEffects({
-        ctx: this.ctx,
-        viewport: { width, height },
-        mousePos: this.mousePos,
-        spores: this.backgroundState.spores,
-        shadows: this.backgroundState.shadows,
-        glitchSparks: this.backgroundState.glitchSparks,
-      });
-
-      this.entityRenderer.renderEntities(this.ctx, this.entities, {
+      const entityConfig = {
         selectedEntity: this.selectedEntity,
         hoveredEntity: this.hoveredEntity,
         worldToScreen: this.worldToScreen.bind(this),
         calculateEntitySize: this.calculateEntitySize.bind(this),
         colors: COLORS,
+        lighting: this.lighting,
+        qualityTier: this.qualityTier,
+        timePhase: this.timePhase,
+        frameTimestampMs,
+      };
+
+      RENDER_PASSES.forEach((pass) => {
+        if (pass === 'entityShadows') {
+          this.entityRenderer.renderEntityShadows(this.ctx!, this.entities, entityConfig);
+          return;
+        }
+
+        if (pass === 'entitiesBase') {
+          this.entityRenderer.renderEntitiesBase(this.ctx!, this.entities, entityConfig);
+          return;
+        }
+
+        if (pass === 'entityOverlays') {
+          this.entityRenderer.renderEntityOverlays(this.ctx!, this.entities, entityConfig);
+          return;
+        }
+
+        renderBackgroundPass({
+          ctx: this.ctx!,
+          pass,
+          viewport: { width, height },
+          mousePos: this.mousePos,
+          spores: this.backgroundState.spores,
+          shadows: this.backgroundState.shadows,
+          glitchSparks: this.backgroundState.glitchSparks,
+          ripples: this.backgroundState.ripples,
+          biomeCells: this.backgroundState.biomeCells,
+          parallaxBands: this.backgroundState.parallaxBands,
+          biomeDriftX: this.backgroundState.biomeDriftX,
+          biomeDriftY: this.backgroundState.biomeDriftY,
+          lighting: this.lighting,
+          qualityTier: this.qualityTier,
+          timePhase: this.timePhase,
+          worldState: this.worldState,
+        });
       });
     }
   }

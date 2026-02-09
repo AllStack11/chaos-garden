@@ -83,3 +83,60 @@ export interface ParticleEffect {
 }
 
 export type ParticleType = 'spore' | 'glow' | 'sparkle' | 'death' | 'birth' | 'eat';
+
+export type TimePhase = 'night' | 'dawn' | 'day' | 'dusk';
+export type QualityTier = 'high' | 'medium' | 'low';
+
+export interface LightingContext {
+  sunlight: number;
+  ambientLevel: number;
+  sunDirection: number;
+  colorTemperature: number;
+  fogDensity: number;
+  shadowStrength: number;
+  bloomFactor: number;
+}
+
+export interface PlantGenome {
+  branchDepth: number;
+  phyllotaxisAngle: number;
+  petalDeformation: number;
+  veinDensity: number;
+  silhouetteNoise: number;
+}
+
+export interface HerbivoreGenome {
+  segmentRatioA: number;
+  segmentRatioB: number;
+  gaitProfile: number;
+  appendageStyle: number;
+  patternMapSeed: number;
+}
+
+export interface CarnivoreGenome {
+  stanceProfile: number;
+  tailDynamics: number;
+  stripeMaskFrequency: number;
+  spotMaskFrequency: number;
+}
+
+export interface FungusGenome {
+  colonyTopology: number;
+  capUndulationProfile: number;
+  sporeVentCadence: number;
+}
+
+export interface VisualGenome {
+  seed: number;
+  plant: PlantGenome;
+  herbivore: HerbivoreGenome;
+  carnivore: CarnivoreGenome;
+  fungus: FungusGenome;
+}
+
+export interface RuntimeVisualState {
+  healthOverlay: number;
+  energyOverlay: number;
+  sunlightOverlay: number;
+  lifecycleOverlay: number;
+}
