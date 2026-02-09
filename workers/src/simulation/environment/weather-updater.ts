@@ -35,10 +35,10 @@ import {
  * @param eventLogger - Logger for environmental events
  * @returns Updated environment
  */
-export function updateEnvironmentForNextTick(
+export async function updateEnvironmentForNextTick(
   current: Environment,
   eventLogger?: EventLogger
-): Environment {
+): Promise<Environment> {
   const nextTick = current.tick + 1;
   
   // Calculate sunlight based on time of day
@@ -76,7 +76,7 @@ export function updateEnvironmentForNextTick(
   
   // Log significant environmental changes
   if (eventLogger) {
-    logEnvironmentalChanges(current, updated, eventLogger);
+    await logEnvironmentalChanges(current, updated, eventLogger);
   }
   
   return updated;
@@ -86,35 +86,35 @@ export function updateEnvironmentForNextTick(
  * Log significant environmental changes.
  * Detects and reports notable weather events.
  */
-function logEnvironmentalChanges(
+async function logEnvironmentalChanges(
   previous: Environment,
   current: Environment,
   eventLogger: EventLogger
-): void {
+): Promise<void> {
   // Detect drought (low moisture)
   if (previous.moisture > DROUGHT_THRESHOLD && current.moisture <= DROUGHT_THRESHOLD) {
-    eventLogger.logEnvironmentChange(
+    await eventLogger.logEnvironmentChange(
       `Drought conditions detected! Moisture dropped to ${(current.moisture * 100).toFixed(1)}%`
     );
   }
   
   // Detect heavy rain (high moisture)
   if (previous.moisture < HEAVY_RAIN_THRESHOLD && current.moisture >= HEAVY_RAIN_THRESHOLD) {
-    eventLogger.logEnvironmentChange(
+    await eventLogger.logEnvironmentChange(
       `Heavy rainfall! Moisture increased to ${(current.moisture * 100).toFixed(1)}%`
     );
   }
   
   // Detect heat wave
   if (previous.temperature < HEAT_WAVE_THRESHOLD && current.temperature >= HEAT_WAVE_THRESHOLD) {
-    eventLogger.logEnvironmentChange(
+    await eventLogger.logEnvironmentChange(
       `Heat wave! Temperature reached ${current.temperature.toFixed(1)}°C`
     );
   }
   
   // Detect freeze
   if (previous.temperature > FREEZE_THRESHOLD && current.temperature <= FREEZE_THRESHOLD) {
-    eventLogger.logEnvironmentChange(
+    await eventLogger.logEnvironmentChange(
       `Freeze warning! Temperature dropped to ${current.temperature.toFixed(1)}°C`
     );
   }
@@ -122,7 +122,7 @@ function logEnvironmentalChanges(
   // Detect rapid temperature change
   const tempChange = Math.abs(current.temperature - previous.temperature);
   if (tempChange > 5) {
-    eventLogger.logEnvironmentChange(
+    await eventLogger.logEnvironmentChange(
       `Rapid temperature change: ${previous.temperature.toFixed(1)}°C → ${current.temperature.toFixed(1)}°C`
     );
   }
@@ -130,7 +130,7 @@ function logEnvironmentalChanges(
   // Detect rapid moisture change
   const moistureChange = Math.abs(current.moisture - previous.moisture);
   if (moistureChange > 0.2) {
-    eventLogger.logEnvironmentChange(
+    await eventLogger.logEnvironmentChange(
       `Rapid moisture change: ${(previous.moisture * 100).toFixed(1)}% → ${(current.moisture * 100).toFixed(1)}%`
     );
   }
@@ -144,10 +144,10 @@ function logEnvironmentalChanges(
  * @param eventLogger - Logger for events
  * @returns Environment with weather event applied
  */
-export function generateRandomWeatherEvent(
+export async function generateRandomWeatherEvent(
   current: Environment,
   eventLogger?: EventLogger
-): Environment {
+): Promise<Environment> {
   const eventType = Math.floor(Math.random() * 4);
   
   let newTemperature = current.temperature;
@@ -183,7 +183,7 @@ export function generateRandomWeatherEvent(
   };
   
   if (eventLogger && eventDescription) {
-    eventLogger.logEnvironmentChange(eventDescription);
+    await eventLogger.logEnvironmentChange(eventDescription);
   }
   
   return updated;

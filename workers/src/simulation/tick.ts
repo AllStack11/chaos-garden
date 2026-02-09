@@ -12,7 +12,13 @@
 
 import type { Entity, GardenState, Environment, PopulationSummary } from '@chaos-garden/shared';
 import type { D1Database } from '../types/worker';
-import { createEventLogger, createConsoleEventLogger, createCompositeEventLogger, type EventLogger } from '../logging/event-logger';
+import {
+  createEventLogger,
+  createBufferedEventLogger,
+  createConsoleEventLogger,
+  createCompositeEventLogger,
+  type EventLogger
+} from '../logging/event-logger';
 import type { ApplicationLogger } from '../logging/application-logger';
 import {
   createTimestamp,
@@ -27,7 +33,6 @@ import { processFungusBehaviorDuringTick, isFungusDead, getFungusCauseOfDeath } 
 import {
   getLatestGardenStateFromDatabase,
   saveGardenStateToDatabase,
-  getAllEntitiesFromDatabase,
   getAllLivingEntitiesFromDatabase,
   saveEntitiesToDatabase,
   markEntitiesAsDeadInDatabase
@@ -81,21 +86,19 @@ export async function runSimulationTick(
     const tickNumber = previousState.tick + 1;
     await appLogger.info('tick_progress', `Starting tick ${tickNumber}`, { previousTick: previousState.tick });
     
-    // 2. Create event logger for this tick (Placeholder ID, updated after state save)
-    // In development, we use a composite logger to mirror events to the console
-    let eventLogger: EventLogger;
-    const dbLogger = createEventLogger(db, tickNumber, previousState.id);
+    // 2. Create buffered event logger for this tick.
+    // In development, mirror events to console immediately while still buffering for DB persistence.
+    const bufferedEventLogger = createBufferedEventLogger();
+    let eventLogger: EventLogger = bufferedEventLogger.logger;
     
     if (isDevelopment) {
       const consoleLogger = createConsoleEventLogger(tickNumber, previousState.id);
-      eventLogger = createCompositeEventLogger([dbLogger, consoleLogger]);
-    } else {
-      eventLogger = dbLogger;
+      eventLogger = createCompositeEventLogger([bufferedEventLogger.logger, consoleLogger]);
     }
     
     // 3. Update environment
     const envUpdateStart = Date.now();
-    const updatedEnvironment = updateEnvironmentForNextTick(previousState.environment, eventLogger);
+    const updatedEnvironment = await updateEnvironmentForNextTick(previousState.environment, eventLogger);
     metrics.environment_update_duration = Date.now() - envUpdateStart;
     
     await appLogger.debug('environment_updated', 'Environment updated for new tick', {
@@ -143,6 +146,8 @@ export async function runSimulationTick(
     // Create the next generation: survivors + new births
     const stillLivingEntities = livingEntities.filter(entity => !deadEntities.includes(entity));
     const allLivingEntitiesAfterTick = [...stillLivingEntities, ...processingResult.newEntities];
+    const allEntitiesAfterTick = [...allLivingEntitiesAfterTick, ...deadEntities];
+    const newPopulations = countEntitiesByType(allEntitiesAfterTick);
 
     // Ensure all living entities are updated for this tick
     for (const entity of allLivingEntitiesAfterTick) {
@@ -155,7 +160,7 @@ export async function runSimulationTick(
       db,
       tickNumber,
       updatedEnvironment,
-      allLivingEntitiesAfterTick,
+      allEntitiesAfterTick,
       appLogger
     );
     metrics.save_state_duration = Date.now() - stateSaveStart;
@@ -173,13 +178,10 @@ export async function runSimulationTick(
     );
     metrics.save_entities_duration = Date.now() - entitySaveStart;
     
-    // 9. Log population changes
+    // 9. Log population changes and ambient narrative to the buffered logger
     const previousPopulations = previousState.populationSummary;
-    const currentEntities = await getAllEntitiesFromDatabase(db);
-    const newPopulations = countEntitiesByType(currentEntities);
     
     await logPopulationChanges(
-      db,
       tickNumber,
       previousPopulations,
       newPopulations,
@@ -188,6 +190,10 @@ export async function runSimulationTick(
 
     // 10. Generate ambient narrative (guarantees at least one narrative event per tick)
     await eventLogger.logAmbientNarrative(updatedEnvironment, newPopulations, allLivingEntitiesAfterTick);
+
+    // 11. Persist buffered events only after the new state exists.
+    const dbEventLogger = createEventLogger(db, tickNumber, newGardenState.id);
+    await bufferedEventLogger.flushTo(dbEventLogger);
 
     const duration = Date.now() - startTime;
     metrics.total_duration = duration;
@@ -251,7 +257,7 @@ async function processEntitiesForTick(
   
   // Process plants first (they create energy)
   for (const plant of plants) {
-    const offspring = processPlantBehaviorDuringTick(plant, environment, eventLogger);
+    const offspring = await processPlantBehaviorDuringTick(plant, environment, eventLogger);
     // Link offspring to parent for lineage
     for (const child of offspring) {
       child.lineage = plant.id;
@@ -272,7 +278,7 @@ async function processEntitiesForTick(
   
   // Process herbivores (they consume plants)
   for (const herbivore of herbivores) {
-    const result = processHerbivoreBehaviorDuringTick(herbivore, environment, plants, eventLogger);
+    const result = await processHerbivoreBehaviorDuringTick(herbivore, environment, plants, eventLogger);
     // Link offspring to parent for lineage
     for (const child of result.offspring) {
       child.lineage = herbivore.id;
@@ -294,7 +300,7 @@ async function processEntitiesForTick(
 
   // Process carnivores (they hunt herbivores)
   for (const carnivore of carnivores) {
-    const result = processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger);
+    const result = await processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger);
     // Link offspring to parent for lineage
     for (const child of result.offspring) {
       child.lineage = carnivore.id;
@@ -316,7 +322,7 @@ async function processEntitiesForTick(
   
   // Process fungi (they decompose dead matter)
   for (const fungus of fungi) {
-    const result = processFungusBehaviorDuringTick(fungus, environment, entities, eventLogger);
+    const result = await processFungusBehaviorDuringTick(fungus, environment, entities, eventLogger);
     // Link offspring to parent for lineage
     for (const child of result.offspring) {
       child.lineage = fungus.id;
@@ -362,17 +368,17 @@ function filterDeadEntities(entities: Entity[]): Entity[] {
  * @param db - D1 database instance
  * @param tickNumber - Current tick number
  * @param environment - Updated environment conditions
- * @param allLivingEntities - Complete list of entities currently alive (including new offspring)
+ * @param allEntities - Complete list of entities currently present after this tick
  * @param appLogger - Application logger
  */
 async function createAndSaveGardenState(
   db: D1Database,
   tickNumber: number,
   environment: Environment,
-  allLivingEntities: Entity[],
+  allEntities: Entity[],
   appLogger: ApplicationLogger
 ): Promise<GardenState> {
-  const populations = countEntitiesByType(allLivingEntities);
+  const populations = countEntitiesByType(allEntities);
   
   const gardenState: Omit<GardenState, 'id'> = {
     tick: tickNumber,
@@ -439,7 +445,6 @@ async function saveEntitiesAndCleanup(
  * Log significant population changes between ticks.
  */
 async function logPopulationChanges(
-  db: D1Database,
   tickNumber: number,
   previous: PopulationSummary,
   current: PopulationSummary,

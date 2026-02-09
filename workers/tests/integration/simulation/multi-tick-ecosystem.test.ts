@@ -9,9 +9,9 @@ import { buildCarnivore, buildFungus, buildHerbivore, buildPlant } from '../../f
 import { buildEnvironment } from '../../fixtures/environment';
 import { createFakeEventLogger } from '../../helpers/fake-event-logger';
 
-function runOneTick(entities: Entity[], tickNumber: number): Entity[] {
+async function runOneTick(entities: Entity[], tickNumber: number): Promise<Entity[]> {
   const eventLogger = createFakeEventLogger();
-  const environment = updateEnvironmentForNextTick(buildEnvironment({ tick: tickNumber }), eventLogger);
+  const environment = await updateEnvironmentForNextTick(buildEnvironment({ tick: tickNumber }), eventLogger);
   const living = entities.filter(entity => entity.isAlive);
 
   for (const entity of living) {
@@ -26,26 +26,26 @@ function runOneTick(entities: Entity[], tickNumber: number): Entity[] {
   const births: Entity[] = [];
 
   for (const plant of plants) {
-    births.push(...processPlantBehaviorDuringTick(plant, environment, eventLogger));
+    births.push(...await processPlantBehaviorDuringTick(plant, environment, eventLogger));
   }
 
   for (const herbivore of herbivores) {
-    births.push(...processHerbivoreBehaviorDuringTick(herbivore, environment, plants, eventLogger).offspring);
+    births.push(...(await processHerbivoreBehaviorDuringTick(herbivore, environment, plants, eventLogger)).offspring);
   }
 
   for (const carnivore of carnivores) {
-    births.push(...processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger).offspring);
+    births.push(...(await processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger)).offspring);
   }
 
   for (const fungus of fungi) {
-    births.push(...processFungusBehaviorDuringTick(fungus, environment, entities, eventLogger).offspring);
+    births.push(...(await processFungusBehaviorDuringTick(fungus, environment, entities, eventLogger)).offspring);
   }
 
   return [...entities, ...births];
 }
 
 describe('integration/simulation multi-tick ecosystem', () => {
-  it('preserves invariants and allows fungi to consume carcass energy from predation', () => {
+  it('preserves invariants and allows fungi to consume carcass energy from predation', async () => {
     const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 50, reproductionRate: 0 });
     const herbivore = buildHerbivore({
       id: 'prey-a',
@@ -59,14 +59,14 @@ describe('integration/simulation multi-tick ecosystem', () => {
 
     let entities: Entity[] = [carnivore, herbivore, fungus, plant];
 
-    entities = runOneTick(entities, 1);
+    entities = await runOneTick(entities, 1);
     const deadPreyAfterHunt = entities.find(entity => entity.id === 'prey-a');
 
     expect(deadPreyAfterHunt?.isAlive).toBe(false);
     expect(deadPreyAfterHunt?.energy).toBeLessThan(70);
 
-    entities = runOneTick(entities, 2);
-    entities = runOneTick(entities, 3);
+    entities = await runOneTick(entities, 2);
+    entities = await runOneTick(entities, 3);
 
     for (const entity of entities) {
       expect(entity.energy).toBeGreaterThanOrEqual(0);

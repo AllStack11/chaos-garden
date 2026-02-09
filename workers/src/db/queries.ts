@@ -21,7 +21,7 @@ import type {
 } from '@chaos-garden/shared';
 import { queryFirst, queryAll, executeQuery, executeBatch } from './connection';
 import type { D1Database } from '../types/worker';
-import { countEntitiesByType, extractTraits } from '../simulation/environment/helpers';
+import { extractTraits } from '../simulation/environment/helpers';
 
 // ==========================================
 // Garden State Queries
@@ -50,15 +50,7 @@ export async function getLatestGardenStateFromDatabase(
     return null;
   }
 
-  // Enrich with dynamic counts from the entities table
-  const gardenState = mapRowToGardenState(row);
-  const entities = await getAllEntitiesFromDatabase(db);
-  const populations = countEntitiesByType(entities);
-  
-  return {
-    ...gardenState,
-    populationSummary: populations
-  };
+  return mapRowToGardenState(row);
 }
 
 /**

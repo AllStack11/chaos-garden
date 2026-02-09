@@ -5,11 +5,11 @@ import { buildHerbivore, buildPlant } from '../../../fixtures/entities';
 import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
 
 describe('simulation/creatures/herbivores', () => {
-  it('does not target plants outside perception radius', () => {
+  it('does not target plants outside perception radius', async () => {
     const herbivore = buildHerbivore({ position: { x: 0, y: 0 }, perceptionRadius: 50 });
     const farPlant = buildPlant({ id: 'plant-far', position: { x: 200, y: 0 } });
 
-    const result = processHerbivoreBehaviorDuringTick(
+    const result = await processHerbivoreBehaviorDuringTick(
       herbivore,
       buildEnvironment(),
       [farPlant],
@@ -21,11 +21,11 @@ describe('simulation/creatures/herbivores', () => {
     expect(herbivore.energy).toBeLessThan(60);
   });
 
-  it('consumes plant when within eating range', () => {
+  it('consumes plant when within eating range', async () => {
     const herbivore = buildHerbivore({ position: { x: 0, y: 0 } });
     const plant = buildPlant({ id: 'plant-food', position: { x: 1, y: 1 }, energy: 20 });
 
-    const result = processHerbivoreBehaviorDuringTick(
+    const result = await processHerbivoreBehaviorDuringTick(
       herbivore,
       buildEnvironment(),
       [plant],
@@ -37,10 +37,10 @@ describe('simulation/creatures/herbivores', () => {
     expect(plant.health).toBe(0);
   });
 
-  it('dies when energy falls to zero', () => {
+  it('dies when energy falls to zero', async () => {
     const herbivore = buildHerbivore({ energy: 0.1, position: { x: 0, y: 0 }, perceptionRadius: 10 });
 
-    processHerbivoreBehaviorDuringTick(
+    await processHerbivoreBehaviorDuringTick(
       herbivore,
       buildEnvironment(),
       [],

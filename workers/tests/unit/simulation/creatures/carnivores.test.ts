@@ -5,11 +5,11 @@ import { buildCarnivore, buildHerbivore } from '../../../fixtures/entities';
 import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
 
 describe('simulation/creatures/carnivores', () => {
-  it('does not target prey outside perception radius', () => {
+  it('does not target prey outside perception radius', async () => {
     const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, perceptionRadius: 30 });
     const farPrey = buildHerbivore({ id: 'prey-far', position: { x: 200, y: 0 } });
 
-    const result = processCarnivoreBehaviorDuringTick(
+    const result = await processCarnivoreBehaviorDuringTick(
       carnivore,
       buildEnvironment(),
       [farPrey],
@@ -20,11 +20,11 @@ describe('simulation/creatures/carnivores', () => {
     expect(farPrey.isAlive).toBe(true);
   });
 
-  it('applies biomass model: prey energy 10 and health 100 gives gain 30', () => {
+  it('applies biomass model: prey energy 10 and health 100 gives gain 30', async () => {
     const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 50 });
     const prey = buildHerbivore({ id: 'prey-1', position: { x: 0, y: 0 }, energy: 10, health: 100 });
 
-    processCarnivoreBehaviorDuringTick(
+    await processCarnivoreBehaviorDuringTick(
       carnivore,
       buildEnvironment(),
       [prey],
@@ -37,11 +37,11 @@ describe('simulation/creatures/carnivores', () => {
     expect(prey.energy).toBe(0);
   });
 
-  it('caps gain and leaves carcass energy: prey energy 100 and health 100', () => {
+  it('caps gain and leaves carcass energy: prey energy 100 and health 100', async () => {
     const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 50 });
     const prey = buildHerbivore({ id: 'prey-2', position: { x: 0, y: 0 }, energy: 100, health: 100 });
 
-    processCarnivoreBehaviorDuringTick(
+    await processCarnivoreBehaviorDuringTick(
       carnivore,
       buildEnvironment(),
       [prey],

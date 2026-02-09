@@ -3,7 +3,6 @@ import type { Entity, GardenState } from '@chaos-garden/shared';
 import { buildEnvironment } from '../../../fixtures/environment';
 import { buildPlant } from '../../../fixtures/entities';
 import { createFakeApplicationLogger } from '../../../helpers/fake-application-logger';
-import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
 
 const mockQueries = vi.hoisted(() => ({
   getLatestGardenStateFromDatabase: vi.fn(),
@@ -22,12 +21,37 @@ const mockEnvironment = vi.hoisted(() => ({
   }))
 }));
 
-const eventLogger = createFakeEventLogger();
-const mockEventLoggerFactories = vi.hoisted(() => ({
-  createEventLogger: vi.fn(() => eventLogger),
-  createConsoleEventLogger: vi.fn(() => eventLogger),
-  createCompositeEventLogger: vi.fn(() => eventLogger)
-}));
+const mockEventLoggerFactories = vi.hoisted(() => {
+  const eventLogger = {
+    logBirth: vi.fn(async () => {}),
+    logDeath: vi.fn(async () => {}),
+    logReproduction: vi.fn(async () => {}),
+    logMutation: vi.fn(async () => {}),
+    logExtinction: vi.fn(async () => {}),
+    logPopulationExplosion: vi.fn(async () => {}),
+    logEcosystemCollapse: vi.fn(async () => {}),
+    logDisaster: vi.fn(async () => {}),
+    logUserIntervention: vi.fn(async () => {}),
+    logEnvironmentChange: vi.fn(async () => {}),
+    logCustom: vi.fn(async () => {}),
+    logAmbientNarrative: vi.fn(async () => {})
+  };
+
+  const bufferedEventLogger = {
+    logger: eventLogger,
+    flushTo: vi.fn(async () => {}),
+    size: vi.fn(() => 0)
+  };
+
+  return {
+    eventLogger,
+    bufferedEventLogger,
+    createBufferedEventLogger: vi.fn(() => bufferedEventLogger),
+    createEventLogger: vi.fn(() => eventLogger),
+    createConsoleEventLogger: vi.fn(() => eventLogger),
+    createCompositeEventLogger: vi.fn(() => eventLogger)
+  };
+});
 
 vi.mock('../../../../src/db/queries', () => mockQueries);
 vi.mock('../../../../src/simulation/environment', async (importOriginal) => {
@@ -72,7 +96,6 @@ describe('simulation/tick/runSimulationTick', () => {
     mockQueries.saveGardenStateToDatabase.mockResolvedValue(2);
     mockQueries.saveEntitiesToDatabase.mockResolvedValue(undefined);
     mockQueries.markEntitiesAsDeadInDatabase.mockResolvedValue(undefined);
-    mockQueries.getAllEntitiesFromDatabase.mockResolvedValue([livingPlant]);
   });
 
   it('increments tick and persists state updates', async () => {
@@ -87,7 +110,6 @@ describe('simulation/tick/runSimulationTick', () => {
   it('increments age for living entities each tick', async () => {
     const agingPlant = buildPlant({ id: 'plant-aging', age: 3, reproductionRate: 0 });
     mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([agingPlant]);
-    mockQueries.getAllEntitiesFromDatabase.mockResolvedValue([agingPlant]);
 
     await runSimulationTick({} as any, createFakeApplicationLogger(), false);
 
@@ -99,13 +121,13 @@ describe('simulation/tick/runSimulationTick', () => {
   it('marks dead entities when energy depletes', async () => {
     const dyingPlant = buildPlant({ id: 'plant-dead', energy: 0.1, photosynthesisRate: 0, reproductionRate: 0 });
     mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([dyingPlant]);
-    mockQueries.getAllEntitiesFromDatabase.mockResolvedValue([dyingPlant]);
 
     const result = await runSimulationTick({} as any, createFakeApplicationLogger(), false);
 
     expect(result.deaths).toBe(1);
-    expect(eventLogger.logDeath).toHaveBeenCalledTimes(1);
+    expect(mockEventLoggerFactories.eventLogger.logDeath).toHaveBeenCalledTimes(1);
     expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, ['plant-dead'], 1);
+    expect(result.populations.total).toBe(1);
   });
 
   it('persists offspring with assigned bornAtTick and gardenStateId', async () => {
@@ -120,10 +142,6 @@ describe('simulation/tick/runSimulationTick', () => {
     });
 
     mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([reproducingPlant]);
-    mockQueries.getAllEntitiesFromDatabase.mockImplementation(async () => {
-      const savedEntities = mockQueries.saveEntitiesToDatabase.mock.calls[0]?.[1] as Entity[] | undefined;
-      return savedEntities ?? [reproducingPlant];
-    });
 
     const result = await runSimulationTick({} as any, createFakeApplicationLogger(), false);
 
@@ -141,7 +159,14 @@ describe('simulation/tick/runSimulationTick', () => {
   it('logs ambient narrative once per successful tick', async () => {
     await runSimulationTick({} as any, createFakeApplicationLogger(), false);
 
-    expect(eventLogger.logAmbientNarrative).toHaveBeenCalledTimes(1);
+    expect(mockEventLoggerFactories.eventLogger.logAmbientNarrative).toHaveBeenCalledTimes(1);
+  });
+
+  it('binds persisted events to the newly created garden state', async () => {
+    await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+
+    expect(mockEventLoggerFactories.createEventLogger).toHaveBeenCalledWith({}, 1, 2);
+    expect(mockEventLoggerFactories.bufferedEventLogger.flushTo).toHaveBeenCalledTimes(1);
   });
 
   it('uses composite logger in development mode', async () => {

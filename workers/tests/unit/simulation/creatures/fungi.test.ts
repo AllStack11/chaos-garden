@@ -5,7 +5,7 @@ import { buildFungus, buildHerbivore } from '../../../fixtures/entities';
 import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
 
 describe('simulation/creatures/fungi', () => {
-  it('ignores dead matter outside perception radius', () => {
+  it('ignores dead matter outside perception radius', async () => {
     const fungus = buildFungus({ position: { x: 0, y: 0 }, perceptionRadius: 20 });
     const farDead = buildHerbivore({
       id: 'dead-far',
@@ -15,7 +15,7 @@ describe('simulation/creatures/fungi', () => {
       energy: 50
     });
 
-    const result = processFungusBehaviorDuringTick(
+    const result = await processFungusBehaviorDuringTick(
       fungus,
       buildEnvironment(),
       [farDead],
@@ -26,7 +26,7 @@ describe('simulation/creatures/fungi', () => {
     expect(farDead.energy).toBe(50);
   });
 
-  it('decomposes dead matter in range and gains energy', () => {
+  it('decomposes dead matter in range and gains energy', async () => {
     const fungus = buildFungus({ position: { x: 0, y: 0 }, perceptionRadius: 100, energy: 40, decompositionRate: 1 });
     const deadHerbivore = buildHerbivore({
       id: 'dead-near',
@@ -36,7 +36,7 @@ describe('simulation/creatures/fungi', () => {
       energy: 50
     });
 
-    const result = processFungusBehaviorDuringTick(
+    const result = await processFungusBehaviorDuringTick(
       fungus,
       buildEnvironment({ moisture: 1 }),
       [deadHerbivore],
@@ -48,10 +48,10 @@ describe('simulation/creatures/fungi', () => {
     expect(deadHerbivore.energy).toBe(10);
   });
 
-  it('dies when energy reaches zero', () => {
+  it('dies when energy reaches zero', async () => {
     const fungus = buildFungus({ energy: 0.01 });
 
-    processFungusBehaviorDuringTick(
+    await processFungusBehaviorDuringTick(
       fungus,
       buildEnvironment(),
       [],

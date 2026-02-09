@@ -128,11 +128,11 @@ export function createInitialPlantPopulation(
 /**
  * Process a plant's behavior for one tick.
  */
-export function processPlantBehaviorDuringTick(
+export async function processPlantBehaviorDuringTick(
   plant: Entity,
   environment: Environment,
   eventLogger: EventLogger
-): Entity[] {
+): Promise<Entity[]> {
   if (plant.type !== 'plant') return [];
   const offspring: Entity[] = [];
   
@@ -151,7 +151,7 @@ export function processPlantBehaviorDuringTick(
   // Reproduction
   if (doesPlantHaveEnoughEnergyToReproduce(plant)) {
     if (willRandomEventOccur(plant.reproductionRate)) {
-      const child = attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
+      const child = await attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
       }
@@ -199,11 +199,11 @@ export function doesPlantHaveEnoughEnergyToReproduce(plant: Entity): boolean {
 /**
  * Attempt plant reproduction.
  */
-export function attemptPlantReproduction(
+export async function attemptPlantReproduction(
   parent: Entity,
   gardenStateId: number,
   eventLogger: EventLogger
-): Entity | null {
+): Promise<Entity | null> {
   if (parent.type !== 'plant') return null;
   parent.energy -= REPRODUCTION_COST;
   
@@ -212,8 +212,8 @@ export function attemptPlantReproduction(
   
   const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
-  eventLogger.logBirth(child, parent.id, parent.name);
-  checkAndLogMutations(parent, child, eventLogger);
+  await eventLogger.logBirth(child, parent.id, parent.name);
+  await checkAndLogMutations(parent, child, eventLogger);
   
   return child;
 }
@@ -221,11 +221,11 @@ export function attemptPlantReproduction(
 /**
  * Check for and log trait mutations.
  */
-function checkAndLogMutations(
+async function checkAndLogMutations(
   parent: Entity,
   child: Entity,
   eventLogger: EventLogger
-): void {
+): Promise<void> {
   if (parent.type !== 'plant' || child.type !== 'plant') return;
 
   const traits = [
@@ -239,7 +239,7 @@ function checkAndLogMutations(
     const newValue = child[trait];
     
     if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      eventLogger.logMutation(child, trait, oldValue, newValue);
+      await eventLogger.logMutation(child, trait, oldValue, newValue);
     }
   }
 }

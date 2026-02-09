@@ -94,12 +94,12 @@ export function createInitialFungusPopulation(
  * Process a fungus's behavior for one tick.
  * Returns offspring and IDs of entities decomposed.
  */
-export function processFungusBehaviorDuringTick(
+export async function processFungusBehaviorDuringTick(
   fungus: Entity,
   environment: Environment,
   allEntities: Entity[],
   eventLogger: EventLogger
-): { offspring: Entity[]; decomposed: string[] } {
+): Promise<{ offspring: Entity[]; decomposed: string[] }> {
   if (fungus.type !== 'fungus') return { offspring: [], decomposed: [] };
   const offspring: Entity[] = [];
   const decomposed: string[] = [];
@@ -127,7 +127,7 @@ export function processFungusBehaviorDuringTick(
   // 4. Reproduction
   if (fungus.energy >= REPRODUCTION_THRESHOLD) {
     if (willRandomEventOccur(fungus.reproductionRate)) {
-      const child = attemptFungusReproduction(fungus, fungus.gardenStateId ?? 0, eventLogger);
+      const child = await attemptFungusReproduction(fungus, fungus.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
       }
@@ -175,11 +175,11 @@ function decomposeMatter(
 /**
  * Attempt fungus reproduction via spores.
  */
-function attemptFungusReproduction(
+async function attemptFungusReproduction(
   parent: Entity,
   gardenStateId: number,
   eventLogger: EventLogger
-): Entity | null {
+): Promise<Entity | null> {
   if (parent.type !== 'fungus') return null;
   parent.energy -= REPRODUCTION_COST;
   
@@ -189,8 +189,8 @@ function attemptFungusReproduction(
   
   const child = createNewFungusEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
-  eventLogger.logBirth(child, parent.id, parent.name);
-  checkAndLogMutations(parent, child, eventLogger);
+  await eventLogger.logBirth(child, parent.id, parent.name);
+  await checkAndLogMutations(parent, child, eventLogger);
   
   return child;
 }
@@ -198,11 +198,11 @@ function attemptFungusReproduction(
 /**
  * Check for and log trait mutations.
  */
-function checkAndLogMutations(
+async function checkAndLogMutations(
   parent: Entity,
   child: Entity,
   eventLogger: EventLogger
-): void {
+): Promise<void> {
   if (parent.type !== 'fungus' || child.type !== 'fungus') return;
 
   const traits = [
@@ -217,7 +217,7 @@ function checkAndLogMutations(
     const newValue = child[trait];
     
     if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      eventLogger.logMutation(child, trait, oldValue, newValue);
+      await eventLogger.logMutation(child, trait, oldValue, newValue);
     }
   }
 }

@@ -108,6 +108,34 @@ export interface EventLogger {
   logAmbientNarrative(environment: Environment, populations: PopulationSummary, entities: Entity[]): Promise<void>;
 }
 
+type BufferedEventOperation =
+  | { type: 'birth'; entity: Entity; parentId?: string; parentName?: string }
+  | { type: 'death'; entity: Entity; cause: string }
+  | { type: 'reproduction'; parent: Entity; offspring: Entity }
+  | { type: 'mutation'; entity: Entity; trait: string; oldValue: number; newValue: number }
+  | { type: 'extinction'; species: string; entityType: Entity['type'] }
+  | { type: 'population_explosion'; entityType: Entity['type']; count: number }
+  | { type: 'ecosystem_collapse'; remainingEntities: number }
+  | { type: 'disaster'; disasterType: 'FIRE' | 'FLOOD' | 'PLAGUE'; description: string; affected: string[] }
+  | { type: 'user_intervention'; action: string; description: string; affected: string[] }
+  | { type: 'environment_change'; description: string }
+  | {
+    type: 'custom';
+    eventType: SimulationEventType;
+    description: string;
+    entities: string[];
+    severity: EventSeverity;
+    tags?: string[];
+    metadata?: Record<string, unknown>;
+  }
+  | { type: 'ambient'; environment: Environment; populations: PopulationSummary; entities: Entity[] };
+
+export interface BufferedEventLogger {
+  logger: EventLogger;
+  flushTo(targetLogger: EventLogger): Promise<void>;
+  size(): number;
+}
+
 /**
  * Create an event logger bound to a specific tick and garden state.
  * This factory ensures all events are properly timestamped and categorized.
@@ -439,6 +467,111 @@ export function createCompositeEventLogger(loggers: EventLogger[]): EventLogger 
     logAmbientNarrative: async (environment, populations, entities) => {
       await Promise.all(loggers.map(l => l.logAmbientNarrative(environment, populations, entities)));
     }
+  };
+}
+
+/**
+ * Create an in-memory event logger that buffers operations for later flush.
+ * This lets tick execution collect events before a new garden state ID exists.
+ */
+export function createBufferedEventLogger(): BufferedEventLogger {
+  const operations: BufferedEventOperation[] = [];
+
+  const logger: EventLogger = {
+    logBirth: async (entity, parentId, parentName) => {
+      operations.push({ type: 'birth', entity, parentId, parentName });
+    },
+    logDeath: async (entity, cause) => {
+      operations.push({ type: 'death', entity, cause });
+    },
+    logReproduction: async (parent, offspring) => {
+      operations.push({ type: 'reproduction', parent, offspring });
+    },
+    logMutation: async (entity, trait, oldValue, newValue) => {
+      operations.push({ type: 'mutation', entity, trait, oldValue, newValue });
+    },
+    logExtinction: async (species, entityType) => {
+      operations.push({ type: 'extinction', species, entityType });
+    },
+    logPopulationExplosion: async (entityType, count) => {
+      operations.push({ type: 'population_explosion', entityType, count });
+    },
+    logEcosystemCollapse: async (remainingEntities) => {
+      operations.push({ type: 'ecosystem_collapse', remainingEntities });
+    },
+    logDisaster: async (disasterType, description, affected) => {
+      operations.push({ type: 'disaster', disasterType, description, affected });
+    },
+    logUserIntervention: async (action, description, affected) => {
+      operations.push({ type: 'user_intervention', action, description, affected });
+    },
+    logEnvironmentChange: async (description) => {
+      operations.push({ type: 'environment_change', description });
+    },
+    logCustom: async (eventType, description, entities, severity, tags, metadata) => {
+      operations.push({ type: 'custom', eventType, description, entities, severity, tags, metadata });
+    },
+    logAmbientNarrative: async (environment, populations, entities) => {
+      operations.push({ type: 'ambient', environment, populations, entities });
+    }
+  };
+
+  async function flushTo(targetLogger: EventLogger): Promise<void> {
+    const operationsToFlush = operations.splice(0, operations.length);
+
+    for (const operation of operationsToFlush) {
+      switch (operation.type) {
+        case 'birth':
+          await targetLogger.logBirth(operation.entity, operation.parentId, operation.parentName);
+          break;
+        case 'death':
+          await targetLogger.logDeath(operation.entity, operation.cause);
+          break;
+        case 'reproduction':
+          await targetLogger.logReproduction(operation.parent, operation.offspring);
+          break;
+        case 'mutation':
+          await targetLogger.logMutation(operation.entity, operation.trait, operation.oldValue, operation.newValue);
+          break;
+        case 'extinction':
+          await targetLogger.logExtinction(operation.species, operation.entityType);
+          break;
+        case 'population_explosion':
+          await targetLogger.logPopulationExplosion(operation.entityType, operation.count);
+          break;
+        case 'ecosystem_collapse':
+          await targetLogger.logEcosystemCollapse(operation.remainingEntities);
+          break;
+        case 'disaster':
+          await targetLogger.logDisaster(operation.disasterType, operation.description, operation.affected);
+          break;
+        case 'user_intervention':
+          await targetLogger.logUserIntervention(operation.action, operation.description, operation.affected);
+          break;
+        case 'environment_change':
+          await targetLogger.logEnvironmentChange(operation.description);
+          break;
+        case 'custom':
+          await targetLogger.logCustom(
+            operation.eventType,
+            operation.description,
+            operation.entities,
+            operation.severity,
+            operation.tags,
+            operation.metadata
+          );
+          break;
+        case 'ambient':
+          await targetLogger.logAmbientNarrative(operation.environment, operation.populations, operation.entities);
+          break;
+      }
+    }
+  }
+
+  return {
+    logger,
+    flushTo,
+    size: () => operations.length
   };
 }
 

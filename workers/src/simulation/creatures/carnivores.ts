@@ -95,12 +95,12 @@ export function createInitialCarnivorePopulation(
  * Process a carnivore's behavior for one tick.
  * Returns offspring and IDs of prey consumed.
  */
-export function processCarnivoreBehaviorDuringTick(
+export async function processCarnivoreBehaviorDuringTick(
   carnivore: Entity,
   environment: Environment,
   allEntities: Entity[],
   eventLogger: EventLogger
-): { offspring: Entity[]; consumed: string[] } {
+): Promise<{ offspring: Entity[]; consumed: string[] }> {
   if (carnivore.type !== 'carnivore') return { offspring: [], consumed: [] };
   const offspring: Entity[] = [];
   const consumed: string[] = [];
@@ -139,7 +139,7 @@ export function processCarnivoreBehaviorDuringTick(
   // 4. Reproduction
   if (carnivore.energy >= REPRODUCTION_THRESHOLD) {
     if (willRandomEventOccur(carnivore.reproductionRate)) {
-      const child = attemptCarnivoreReproduction(carnivore, carnivore.gardenStateId ?? 0, eventLogger);
+      const child = await attemptCarnivoreReproduction(carnivore, carnivore.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
       }
@@ -181,11 +181,11 @@ function huntHerbivore(carnivore: Entity, prey: Entity): number {
 /**
  * Attempt carnivore reproduction.
  */
-function attemptCarnivoreReproduction(
+async function attemptCarnivoreReproduction(
   parent: Entity,
   gardenStateId: number,
   eventLogger: EventLogger
-): Entity | null {
+): Promise<Entity | null> {
   if (parent.type !== 'carnivore') return null;
   parent.energy -= REPRODUCTION_COST;
   
@@ -194,8 +194,8 @@ function attemptCarnivoreReproduction(
   
   const child = createNewCarnivoreEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
-  eventLogger.logBirth(child, parent.id, parent.name);
-  checkAndLogMutations(parent, child, eventLogger);
+  await eventLogger.logBirth(child, parent.id, parent.name);
+  await checkAndLogMutations(parent, child, eventLogger);
   
   return child;
 }
@@ -203,11 +203,11 @@ function attemptCarnivoreReproduction(
 /**
  * Check for and log trait mutations.
  */
-function checkAndLogMutations(
+async function checkAndLogMutations(
   parent: Entity,
   child: Entity,
   eventLogger: EventLogger
-): void {
+): Promise<void> {
   if (parent.type !== 'carnivore' || child.type !== 'carnivore') return;
 
   const traits = [
@@ -222,7 +222,7 @@ function checkAndLogMutations(
     const newValue = child[trait];
     
     if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      eventLogger.logMutation(child, trait, oldValue, newValue);
+      await eventLogger.logMutation(child, trait, oldValue, newValue);
     }
   }
 }
