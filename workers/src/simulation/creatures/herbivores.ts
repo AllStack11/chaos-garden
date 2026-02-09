@@ -26,7 +26,7 @@ import {
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 
 // Constants
-const BASE_METABOLISM_COST = DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick;
+const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 0.9 ; // Herbivores are slightly more efficient than carnivores
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.herbivoreReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 40;

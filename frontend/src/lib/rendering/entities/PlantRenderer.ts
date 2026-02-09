@@ -95,8 +95,8 @@ export class PlantRenderer {
     }
     
     // Energy glow for healthy plants
-    if (entity.energy > 70) {
-      this.renderEnergyGlow(x, y - size, size * 2, visual);
+    if (entity.energy > 85) {
+      this.renderEnergyGlow(x, y - size, size * 1.45, visual);
     }
 
     this.ctx.restore();
@@ -754,8 +754,8 @@ export class PlantRenderer {
     if (!this.ctx) return;
     
     const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, `hsla(${visual.baseHue + 100}, ${80}%, ${70}%, 0.3)`);
-    gradient.addColorStop(0.5, `hsla(${visual.baseHue + 100}, ${70}%, ${60}%, 0.1)`);
+    gradient.addColorStop(0, `hsla(${visual.baseHue + 100}, ${80}%, ${70}%, 0.11)`);
+    gradient.addColorStop(0.5, `hsla(${visual.baseHue + 100}, ${70}%, ${60}%, 0.03)`);
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     
     this.ctx.fillStyle = gradient;

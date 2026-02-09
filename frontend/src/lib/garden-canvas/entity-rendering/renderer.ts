@@ -415,12 +415,13 @@ export class GardenEntityRenderer {
     prepared: PreparedEntity,
     config: EntityRenderConfig,
   ): void {
-    if (config.qualityTier === 'low' && prepared.runtime.energyOverlay < 0.75) {
+    if (config.qualityTier === 'low' && prepared.runtime.energyOverlay < 0.85) {
       return;
     }
 
-    const overlayRadius = prepared.radius * (1.1 + prepared.runtime.sunlightOverlay * 0.15);
-    const alpha = 0.04 + prepared.runtime.energyOverlay * 0.07;
+    const vitalityOverlay = (prepared.runtime.energyOverlay * 0.65) + (prepared.runtime.healthOverlay * 0.35);
+    const overlayRadius = prepared.radius * (1 + prepared.runtime.sunlightOverlay * 0.05);
+    const alpha = 0.006 + vitalityOverlay * 0.022;
     const hue = prepared.entity.type === 'fungus'
       ? 185
       : prepared.entity.type === 'carnivore'

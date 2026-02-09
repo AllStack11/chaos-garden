@@ -25,7 +25,7 @@ import {
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 
 // Constants
-const BASE_METABOLISM_COST = DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick;
+const BASE_METABOLISM_COST = 0.2; // Fungi have lower metabolism than plants/herbivores
 const REPRODUCTION_THRESHOLD = 70; // Fungi reproduce at lower energy than plants
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 25;

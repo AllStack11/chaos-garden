@@ -25,7 +25,7 @@ import {
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 
 // Constants
-const BASE_METABOLISM_COST = DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick;
+const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 1.1; // Carnivores have higher metabolism
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.carnivoreReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 50;

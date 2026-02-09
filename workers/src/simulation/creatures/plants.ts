@@ -26,7 +26,7 @@ const BASE_PHOTOSYNTHESIS_RATE = DEFAULT_SIMULATION_CONFIG.basePhotosynthesisRat
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.plantReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 30;
-const BASE_METABOLISM_COST = 0.5;
+const BASE_METABOLISM_COST = 0.3;
 const MAX_AGE = 200;
 const SEED_SPREAD_RADIUS = 50; // Increased from 30 for more spread out offspring
 
