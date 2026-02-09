@@ -6,6 +6,8 @@ import type {
   CanopyNode,
   ParallaxBand,
   PointerPosition,
+  RootPressureCell,
+  MemoryRing,
   ShadowBlob,
   SporeParticle,
   ViewportSize,
@@ -22,7 +24,9 @@ export interface BackgroundRenderInput {
   shadows: ShadowBlob[];
   glitchSparks: GlitchSpark[];
   ripples: RippleEffect[];
+  memoryRings: MemoryRing[];
   biomeCells: BiomeCell[];
+  rootPressureCells: RootPressureCell[];
   parallaxBands: ParallaxBand[];
   canopyNodes: CanopyNode[];
   canopyEdges: CanopyEdge[];
@@ -45,6 +49,7 @@ export function renderBackgroundPass(input: BackgroundRenderInput): void {
       break;
     case 'ambientAtmosphere':
       drawAtmosphere(input);
+      drawMemoryRings(input.ctx, input.memoryRings, 'ambient');
       break;
     case 'entityShadows':
       drawShadows(input.ctx, input.shadows, input.lighting);
@@ -52,10 +57,10 @@ export function renderBackgroundPass(input: BackgroundRenderInput): void {
     case 'foregroundParticles':
       drawSpores(input.ctx, input.spores, input.qualityTier);
       drawGlitchSparks(input.ctx, input.glitchSparks);
-      drawRipples(input.ctx, input.ripples);
       break;
     case 'postLightVeil':
       drawPostLightVeil(input);
+      drawMemoryRings(input.ctx, input.memoryRings, 'veil');
       break;
     case 'entitiesBase':
     case 'entityOverlays':
@@ -89,7 +94,18 @@ function drawFarBackground(input: BackgroundRenderInput): void {
 }
 
 function drawTerrain(input: BackgroundRenderInput): void {
-  const { ctx, viewport, lighting, mousePos, biomeCells, biomeDriftX, biomeDriftY, worldState, parallaxBands } = input;
+  const {
+    ctx,
+    viewport,
+    lighting,
+    mousePos,
+    biomeCells,
+    rootPressureCells,
+    biomeDriftX,
+    biomeDriftY,
+    worldState,
+    parallaxBands,
+  } = input;
 
   const parallaxX = (mousePos.x / viewport.width - 0.5) * 28;
   const parallaxY = (mousePos.y / viewport.height - 0.5) * 14;
@@ -116,6 +132,7 @@ function drawTerrain(input: BackgroundRenderInput): void {
     ctx.stroke();
   }
 
+  drawRootPressureField(ctx, rootPressureCells, worldState, lighting);
   drawBiomeField(ctx, biomeCells, biomeDriftX, biomeDriftY, worldState, lighting);
   drawParallaxBands(ctx, viewport, parallaxBands, mousePos, 0.9);
 
@@ -215,26 +232,6 @@ function drawGlitchSparks(ctx: CanvasRenderingContext2D, glitchSparks: GlitchSpa
   });
 }
 
-function drawRipples(ctx: CanvasRenderingContext2D, ripples: RippleEffect[]): void {
-  ripples.forEach((ripple) => {
-    const color = ripple.eventType === 'REPRODUCTION'
-      ? `rgba(130, 255, 170, ${ripple.opacity})`
-      : ripple.eventType === 'DEATH'
-        ? `rgba(255, 135, 115, ${ripple.opacity})`
-        : ripple.eventType === 'PREDATION'
-          ? `rgba(255, 180, 90, ${ripple.opacity})`
-          : `rgba(170, 220, 255, ${ripple.opacity})`;
-
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  });
-}
-
 function drawPostLightVeil(input: BackgroundRenderInput): void {
   const { ctx, viewport, lighting, timePhase, worldState } = input;
   const veilGradient = ctx.createLinearGradient(0, 0, 0, viewport.height);
@@ -274,6 +271,59 @@ function drawBiomeField(
   });
 }
 
+function drawRootPressureField(
+  ctx: CanvasRenderingContext2D,
+  rootPressureCells: RootPressureCell[],
+  worldState: BackgroundWorldState,
+  lighting: LightingContext,
+): void {
+  const plantDensity = Math.max(0, Math.min(1, worldState.plantDensity ?? 0));
+  const fungusDensity = Math.max(0, Math.min(1, worldState.fungusDensity ?? 0));
+  const moisture = Math.max(0, Math.min(1, worldState.moisture));
+
+  // Biological load pushes the soil pressure effect upward.
+  const ecosystemLoad = (plantDensity * 0.65) + (fungusDensity * 0.35);
+  const loadAlpha = 0.022 + ecosystemLoad * 0.038 + moisture * 0.014;
+
+  rootPressureCells.forEach((cell) => {
+    const radiusX = cell.size * (0.28 + cell.pressure * 0.32);
+    const radiusY = cell.size * (0.11 + cell.pressure * 0.15);
+    const centerX = cell.x + cell.size * 0.5;
+    const centerY = cell.y + cell.size * (0.34 + cell.pressure * 0.14);
+    const hue = 116 + cell.pressure * 6 - fungusDensity * 4;
+    const alpha = loadAlpha * (0.55 + cell.pressure * 0.45) * (0.75 + lighting.ambientLevel * 0.25);
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(cell.tilt);
+
+    const pressureGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radiusX);
+    pressureGradient.addColorStop(0, `hsla(${hue}, 24%, 8%, ${alpha})`);
+    pressureGradient.addColorStop(1, `hsla(${hue}, 20%, 4%, 0)`);
+
+    ctx.fillStyle = pressureGradient;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `hsla(${hue + 3}, 20%, 10%, ${alpha * 0.32})`;
+    ctx.lineWidth = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(-radiusX * 0.7, 0);
+    ctx.quadraticCurveTo(0, -radiusY * 0.25, radiusX * 0.7, 0);
+    ctx.stroke();
+
+    ctx.strokeStyle = `hsla(${hue - 6}, 16%, 7%, ${alpha * 0.2})`;
+    ctx.lineWidth = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(-radiusX * 0.5, radiusY * 0.12);
+    ctx.quadraticCurveTo(0, radiusY * 0.32, radiusX * 0.5, radiusY * 0.12);
+    ctx.stroke();
+
+    ctx.restore();
+  });
+}
+
 function drawParallaxBands(
   ctx: CanvasRenderingContext2D,
   viewport: ViewportSize,
@@ -305,6 +355,51 @@ function drawParallaxBands(
   });
 }
 
+function drawMemoryRings(
+  ctx: CanvasRenderingContext2D,
+  memoryRings: MemoryRing[],
+  layer: 'ambient' | 'veil',
+): void {
+  memoryRings.forEach((ring) => {
+    const lifeProgress = ring.age / Math.max(1, ring.maxAge);
+    const alphaBase = layer === 'ambient' ? 1 : 0.55;
+    const alpha = ring.opacity * (1 - lifeProgress * 0.7) * alphaBase;
+    if (alpha <= 0.003) return;
+
+    const color = ring.ringType === 'growth'
+      ? { hue: 132, sat: 54, light: 66 }
+      : ring.ringType === 'decay'
+        ? { hue: 14, sat: 58, light: 60 }
+        : ring.ringType === 'stress'
+          ? { hue: 40, sat: 62, light: 64 }
+          : { hue: 196, sat: 42, light: 68 };
+
+    const ringsToDraw = layer === 'ambient' ? 2 : 1;
+    const spacing = 16 + lifeProgress * 22;
+
+    for (let index = 0; index < ringsToDraw; index += 1) {
+      const radius = ring.radius + index * spacing;
+      ctx.save();
+      ctx.strokeStyle = `hsla(${color.hue}, ${color.sat}%, ${color.light}%, ${alpha * (1 - index * 0.3)})`;
+      ctx.lineWidth = layer === 'ambient' ? 1.2 : 0.9;
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (ring.ringType === 'decay' && layer === 'ambient') {
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = `hsla(${color.hue + 8}, ${color.sat - 8}%, ${color.light - 10}%, ${alpha * 0.45})`;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.restore();
+    }
+  });
+}
+
 function drawCanopyGraph(
   ctx: CanvasRenderingContext2D,
   canopyNodes: CanopyNode[],
@@ -316,9 +411,9 @@ function drawCanopyGraph(
 
   const plantDensity = Math.max(0, Math.min(1, worldState.plantDensity ?? 0.25));
   const livingFactor = Math.max(0, Math.min(1, worldState.totalLiving / 400));
-  const densityFactor = Math.max(0.15, Math.min(1, 0.18 + plantDensity * 0.6 + livingFactor * 0.32));
+  const densityFactor = Math.max(0.28, Math.min(1, 0.26 + plantDensity * 0.72 + livingFactor * 0.4));
   const visibleEdges = Math.max(1, Math.floor(canopyEdges.length * densityFactor));
-  const baseAlpha = 0.02 + densityFactor * 0.05 + (1 - lighting.sunlight) * 0.02;
+  const baseAlpha = 0.045 + densityFactor * 0.08 + (1 - lighting.sunlight) * 0.03;
 
   const nodeById = new Map<number, CanopyNode>();
   canopyNodes.forEach((node) => nodeById.set(node.id, node));
@@ -332,8 +427,8 @@ function drawCanopyGraph(
     const controlX = (from.x + to.x) * 0.5 + edge.curve * (0.6 + from.depth * 0.4);
     const controlY = (from.y + to.y) * 0.5 - Math.abs(edge.curve) * 0.2;
 
-    ctx.strokeStyle = `hsla(${88 + from.depth * 44}, 36%, 58%, ${baseAlpha * edge.weight})`;
-    ctx.lineWidth = edge.thickness * (0.65 + from.depth * 0.5);
+    ctx.strokeStyle = `hsla(${88 + from.depth * 44}, 42%, 62%, ${baseAlpha * edge.weight})`;
+    ctx.lineWidth = edge.thickness * (0.9 + from.depth * 0.55);
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);

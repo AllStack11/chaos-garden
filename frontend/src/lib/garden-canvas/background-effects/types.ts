@@ -47,6 +47,25 @@ export interface BiomeCell {
   corruption: number;
 }
 
+export interface RootPressureCell {
+  x: number;
+  y: number;
+  size: number;
+  pressure: number;
+  tilt: number;
+}
+
+export interface MemoryRing {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  opacity: number;
+  age: number;
+  maxAge: number;
+  ringType: 'growth' | 'decay' | 'stress' | 'population';
+}
+
 export interface ParallaxBand {
   baseY: number;
   amplitude: number;

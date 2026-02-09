@@ -117,6 +117,56 @@ const AMBIENT_HUMOR_TEMPLATES: readonly string[] = [
   'Nothing to report. The garden is simply gardening.',
 ];
 
+const AMBIENT_PHILOSOPHY_TEMPLATES: readonly string[] = [
+  'The carnivores do not know they are keeping the herbivore population in check. They just think they are hungry.',
+  'Every plant that dies feeds a fungus that feeds the soil that feeds the next plant. Nothing is wasted here.',
+  'In the garden, there is no good or evil. Only energy, moving from one form to another.',
+  'The herbivores eat the plants. The carnivores eat the herbivores. The fungi eat everyone. Democracy.',
+  'Each entity lives its entire life in this 800x600 pixel rectangle. To them, it is infinite.',
+  'The garden does not care who survives. It only cares that something does.',
+  'Somewhere between the photosynthesis and the predation, something like meaning emerges.',
+  'Every creature in this garden is optimizing for survival. None of them know the word.',
+  '{totalLiving} entities, each running the same basic algorithm: eat, reproduce, do not die. The results are endlessly different.',
+  'The plants cannot run. The herbivores cannot photosynthesize. The carnivores cannot eat plants. Specialization is a prison and a gift.',
+];
+
+const AMBIENT_INTERSPECIES_TEMPLATES: readonly string[] = [
+  '{herbivoreCount} herbivores circle {plantCount} plants. The math is not in the plants\' favor.',
+  'The carnivores outnumber the herbivores {carnivoreCount} to {herbivoreCount}. Someone is going to go hungry.',
+  '{plantCount} plants versus {herbivoreCount} mouths. The buffet is getting crowded.',
+  'The fungi watch the drama between predators and prey with the patience of those who will eat the winner.',
+  '{fungusCount} fungi wait for the inevitable. In the end, everything comes to them.',
+  'The herbivores avoid the carnivores. The carnivores chase the herbivores. The plants just sit there, judging everyone.',
+  'Somewhere, a carnivore passes within pixels of a herbivore. Neither notices. Survival is mostly luck.',
+  '{carnivoreCount} predators stalk {herbivoreCount} grazers across {plantCount} patches of green. The ratios tell a story.',
+  'The plants grow. The herbivores eat. The carnivores hunt. The fungi decompose. Everybody has a job.',
+  'A herbivore grazes near a carnivore\'s path. It does not know how close it came. Ignorance is survival.',
+];
+
+const AMBIENT_TENSION_TEMPLATES: readonly string[] = [
+  'The {moistureAdjective} conditions at {moisturePercent}% moisture are testing the garden\'s resilience.',
+  'Energy reserves are running low across the board. The next few ticks will be decisive.',
+  'The ecosystem feels taut, like a string about to snap. {totalLiving} entities hold their collective breath.',
+  'Resources grow scarce. The garden is about to find out who is truly fit for survival.',
+  'The balance between producers and consumers grows razor-thin. Something will give.',
+  'At {temperature}°C and {moisturePercent}% moisture, the garden pushes toward its limits.',
+  'The food chain stretches. {herbivoreCount} herbivores compete for {plantCount} plants. Tensions rise.',
+  'The garden holds steady, but barely. One bad tick could cascade into something worse.',
+  '{totalLiving} entities in a garden that feels smaller every tick. Competition intensifies.',
+  'The quiet before the storm. Or maybe just quiet. The garden is not telling.',
+];
+
+const AMBIENT_MILESTONE_TEMPLATES: readonly string[] = [
+  '{totalLiving} living entities. The garden has never felt so alive. Or so crowded.',
+  'The population holds at {totalLiving}. Stable, for now. The garden does not promise stability.',
+  '{plantCount} plants form the foundation. Everything else is built on photosynthesis.',
+  'The ecosystem supports {totalLiving} lives. Not bad for a pile of algorithms and sunlight.',
+  '{herbivoreCount} herbivores and {carnivoreCount} carnivores coexist. Coexist is a generous word.',
+  '{fungusCount} fungi quietly maintain the garden\'s recycling program. Unpaid, unappreciated, essential.',
+  'At {totalLiving} entities, the garden is a city in miniature. Complete with politics and resource wars.',
+  'The garden census reads {totalLiving}. Each one a story. Most of them short.',
+];
+
 // ==========================================
 // Adjective Helpers
 // ==========================================
@@ -149,7 +199,7 @@ function describeMoistureAsAdjective(moisture: number): string {
 // Template Selection Logic
 // ==========================================
 
-type NarrativeCategory = 'time' | 'weather' | 'population' | 'spotlight' | 'humor';
+type NarrativeCategory = 'time' | 'weather' | 'population' | 'spotlight' | 'humor' | 'philosophy' | 'interspecies' | 'tension' | 'milestone';
 
 const NARRATIVE_CATEGORY_WEIGHTS: Record<NarrativeCategory, number> = {
   time: 1,
@@ -157,6 +207,10 @@ const NARRATIVE_CATEGORY_WEIGHTS: Record<NarrativeCategory, number> = {
   population: 1,
   spotlight: 1,
   humor: 1,
+  philosophy: 1,
+  interspecies: 1,
+  tension: 0,
+  milestone: 1,
 };
 
 /**
@@ -194,6 +248,21 @@ function selectNarrativeCategoryForContext(
     weights.spotlight = 1;
   } else {
     weights.spotlight = 0;
+  }
+
+  // Boost interspecies when predator-prey ratios are dramatic
+  if (populations.herbivores > 0 && populations.carnivores > 0) {
+    const predatorPreyRatio = populations.carnivores / populations.herbivores;
+    if (predatorPreyRatio > 0.8 || predatorPreyRatio < 0.1) {
+      weights.interspecies = 3;
+    }
+  }
+
+  // Boost tension when resources are scarce or environment is harsh
+  if (populations.totalLiving <= 20 || environment.moisture <= 0.15 || environment.temperature >= 38) {
+    weights.tension = 3;
+  } else if (populations.plants > 0 && populations.herbivores / populations.plants > 1.5) {
+    weights.tension = 2;
   }
 
   // Build weighted array and pick
@@ -301,6 +370,22 @@ export function generateAmbientNarrativeForTick(
     case 'humor':
       templates = AMBIENT_HUMOR_TEMPLATES;
       tags.push('humor');
+      break;
+    case 'philosophy':
+      templates = AMBIENT_PHILOSOPHY_TEMPLATES;
+      tags.push('philosophy');
+      break;
+    case 'interspecies':
+      templates = AMBIENT_INTERSPECIES_TEMPLATES;
+      tags.push('interspecies');
+      break;
+    case 'tension':
+      templates = AMBIENT_TENSION_TEMPLATES;
+      tags.push('tension');
+      break;
+    case 'milestone':
+      templates = AMBIENT_MILESTONE_TEMPLATES;
+      tags.push('milestone');
       break;
   }
 

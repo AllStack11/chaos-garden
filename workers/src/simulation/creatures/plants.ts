@@ -213,7 +213,7 @@ export function attemptPlantReproduction(
   
   const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
-  eventLogger.logBirth(child, parent.id);
+  eventLogger.logBirth(child, parent.id, parent.name);
   checkAndLogMutations(parent, child, eventLogger);
   
   return child;

@@ -23,6 +23,16 @@ import { logSimulationEventToDatabase } from '../db/queries';
 import type { D1Database } from '../types/worker';
 import { extractTraits } from '../simulation/environment/helpers';
 import { generateAmbientNarrativeForTick } from './narrative-templates';
+import {
+  generateNarrativeBirthDescription,
+  generateNarrativeDeathDescription,
+  generateNarrativeReproductionDescription,
+  generateNarrativeMutationDescription,
+  generateNarrativeExtinctionDescription,
+  generateNarrativePopulationExplosionDescription,
+  generateNarrativeEcosystemCollapseDescription,
+  generateNarrativePopulationDeltaDescription
+} from './event-description-templates';
 
 const ANSI_RESET = '\x1b[0m';
 const ANSI_DIM = '\x1b[2m';
@@ -84,7 +94,7 @@ function getEventTypeColor(eventType: SimulationEventType): string {
  * Bound to a specific tick and garden state for contextual logging.
  */
 export interface EventLogger {
-  logBirth(entity: Entity, parentId?: string): Promise<void>;
+  logBirth(entity: Entity, parentId?: string, parentName?: string): Promise<void>;
   logDeath(entity: Entity, cause: string): Promise<void>;
   logReproduction(parent: Entity, offspring: Entity): Promise<void>;
   logMutation(entity: Entity, trait: string, oldValue: number, newValue: number): Promise<void>;
@@ -140,18 +150,16 @@ export function createEventLogger(
   }
 
   return {
-    logBirth: async (entity, parentId) => {
-      const description = parentId 
-        ? `A new ${entity.species} is born from parent ${parentId.substring(0, 8)}`
-        : `A new ${entity.species} springs into existence`;
-      
+    logBirth: async (entity, parentId, parentName) => {
+      const description = generateNarrativeBirthDescription(entity, parentName);
+
       await logEvent(
         'BIRTH',
         description,
         [entity.id],
         'LOW',
         ['biology', entity.type, 'birth'],
-        { 
+        {
           type: entity.type,
           species: entity.species,
           parentId: parentId || 'origin',
@@ -161,9 +169,11 @@ export function createEventLogger(
     },
 
     logDeath: async (entity, cause) => {
+      const description = generateNarrativeDeathDescription(entity, cause);
+
       await logEvent(
         'DEATH',
-        `${entity.species} has died: ${cause}`,
+        description,
         [entity.id],
         'MEDIUM',
         ['biology', entity.type, 'death'],
@@ -178,9 +188,11 @@ export function createEventLogger(
     },
 
     logReproduction: async (parent, offspring) => {
+      const description = generateNarrativeReproductionDescription(parent, offspring);
+
       await logEvent(
         'REPRODUCTION',
-        `${parent.species} has reproduced, creating ${offspring.species}`,
+        description,
         [parent.id, offspring.id],
         'LOW',
         ['biology', parent.type, 'reproduction'],
@@ -194,11 +206,12 @@ export function createEventLogger(
     },
 
     logMutation: async (entity, trait, oldValue, newValue) => {
+      const description = generateNarrativeMutationDescription(entity, trait, oldValue, newValue);
       const percentChange = ((newValue - oldValue) / oldValue * 100).toFixed(1);
-      
+
       await logEvent(
         'MUTATION',
-        `${entity.species} shows a ${percentChange}% change in ${trait}`,
+        description,
         [entity.id],
         'LOW',
         ['evolution', entity.type, 'mutation', trait],
@@ -212,9 +225,11 @@ export function createEventLogger(
     },
 
     logExtinction: async (species, type) => {
+      const description = generateNarrativeExtinctionDescription(species, type);
+
       await logEvent(
         'EXTINCTION',
-        `The ${species} (${type}) have gone extinct from the garden`,
+        description,
         [],
         'CRITICAL',
         ['ecology', 'extinction', type],
@@ -223,9 +238,11 @@ export function createEventLogger(
     },
 
     logPopulationExplosion: async (type, count) => {
+      const description = generateNarrativePopulationExplosionDescription(type, count);
+
       await logEvent(
         'POPULATION_EXPLOSION',
-        `${type} population has exploded to ${count} individuals!`,
+        description,
         [],
         'HIGH',
         ['ecology', 'population', type],
@@ -234,9 +251,11 @@ export function createEventLogger(
     },
 
     logEcosystemCollapse: async (remainingEntities) => {
+      const description = generateNarrativeEcosystemCollapseDescription(remainingEntities);
+
       await logEvent(
         'ECOSYSTEM_COLLAPSE',
-        `Ecosystem collapse! Only ${remainingEntities} entities remain alive`,
+        description,
         [],
         'CRITICAL',
         ['ecology', 'collapse'],
@@ -329,26 +348,33 @@ export function createConsoleEventLogger(tick: number, gardenStateId: number): E
   }
 
   return {
-    logBirth: async (entity, parentId) => {
-      await logToConsole('BIRTH', `New ${entity.species} born`, [entity.id], 'LOW', ['biology', 'birth']);
+    logBirth: async (entity, parentId, parentName) => {
+      const description = generateNarrativeBirthDescription(entity, parentName);
+      await logToConsole('BIRTH', description, [entity.id], 'LOW', ['biology', 'birth']);
     },
     logDeath: async (entity, cause) => {
-      await logToConsole('DEATH', `${entity.species} died: ${cause}`, [entity.id], 'MEDIUM', ['biology', 'death']);
+      const description = generateNarrativeDeathDescription(entity, cause);
+      await logToConsole('DEATH', description, [entity.id], 'MEDIUM', ['biology', 'death']);
     },
     logReproduction: async (parent, offspring) => {
-      await logToConsole('REPRODUCTION', `${parent.species} reproduced`, [parent.id, offspring.id], 'LOW', ['biology', 'reproduction']);
+      const description = generateNarrativeReproductionDescription(parent, offspring);
+      await logToConsole('REPRODUCTION', description, [parent.id, offspring.id], 'LOW', ['biology', 'reproduction']);
     },
     logMutation: async (entity, trait, oldValue, newValue) => {
-      await logToConsole('MUTATION', `${entity.species} mutated ${trait}`, [entity.id], 'LOW', ['evolution', 'mutation']);
+      const description = generateNarrativeMutationDescription(entity, trait, oldValue, newValue);
+      await logToConsole('MUTATION', description, [entity.id], 'LOW', ['evolution', 'mutation']);
     },
     logExtinction: async (species, type) => {
-      await logToConsole('EXTINCTION', `${species} extinct`, [], 'CRITICAL', ['ecology', 'extinction']);
+      const description = generateNarrativeExtinctionDescription(species, type);
+      await logToConsole('EXTINCTION', description, [], 'CRITICAL', ['ecology', 'extinction']);
     },
     logPopulationExplosion: async (type, count) => {
-      await logToConsole('POPULATION_EXPLOSION', `${type} explosion: ${count}`, [], 'HIGH', ['ecology', 'population']);
+      const description = generateNarrativePopulationExplosionDescription(type, count);
+      await logToConsole('POPULATION_EXPLOSION', description, [], 'HIGH', ['ecology', 'population']);
     },
     logEcosystemCollapse: async (remaining) => {
-      await logToConsole('ECOSYSTEM_COLLAPSE', `Collapse: ${remaining} left`, [], 'CRITICAL', ['ecology', 'collapse']);
+      const description = generateNarrativeEcosystemCollapseDescription(remaining);
+      await logToConsole('ECOSYSTEM_COLLAPSE', description, [], 'CRITICAL', ['ecology', 'collapse']);
     },
     logDisaster: async (type, description, affected) => {
       await logToConsole(`DISASTER_${type}` as SimulationEventType, description, affected, 'HIGH', ['chaos', 'disaster']);
@@ -376,8 +402,8 @@ export function createConsoleEventLogger(tick: number, gardenStateId: number): E
  */
 export function createCompositeEventLogger(loggers: EventLogger[]): EventLogger {
   return {
-    logBirth: async (entity, parentId) => {
-      await Promise.all(loggers.map(l => l.logBirth(entity, parentId)));
+    logBirth: async (entity, parentId, parentName) => {
+      await Promise.all(loggers.map(l => l.logBirth(entity, parentId, parentName)));
     },
     logDeath: async (entity, cause) => {
       await Promise.all(loggers.map(l => l.logDeath(entity, cause)));

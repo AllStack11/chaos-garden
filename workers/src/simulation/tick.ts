@@ -18,6 +18,7 @@ import {
   createTimestamp,
   countEntitiesByType
 } from './environment/helpers';
+import { generateNarrativePopulationDeltaDescription } from '../logging/event-description-templates';
 import { updateEnvironmentForNextTick } from './environment';
 import { processPlantBehaviorDuringTick, isPlantDead, getPlantCauseOfDeath } from './creatures/plants';
 import { processHerbivoreBehaviorDuringTick, isHerbivoreDead, getHerbivoreCauseOfDeath } from './creatures/herbivores';
@@ -473,9 +474,10 @@ async function logPopulationChanges(
   const herbivoreDelta = current.herbivores - previous.herbivores;
 
   if (Math.abs(plantDelta) > 5 || Math.abs(herbivoreDelta) > 2) {
+    const deltaDescription = generateNarrativePopulationDeltaDescription(plantDelta, herbivoreDelta);
     await eventLogger.logCustom(
       'POPULATION_DELTA',
-      `Population shift: Plants (${plantDelta > 0 ? '+' : ''}${plantDelta}), Herbivores (${herbivoreDelta > 0 ? '+' : ''}${herbivoreDelta})`,
+      deltaDescription,
       [],
       'LOW',
       ['ecology', 'population', 'delta'],

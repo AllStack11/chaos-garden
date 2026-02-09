@@ -4,8 +4,10 @@ import type {
   CanopyEdge,
   CanopyNode,
   GlitchSpark,
+  MemoryRing,
   ParallaxBand,
   PointerPosition,
+  RootPressureCell,
   ShadowBlob,
   SporeParticle,
   ViewportSize,
@@ -33,7 +35,9 @@ export interface BackgroundAnimationState {
   shadows: ShadowBlob[];
   glitchSparks: GlitchSpark[];
   ripples: RippleEffect[];
+  memoryRings: MemoryRing[];
   biomeCells: BiomeCell[];
+  rootPressureCells: RootPressureCell[];
   parallaxBands: ParallaxBand[];
   canopyNodes: CanopyNode[];
   canopyEdges: CanopyEdge[];
@@ -63,7 +67,9 @@ export function createBackgroundAnimationState(
     shadows: [],
     glitchSparks: [],
     ripples: [],
+    memoryRings: [],
     biomeCells: [],
+    rootPressureCells: [],
     parallaxBands: [],
     canopyNodes: [],
     canopyEdges: [],
@@ -78,6 +84,7 @@ export function createBackgroundAnimationState(
   state.spores = createSporeParticles(state, viewport);
   state.shadows = createShadowBlobs(state, viewport);
   state.biomeCells = createBiomeCells(state, viewport);
+  state.rootPressureCells = createRootPressureCells(state, viewport);
   state.parallaxBands = createParallaxBands(state, viewport);
   const canopyGraph = createCanopyGraph(state, viewport);
   state.canopyNodes = canopyGraph.nodes;
@@ -94,6 +101,7 @@ export function resizeBackgroundAnimationState(
   state.spores = createSporeParticles(state, viewport);
   state.shadows = createShadowBlobs(state, viewport);
   state.biomeCells = createBiomeCells(state, viewport);
+  state.rootPressureCells = createRootPressureCells(state, viewport);
   state.parallaxBands = createParallaxBands(state, viewport);
   const canopyGraph = createCanopyGraph(state, viewport);
   state.canopyNodes = canopyGraph.nodes;
@@ -145,7 +153,35 @@ export function syncBackgroundEventEffects(
       opacity: baseOpacity + nextRandom(state) * 0.25,
       eventType,
     });
+
+    const eventKey = `${event.id ?? event.timestamp}|${event.eventType}|${event.timestamp}`;
+    const deterministic = deterministicEventCoordinates(eventKey, viewport);
+    const ringType =
+      event.eventType === 'REPRODUCTION'
+        ? 'growth'
+        : event.eventType === 'DEATH'
+          ? 'decay'
+          : event.eventType === 'POPULATION_DELTA'
+            ? 'stress'
+            : 'population';
+
+    state.memoryRings.push({
+      x: deterministic.x,
+      y: deterministic.y,
+      radius: 8,
+      maxRadius: (ringType === 'population' ? 280 : ringType === 'growth' ? 200 : 230) + (deterministic.seed % 60),
+      opacity: ringType === 'decay' ? 0.32 : 0.28,
+      age: 0,
+      maxAge: ringType === 'population' ? 2600 : 2200,
+      ringType,
+    });
   });
+
+  // Keep recent ring history bounded
+  const maxRingHistory = 42;
+  if (state.memoryRings.length > maxRingHistory) {
+    state.memoryRings.splice(0, state.memoryRings.length - maxRingHistory);
+  }
 }
 
 export function updateBackgroundAnimationState(
@@ -184,6 +220,13 @@ export function updateBackgroundAnimationState(
   state.ripples.forEach((ripple) => {
     ripple.radius += 1.8;
     ripple.opacity *= 0.97;
+  });
+
+  state.memoryRings = state.memoryRings.filter((ring) => ring.age < ring.maxAge && ring.opacity > 0.005);
+  state.memoryRings.forEach((ring) => {
+    ring.age += 16;
+    ring.radius += 0.85;
+    ring.opacity *= ring.ringType === 'population' ? 0.992 : 0.989;
   });
 }
 
@@ -227,6 +270,27 @@ function createBiomeCells(state: BackgroundAnimationState, viewport: ViewportSiz
         moisture: nextRandom(state),
         fertility: nextRandom(state),
         corruption: nextRandom(state) * 0.7,
+      });
+    }
+  }
+
+  return cells;
+}
+
+function createRootPressureCells(state: BackgroundAnimationState, viewport: ViewportSize): RootPressureCell[] {
+  const cellSize = state.qualityTier === 'high' ? 120 : state.qualityTier === 'medium' ? 150 : 190;
+  const cols = Math.ceil(viewport.width / cellSize) + 2;
+  const rows = Math.ceil(viewport.height / cellSize) + 2;
+  const cells: RootPressureCell[] = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      cells.push({
+        x: (col - 1) * cellSize,
+        y: (row - 1) * cellSize,
+        size: cellSize,
+        pressure: 0.2 + nextRandom(state) * 0.8,
+        tilt: (nextRandom(state) - 0.5) * 0.6,
       });
     }
   }
@@ -346,4 +410,19 @@ function addGlitchSpark(state: BackgroundAnimationState, viewport: ViewportSize)
     color,
     shape: Math.floor(nextRandom(state) * 2),
   });
+}
+
+function deterministicEventCoordinates(
+  eventKey: string,
+  viewport: ViewportSize,
+): { x: number; y: number; seed: number } {
+  let hash = 2166136261;
+  for (let index = 0; index < eventKey.length; index += 1) {
+    hash ^= eventKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const seed = hash >>> 0;
+  const x = ((seed % 100000) / 100000) * viewport.width;
+  const y = ((((seed / 101) % 100000) / 100000) * viewport.height * 0.72) + viewport.height * 0.08;
+  return { x, y, seed };
 }
