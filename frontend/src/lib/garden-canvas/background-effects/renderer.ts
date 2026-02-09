@@ -2,6 +2,8 @@ import type {
   BackgroundPass,
   BackgroundWorldState,
   BiomeCell,
+  CanopyEdge,
+  CanopyNode,
   ParallaxBand,
   PointerPosition,
   ShadowBlob,
@@ -22,6 +24,8 @@ export interface BackgroundRenderInput {
   ripples: RippleEffect[];
   biomeCells: BiomeCell[];
   parallaxBands: ParallaxBand[];
+  canopyNodes: CanopyNode[];
+  canopyEdges: CanopyEdge[];
   biomeDriftX: number;
   biomeDriftY: number;
   lighting: LightingContext;
@@ -60,7 +64,7 @@ export function renderBackgroundPass(input: BackgroundRenderInput): void {
 }
 
 function drawFarBackground(input: BackgroundRenderInput): void {
-  const { ctx, viewport, lighting, timePhase, parallaxBands, mousePos } = input;
+  const { ctx, viewport, lighting, timePhase, parallaxBands, mousePos, canopyNodes, canopyEdges, worldState } = input;
   const baseGradient = ctx.createLinearGradient(0, 0, 0, viewport.height);
 
   const topColor = timePhase === 'night'
@@ -81,6 +85,7 @@ function drawFarBackground(input: BackgroundRenderInput): void {
   ctx.fillRect(0, 0, viewport.width, viewport.height);
 
   drawParallaxBands(ctx, viewport, parallaxBands, mousePos, 0.35);
+  drawCanopyGraph(ctx, canopyNodes, canopyEdges, worldState, lighting);
 }
 
 function drawTerrain(input: BackgroundRenderInput): void {
@@ -298,4 +303,41 @@ function drawParallaxBands(
     }
     ctx.stroke();
   });
+}
+
+function drawCanopyGraph(
+  ctx: CanvasRenderingContext2D,
+  canopyNodes: CanopyNode[],
+  canopyEdges: CanopyEdge[],
+  worldState: BackgroundWorldState,
+  lighting: LightingContext,
+): void {
+  if (canopyNodes.length === 0 || canopyEdges.length === 0) return;
+
+  const plantDensity = Math.max(0, Math.min(1, worldState.plantDensity ?? 0.25));
+  const livingFactor = Math.max(0, Math.min(1, worldState.totalLiving / 400));
+  const densityFactor = Math.max(0.15, Math.min(1, 0.18 + plantDensity * 0.6 + livingFactor * 0.32));
+  const visibleEdges = Math.max(1, Math.floor(canopyEdges.length * densityFactor));
+  const baseAlpha = 0.02 + densityFactor * 0.05 + (1 - lighting.sunlight) * 0.02;
+
+  const nodeById = new Map<number, CanopyNode>();
+  canopyNodes.forEach((node) => nodeById.set(node.id, node));
+
+  for (let index = 0; index < visibleEdges; index += 1) {
+    const edge = canopyEdges[index]!;
+    const from = nodeById.get(edge.fromId);
+    const to = nodeById.get(edge.toId);
+    if (!from || !to) continue;
+
+    const controlX = (from.x + to.x) * 0.5 + edge.curve * (0.6 + from.depth * 0.4);
+    const controlY = (from.y + to.y) * 0.5 - Math.abs(edge.curve) * 0.2;
+
+    ctx.strokeStyle = `hsla(${88 + from.depth * 44}, 36%, 58%, ${baseAlpha * edge.weight})`;
+    ctx.lineWidth = edge.thickness * (0.65 + from.depth * 0.5);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(controlX, controlY, to.x, to.y);
+    ctx.stroke();
+  }
 }

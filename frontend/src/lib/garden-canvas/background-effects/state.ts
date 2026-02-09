@@ -1,6 +1,8 @@
 import type { SimulationEvent } from '../../../env.d.ts';
 import type {
   BiomeCell,
+  CanopyEdge,
+  CanopyNode,
   GlitchSpark,
   ParallaxBand,
   PointerPosition,
@@ -33,6 +35,8 @@ export interface BackgroundAnimationState {
   ripples: RippleEffect[];
   biomeCells: BiomeCell[];
   parallaxBands: ParallaxBand[];
+  canopyNodes: CanopyNode[];
+  canopyEdges: CanopyEdge[];
   biomeDriftX: number;
   biomeDriftY: number;
   lastGlitchTime: number;
@@ -61,6 +65,8 @@ export function createBackgroundAnimationState(
     ripples: [],
     biomeCells: [],
     parallaxBands: [],
+    canopyNodes: [],
+    canopyEdges: [],
     biomeDriftX: 0,
     biomeDriftY: 0,
     lastGlitchTime: 0,
@@ -73,6 +79,9 @@ export function createBackgroundAnimationState(
   state.shadows = createShadowBlobs(state, viewport);
   state.biomeCells = createBiomeCells(state, viewport);
   state.parallaxBands = createParallaxBands(state, viewport);
+  const canopyGraph = createCanopyGraph(state, viewport);
+  state.canopyNodes = canopyGraph.nodes;
+  state.canopyEdges = canopyGraph.edges;
   return state;
 }
 
@@ -86,6 +95,9 @@ export function resizeBackgroundAnimationState(
   state.shadows = createShadowBlobs(state, viewport);
   state.biomeCells = createBiomeCells(state, viewport);
   state.parallaxBands = createParallaxBands(state, viewport);
+  const canopyGraph = createCanopyGraph(state, viewport);
+  state.canopyNodes = canopyGraph.nodes;
+  state.canopyEdges = canopyGraph.edges;
 }
 
 export function syncBackgroundEventEffects(
@@ -236,6 +248,58 @@ function createParallaxBands(state: BackgroundAnimationState, viewport: Viewport
     hue: 95 + nextRandom(state) * 60,
     depth: index / Math.max(1, bandCount - 1),
   }));
+}
+
+function createCanopyGraph(
+  state: BackgroundAnimationState,
+  viewport: ViewportSize,
+): { nodes: CanopyNode[]; edges: CanopyEdge[] } {
+  const nodeCount = state.qualityTier === 'high' ? 72 : state.qualityTier === 'medium' ? 54 : 36;
+  const nodes: CanopyNode[] = [];
+  const edges: CanopyEdge[] = [];
+
+  for (let index = 0; index < nodeCount; index += 1) {
+    const x = nextRandom(state) * viewport.width;
+    const y = (nextRandom(state) * viewport.height * 0.72) + viewport.height * 0.02;
+    nodes.push({
+      id: index,
+      x,
+      y,
+      depth: nextRandom(state),
+    });
+  }
+
+  nodes.sort((left, right) => left.y - right.y);
+
+  for (let index = 1; index < nodes.length; index += 1) {
+    const child = nodes[index]!;
+    let bestParent = nodes[0]!;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let parentIndex = 0; parentIndex < index; parentIndex += 1) {
+      const parent = nodes[parentIndex]!;
+      const dx = child.x - parent.x;
+      const dy = child.y - parent.y;
+      if (dy <= 0) continue;
+
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const score = distance * (0.8 + parent.depth * 0.4);
+      if (score < bestScore) {
+        bestScore = score;
+        bestParent = parent;
+      }
+    }
+
+    edges.push({
+      fromId: bestParent.id,
+      toId: child.id,
+      thickness: 0.4 + nextRandom(state) * 1.6,
+      curve: (nextRandom(state) - 0.5) * 40,
+      weight: 0.4 + nextRandom(state) * 0.6,
+    });
+  }
+
+  return { nodes, edges };
 }
 
 function updateSporeParticles(spores: SporeParticle[], viewport: ViewportSize): void {

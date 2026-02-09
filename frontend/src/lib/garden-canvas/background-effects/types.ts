@@ -59,6 +59,21 @@ export interface ParallaxBand {
   depth: number;
 }
 
+export interface CanopyNode {
+  id: number;
+  x: number;
+  y: number;
+  depth: number;
+}
+
+export interface CanopyEdge {
+  fromId: number;
+  toId: number;
+  thickness: number;
+  curve: number;
+  weight: number;
+}
+
 export interface ViewportSize {
   width: number;
   height: number;
@@ -93,4 +108,9 @@ export interface BackgroundWorldState {
   sunlight: number;
   totalLiving: number;
   totalEntities: number;
+  plantDensity?: number;
+  fungusDensity?: number;
+  predatorPressure?: number;
+  diversityIndex?: number;
+  eventIntensity?: number;
 }

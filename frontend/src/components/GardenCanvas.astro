@@ -256,6 +256,16 @@ const {
       const moisture = this.gardenState?.environment.moisture ?? 0.5;
       const totalLiving = this.gardenState?.populationSummary.totalLiving ?? this.entities.filter((entity) => entity.isAlive).length;
       const totalEntities = this.gardenState?.populationSummary.total ?? this.entities.length;
+      const livingPlants = this.gardenState?.populationSummary.plants ?? this.entities.filter((entity) => entity.isAlive && entity.type === 'plant').length;
+      const livingFungi = this.gardenState?.populationSummary.fungi ?? this.entities.filter((entity) => entity.isAlive && entity.type === 'fungus').length;
+      const livingCarnivores = this.gardenState?.populationSummary.carnivores ?? this.entities.filter((entity) => entity.isAlive && entity.type === 'carnivore').length;
+      const livingHerbivores = this.gardenState?.populationSummary.herbivores ?? this.entities.filter((entity) => entity.isAlive && entity.type === 'herbivore').length;
+      const plantDensity = totalLiving > 0 ? livingPlants / totalLiving : 0;
+      const fungusDensity = totalLiving > 0 ? livingFungi / totalLiving : 0;
+      const predatorPressure = totalLiving > 0 ? livingCarnivores / totalLiving : 0;
+      const activeCategories = [livingPlants, livingFungi, livingHerbivores, livingCarnivores].filter((count) => count > 0).length;
+      const diversityIndex = activeCategories / 4;
+      const eventIntensity = Math.min(1, (this.recentEvents?.length ?? 0) / 8);
 
       this.lighting = createLightingContext(sunlight, tick);
       this.timePhase = getTimePhaseFromSunlight(sunlight);
@@ -266,6 +276,11 @@ const {
         sunlight,
         totalLiving,
         totalEntities,
+        plantDensity,
+        fungusDensity,
+        predatorPressure,
+        diversityIndex,
+        eventIntensity,
       };
 
       updateBackgroundAnimationState(
@@ -325,6 +340,8 @@ const {
           ripples: this.backgroundState.ripples,
           biomeCells: this.backgroundState.biomeCells,
           parallaxBands: this.backgroundState.parallaxBands,
+          canopyNodes: this.backgroundState.canopyNodes,
+          canopyEdges: this.backgroundState.canopyEdges,
           biomeDriftX: this.backgroundState.biomeDriftX,
           biomeDriftY: this.backgroundState.biomeDriftY,
           lighting: this.lighting,
