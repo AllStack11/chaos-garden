@@ -282,7 +282,8 @@ export function moveEntityTowardTarget(
 export function findNearestEntity(
   source: Entity,
   candidates: Entity[],
-  typeFilter?: Entity['type']
+  typeFilter?: Entity['type'],
+  maxDistance?: number
 ): Entity | null {
   const validTargets = typeFilter 
     ? candidates.filter(e =>
@@ -298,19 +299,25 @@ export function findNearestEntity(
       e.health > 0 &&
       e.energy > 0
     );
+
+  const targetsWithinRange = typeof maxDistance === 'number'
+    ? validTargets.filter(target =>
+      calculateDistanceBetweenEntities(source, target) <= maxDistance
+    )
+    : validTargets;
   
-  if (validTargets.length === 0) {
+  if (targetsWithinRange.length === 0) {
     return null;
   }
   
-  let nearest = validTargets[0];
+  let nearest = targetsWithinRange[0];
   let minDistance = calculateDistanceBetweenEntities(source, nearest);
   
-  for (let i = 1; i < validTargets.length; i++) {
-    const distance = calculateDistanceBetweenEntities(source, validTargets[i]);
+  for (let i = 1; i < targetsWithinRange.length; i++) {
+    const distance = calculateDistanceBetweenEntities(source, targetsWithinRange[i]);
     if (distance < minDistance) {
       minDistance = distance;
-      nearest = validTargets[i];
+      nearest = targetsWithinRange[i];
     }
   }
   

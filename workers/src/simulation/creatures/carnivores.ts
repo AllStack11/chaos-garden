@@ -32,6 +32,8 @@ const REPRODUCTION_COST = 50;
 const HUNTING_DISTANCE = 8; // pixels (slightly larger than herbivore eating)
 const MAX_AGE = 200; // ticks (carnivores live longer but are fewer)
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
+const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
+const MAX_CARCASS_ENERGY = 100;
 
 /**
  * Create a new carnivore entity.
@@ -104,7 +106,7 @@ export function processCarnivoreBehaviorDuringTick(
   const consumed: string[] = [];
   
   // 1. Find nearest herbivore (prey)
-  const targetPrey = findNearestEntity(carnivore, allEntities, 'herbivore');
+  const targetPrey = findNearestEntity(carnivore, allEntities, 'herbivore', carnivore.perceptionRadius);
   
   // 2. Move toward prey if found
   if (targetPrey) {
@@ -164,11 +166,15 @@ export function processCarnivoreBehaviorDuringTick(
  * Hunt an herbivore and gain energy.
  */
 function huntHerbivore(carnivore: Entity, prey: Entity): number {
-  const energyGained = Math.min(ENERGY_FROM_PREY, prey.energy + 20); // Extra energy from biomass
+  const availablePreyEnergy = prey.energy + (prey.health * PREY_HEALTH_TO_ENERGY_RATIO);
+  const energyGained = Math.min(ENERGY_FROM_PREY, availablePreyEnergy);
+  const remainingCarcassEnergy = clampValueToRange(availablePreyEnergy - energyGained, 0, MAX_CARCASS_ENERGY);
+
   carnivore.energy = clampValueToRange(carnivore.energy + energyGained, 0, MAX_ENERGY);
-  prey.energy = Math.max(0, prey.energy - energyGained);
+  prey.energy = remainingCarcassEnergy;
   prey.isAlive = false;
   prey.health = 0;
+
   return energyGained;
 }
 

@@ -107,7 +107,7 @@ export function processHerbivoreBehaviorDuringTick(
   const consumed: string[] = [];
   
   // 1. Find nearest plant
-  const targetPlant = findNearestEntity(herbivore, allEntities, 'plant');
+  const targetPlant = findNearestEntity(herbivore, allEntities, 'plant', herbivore.perceptionRadius);
   
   // 2. Move toward plant if found
   if (targetPlant) {

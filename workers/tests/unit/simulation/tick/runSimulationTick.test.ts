@@ -1,0 +1,163 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Entity, GardenState } from '@chaos-garden/shared';
+import { buildEnvironment } from '../../../fixtures/environment';
+import { buildPlant } from '../../../fixtures/entities';
+import { createFakeApplicationLogger } from '../../../helpers/fake-application-logger';
+import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
+
+const mockQueries = vi.hoisted(() => ({
+  getLatestGardenStateFromDatabase: vi.fn(),
+  saveGardenStateToDatabase: vi.fn(),
+  getAllEntitiesFromDatabase: vi.fn(),
+  getAllLivingEntitiesFromDatabase: vi.fn(),
+  saveEntitiesToDatabase: vi.fn(),
+  markEntitiesAsDeadInDatabase: vi.fn()
+}));
+
+const mockEnvironment = vi.hoisted(() => ({
+  updateEnvironmentForNextTick: vi.fn((current) => ({
+    ...current,
+    tick: current.tick + 1,
+    sunlight: 0.6
+  }))
+}));
+
+const eventLogger = createFakeEventLogger();
+const mockEventLoggerFactories = vi.hoisted(() => ({
+  createEventLogger: vi.fn(() => eventLogger),
+  createConsoleEventLogger: vi.fn(() => eventLogger),
+  createCompositeEventLogger: vi.fn(() => eventLogger)
+}));
+
+vi.mock('../../../../src/db/queries', () => mockQueries);
+vi.mock('../../../../src/simulation/environment', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../../src/simulation/environment')>();
+  return {
+    ...original,
+    updateEnvironmentForNextTick: mockEnvironment.updateEnvironmentForNextTick
+  };
+});
+vi.mock('../../../../src/logging/event-logger', () => mockEventLoggerFactories);
+
+import { runSimulationTick } from '../../../../src/simulation/tick';
+
+describe('simulation/tick/runSimulationTick', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    const previousState: GardenState = {
+      id: 1,
+      tick: 0,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      environment: buildEnvironment({ tick: 0 }),
+      populationSummary: {
+        plants: 1,
+        herbivores: 0,
+        carnivores: 0,
+        fungi: 0,
+        deadPlants: 0,
+        deadHerbivores: 0,
+        deadCarnivores: 0,
+        deadFungi: 0,
+        total: 1,
+        totalLiving: 1,
+        totalDead: 0
+      }
+    };
+
+    const livingPlant = buildPlant({ energy: 40, reproductionRate: 0, age: 0 });
+
+    mockQueries.getLatestGardenStateFromDatabase.mockResolvedValue(previousState);
+    mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([livingPlant]);
+    mockQueries.saveGardenStateToDatabase.mockResolvedValue(2);
+    mockQueries.saveEntitiesToDatabase.mockResolvedValue(undefined);
+    mockQueries.markEntitiesAsDeadInDatabase.mockResolvedValue(undefined);
+    mockQueries.getAllEntitiesFromDatabase.mockResolvedValue([livingPlant]);
+  });
+
+  it('increments tick and persists state updates', async () => {
+    const result = await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+
+    expect(result.tickNumber).toBe(1);
+    expect(mockEnvironment.updateEnvironmentForNextTick).toHaveBeenCalledTimes(1);
+    expect(mockQueries.saveGardenStateToDatabase).toHaveBeenCalledTimes(1);
+    expect(mockQueries.saveEntitiesToDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('increments age for living entities each tick', async () => {
+    const agingPlant = buildPlant({ id: 'plant-aging', age: 3, reproductionRate: 0 });
+    mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([agingPlant]);
+    mockQueries.getAllEntitiesFromDatabase.mockResolvedValue([agingPlant]);
+
+    await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+
+    const savedEntities = mockQueries.saveEntitiesToDatabase.mock.calls[0][1] as Entity[];
+    const persistedPlant = savedEntities.find((entity) => entity.id === 'plant-aging');
+    expect(persistedPlant?.age).toBe(4);
+  });
+
+  it('marks dead entities when energy depletes', async () => {
+    const dyingPlant = buildPlant({ id: 'plant-dead', energy: 0.1, photosynthesisRate: 0, reproductionRate: 0 });
+    mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([dyingPlant]);
+    mockQueries.getAllEntitiesFromDatabase.mockResolvedValue([dyingPlant]);
+
+    const result = await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+
+    expect(result.deaths).toBe(1);
+    expect(eventLogger.logDeath).toHaveBeenCalledTimes(1);
+    expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, ['plant-dead'], 1);
+  });
+
+  it('persists offspring with assigned bornAtTick and gardenStateId', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const reproducingPlant = buildPlant({
+      id: 'plant-parent',
+      energy: 95,
+      reproductionRate: 1,
+      photosynthesisRate: 1,
+      age: 0
+    });
+
+    mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([reproducingPlant]);
+    mockQueries.getAllEntitiesFromDatabase.mockImplementation(async () => {
+      const savedEntities = mockQueries.saveEntitiesToDatabase.mock.calls[0]?.[1] as Entity[] | undefined;
+      return savedEntities ?? [reproducingPlant];
+    });
+
+    const result = await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+
+    expect(result.newEntities).toBeGreaterThanOrEqual(1);
+
+    const savedEntities = mockQueries.saveEntitiesToDatabase.mock.calls[0][1] as Entity[];
+    const childEntity = savedEntities.find((entity) => entity.id !== 'plant-parent');
+
+    expect(childEntity).toBeDefined();
+    expect(childEntity?.bornAtTick).toBe(1);
+    expect(childEntity?.gardenStateId).toBe(2);
+    expect(childEntity?.lineage).toBe('plant-parent');
+  });
+
+  it('logs ambient narrative once per successful tick', async () => {
+    await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+
+    expect(eventLogger.logAmbientNarrative).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses composite logger in development mode', async () => {
+    await runSimulationTick({} as any, createFakeApplicationLogger(), true);
+
+    expect(mockEventLoggerFactories.createConsoleEventLogger).toHaveBeenCalledTimes(1);
+    expect(mockEventLoggerFactories.createCompositeEventLogger).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when no prior garden state exists', async () => {
+    const appLogger = createFakeApplicationLogger();
+    mockQueries.getLatestGardenStateFromDatabase.mockResolvedValue(null);
+
+    await expect(runSimulationTick({} as any, appLogger, false)).rejects.toThrow('No garden state found');
+
+    expect(appLogger.error).toHaveBeenCalled();
+    expect(mockQueries.saveGardenStateToDatabase).not.toHaveBeenCalled();
+  });
+});

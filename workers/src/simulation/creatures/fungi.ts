@@ -105,7 +105,7 @@ export function processFungusBehaviorDuringTick(
   const decomposed: string[] = [];
   
   // 1. Find nearest dead entity to decompose
-  const targetDead = findNearestDeadEntity(fungus, allEntities);
+  const targetDead = findNearestDeadEntity(fungus, allEntities, fungus.perceptionRadius);
   
   // 2. Decompose if found and within range
   if (targetDead) {
@@ -227,26 +227,33 @@ function checkAndLogMutations(
  */
 function findNearestDeadEntity(
   fungus: Entity,
-  allEntities: Entity[]
+  allEntities: Entity[],
+  maxDistance?: number
 ): Entity | null {
   const deadEntities = allEntities.filter(e => 
     e.type !== 'fungus' &&
     !e.isAlive &&
     e.energy > 0
   );
+
+  const deadEntitiesInRange = typeof maxDistance === 'number'
+    ? deadEntities.filter(entity =>
+      calculateDistanceBetweenEntities(fungus, entity) <= maxDistance
+    )
+    : deadEntities;
   
-  if (deadEntities.length === 0) {
+  if (deadEntitiesInRange.length === 0) {
     return null;
   }
   
-  let nearest = deadEntities[0];
+  let nearest = deadEntitiesInRange[0];
   let minDistance = calculateDistanceBetweenEntities(fungus, nearest);
   
-  for (let i = 1; i < deadEntities.length; i++) {
-    const distance = calculateDistanceBetweenEntities(fungus, deadEntities[i]);
+  for (let i = 1; i < deadEntitiesInRange.length; i++) {
+    const distance = calculateDistanceBetweenEntities(fungus, deadEntitiesInRange[i]);
     if (distance < minDistance) {
       minDistance = distance;
-      nearest = deadEntities[i];
+      nearest = deadEntitiesInRange[i];
     }
   }
   
