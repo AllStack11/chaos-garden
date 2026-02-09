@@ -521,6 +521,32 @@ export function createGlow(
 }
 
 /**
+ * Create a mycelium particle for fungus network visuals
+ */
+export function createMyceliumParticle(
+  x: number,
+  y: number,
+  color: string = 'rgba(210, 190, 255, 0.8)'
+): Omit<Particle, 'id'> {
+  return {
+    type: 'mycelium',
+    x,
+    y,
+    vx: (Math.random() - 0.5) * 0.2,
+    vy: (Math.random() - 0.5) * 0.2,
+    size: 3 + Math.random() * 3,
+    sizeChange: -0.01,
+    opacity: 0.8,
+    opacityChange: -0.01,
+    color,
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: (Math.random() - 0.5) * 0.05,
+    lifetime: 0,
+    maxLifetime: 900 + Math.random() * 600
+  };
+}
+
+/**
  * Create sparkle particles (for special moments)
  */
 export function createSparkles(

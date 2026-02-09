@@ -1,20 +1,17 @@
 /**
  * EntityRenderer - Main Rendering Engine for Chaos Garden
- * 
- * Renders all entity types with detailed procedural visuals,
- * health/energy animations, and biological behaviors.
+ *
+ * Renders entities with lightweight procedural visuals and optional overlays.
  */
 
-import type { Entity } from '../../../env.d.ts';
-import { 
-  generateEntityColors, 
-  getHealthAdjustedColor, 
+import type { Entity } from '../../env.d.ts';
+import {
+  generateEntityColors,
+  getHealthAdjustedColor,
   getNightColor,
-  getDeathColor,
-  type EntityColors 
+  type EntityColors,
 } from './utils/colors.ts';
 import {
-  drawLeaf,
   drawFlower,
   drawMushroomCap,
   drawInsectBody,
@@ -23,35 +20,23 @@ import {
   drawAntenna,
   drawEye,
   drawStem,
-  type ShapeOptions
 } from './utils/shapes.ts';
 import {
   breathingAnimation,
   wingFlapAnimation,
   plantSwayAnimation,
-  heliotropismAnimation,
   walkBobAnimation,
-  happyWiggleAnimation,
   antennaWaveAnimation,
-  scalePulseAnimation,
   growthAnimation,
   easeOutElastic,
-  easeInOutSine
 } from './utils/animations.ts';
 import {
   ParticleSystem,
   createSpore,
-  createEatParticles,
-  createDeathParticles,
-  createBirthParticles,
   createGlow,
   createMyceliumParticle,
-  createSparkles
+  createSparkles,
 } from './utils/particles.ts';
-
-// ==========================================
-// Configuration
-// ==========================================
 
 export interface EntityRendererConfig {
   showNames: boolean;
@@ -66,79 +51,54 @@ const DEFAULT_CONFIG: EntityRendererConfig = {
   showHealthBars: true,
   showSelectionHighlight: true,
   particleIntensity: 1,
-  lodDistance: 50
+  lodDistance: 50,
 };
-
-// ==========================================
-// Entity Renderer Class
-// ==========================================
 
 export class EntityRenderer {
   private ctx: CanvasRenderingContext2D | null = null;
-  private particleSystem: ParticleSystem;
+  private particleSystem = new ParticleSystem();
   private entityColors: Map<string, EntityColors> = new Map();
   private config: EntityRendererConfig;
-  private lastFrameTime: number = 0;
-  private time: number = 0;
+  private time = 0;
 
   constructor(config: Partial<EntityRendererConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.particleSystem = new ParticleSystem();
   }
 
-  /**
-   * Initialize the renderer with a canvas context
-   */
   initialize(ctx: CanvasRenderingContext2D): void {
     this.ctx = ctx;
   }
 
-  /**
-   * Set the rendering configuration
-   */
   setConfig(config: Partial<EntityRendererConfig>): void {
     this.config = { ...this.config, ...config };
   }
 
-  /**
-   * Update time and particles
-   */
   update(deltaTime: number): void {
     this.time += deltaTime;
     this.particleSystem.update(deltaTime);
   }
 
-  /**
-   * Render all entities
-   */
   render(
     entities: Entity[],
     selectedEntity: Entity | null,
     isNight: boolean,
-    sunlight: number
+    sunlight: number,
   ): void {
     if (!this.ctx) return;
 
-    // Render particles first (behind entities)
     this.particleSystem.render(this.ctx);
 
-    // Sort entities by y-position for depth
-    const sortedEntities = [...entities].sort((a, b) => a.position.y - b.position.y);
-
-    // Render each entity
-    for (const entity of sortedEntities) {
+    const sortedEntities = [...entities].sort((left, right) => left.position.y - right.position.y);
+    sortedEntities.forEach((entity) => {
       this.renderEntity(entity, selectedEntity, isNight, sunlight);
-    }
+    });
   }
 
-  /**
-   * Render a single entity
-   */
   private renderEntity(
     entity: Entity,
     selectedEntity: Entity | null,
     isNight: boolean,
-    sunlight: number
+    sunlight: number,
   ): void {
     if (!this.ctx || !entity.isAlive) return;
 
@@ -148,403 +108,271 @@ export class EntityRenderer {
     const healthColors = getHealthAdjustedColor(colors, entity.health, entity.energy);
     const nightColors = getNightColor(colors, isNight, this.isNocturnal(entity));
 
-    // Get screen position
     const screenX = entity.position.x;
     const screenY = entity.position.y;
 
-    // Render based on entity type
     switch (entity.type) {
       case 'plant':
-        this.renderPlant(entity, screenX, screenY, scale, colors, healthColors, nightColors, isSelected, sunlight);
+        this.renderPlant(entity, screenX, screenY, scale, healthColors, nightColors, sunlight);
         break;
       case 'herbivore':
-        this.renderHerbivore(entity, screenX, screenY, scale, colors, healthColors, nightColors, isSelected);
+        this.renderHerbivore(entity, screenX, screenY, scale, healthColors, nightColors);
         break;
       case 'carnivore':
-        this.renderCarnivore(entity, screenX, screenY, scale, colors, healthColors, nightColors, isSelected);
+        this.renderCarnivore(entity, screenX, screenY, scale, healthColors, nightColors);
         break;
       case 'fungus':
-        this.renderFungus(entity, screenX, screenY, scale, colors, healthColors, nightColors, isSelected);
+        this.renderFungus(entity, screenX, screenY, scale, healthColors, nightColors, isNight);
         break;
     }
 
-    // Render selection highlight
     if (isSelected && this.config.showSelectionHighlight) {
       this.renderSelectionHighlight(screenX, screenY, scale, entity);
     }
 
-    // Render name tag
     if (this.config.showNames || isSelected) {
       this.renderNameTag(entity, screenX, screenY, scale, isSelected);
     }
 
-    // Render health bar
     if (this.config.showHealthBars) {
       this.renderHealthBar(entity, screenX, screenY, scale);
     }
   }
 
-  /**
-   * Render a plant entity
-   */
   private renderPlant(
-    entity: Entity,
+    entity: Extract<Entity, { type: 'plant' }>,
     x: number,
     y: number,
     scale: number,
-    colors: EntityColors,
     healthColors: { fill: string; stroke: string },
     nightColors: { fill: string; glow: string },
-    isSelected: boolean,
-    sunlight: number
+    sunlight: number,
   ): void {
     if (!this.ctx) return;
 
-    const time = this.time;
-    const healthFactor = entity.health / 100;
     const energyFactor = entity.energy / 100;
-
-    // Calculate animations
-    const sway = plantSwayAnimation(x, time);
-    const heliotropism = heliotropismAnimation(sunlight, time);
-    const breath = breathingAnimation(time, 1, 0.1);
-    const growthProgress = Math.min(entity.age / 50, 1); // Grows in first 50 ticks
+    const growthProgress = Math.min(entity.age / 50, 1);
     const growthScale = growthAnimation(growthProgress, easeOutElastic) * scale;
 
-    // Size based on energy and growth
-    const baseSize = 8 + (energyFactor * 8) + (growthScale * 4);
-    const petalCount = 5 + Math.floor(entity.age % 10); // Varied petals based on age
-
-    // Draw stem
+    const sway = plantSwayAnimation(x, this.time, sunlight);
+    const breath = breathingAnimation(this.time, 1, 0.1);
+    const baseSize = 7 + energyFactor * 8;
     const stemHeight = baseSize * 2;
-    drawStem(
-      this.ctx,
-      x,
-      y,
-      stemHeight,
-      sway * 10,
-      2 * growthScale,
-      { fill: '#166534', stroke: '#14532d' }
-    );
 
-    // Draw flower/leaf
-    const flowerY = y - stemHeight;
+    drawStem(this.ctx, x, y, stemHeight, sway * 10, 2 * growthScale, {
+      fill: '#166534',
+      stroke: healthColors.stroke,
+    });
+
     drawFlower(
       this.ctx,
-      x + sway * 5,
-      flowerY,
-      petalCount,
-      baseSize * 1.5,
+      x + sway * 3,
+      y - stemHeight,
+      5 + Math.floor(entity.age % 6),
+      baseSize * 1.2,
       baseSize * 0.4,
-      baseSize * 0.3,
+      baseSize * 0.35,
       {
         fill: nightColors.fill,
         stroke: healthColors.stroke,
         scale: growthScale,
-        opacity: 0.7 + breath * 0.3 + energyFactor * 0.3
-      }
+        opacity: 0.75 + breath * 0.2,
+      },
     );
 
-    // High energy glow effect
-    if (energyFactor > 0.7) {
-      this.ctx.save();
-      const glow = this.ctx.createRadialGradient(x, flowerY, 0, x, flowerY, baseSize * 3);
-      glow.addColorStop(0, nightColors.glow);
-      glow.addColorStop(1, 'transparent');
-      this.ctx.fillStyle = glow;
-      this.ctx.beginPath();
-      this.ctx.arc(x, flowerY, baseSize * 3, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
-    }
-
-    // Low health droop
-    if (healthFactor < 0.5) {
-      // Draw drooping effect (no code needed, just visual representation)
+    if (energyFactor > 0.75 && Math.random() < 0.01 * this.config.particleIntensity) {
+      this.particleSystem.addParticle(createGlow(x, y - stemHeight, baseSize * 0.8, nightColors.glow));
     }
   }
 
-  /**
-   * Render a herbivore entity
-   */
   private renderHerbivore(
-    entity: Entity,
+    entity: Extract<Entity, { type: 'herbivore' }>,
     x: number,
     y: number,
     scale: number,
-    colors: EntityColors,
     healthColors: { fill: string; stroke: string },
     nightColors: { fill: string; glow: string },
-    isSelected: boolean
   ): void {
     if (!this.ctx) return;
 
-    const time = this.time;
     const healthFactor = entity.health / 100;
-    const energyFactor = entity.energy / 100;
-
-    // Calculate animations
-    const flapPhase = wingFlapAnimation(time, 5);
-    const bob = walkBobAnimation(time, 8);
-    const wiggle = energyFactor > 0.8 ? happyWiggleAnimation(time, 1) : 0;
-    const antennaAngle = antennaWaveAnimation(time, 2);
-
-    // Body dimensions
-    const bodyLength = (12 + energyFactor * 8) * scale;
+    const bodyLength = (12 + (entity.energy / 100) * 7) * scale;
     const bodyWidth = (6 + healthFactor * 4) * scale;
-    const yOffset = y - bob;
+    const yOffset = y - walkBobAnimation(this.time, 8);
 
-    // Draw wings (behind body)
-    const wingY = yOffset - bodyWidth * 0.3;
-    drawWings(
-      this.ctx,
-      x,
-      wingY,
-      bodyLength * 1.2,
-      bodyWidth * 0.8,
-      flapPhase,
-      nightColors.fill,
-      { opacity: 0.6 }
-    );
+    drawWings(this.ctx, x, yOffset - bodyWidth * 0.2, bodyLength, bodyWidth, wingFlapAnimation(this.time, 6), nightColors.fill, {
+      opacity: 0.6,
+    });
 
-    // Draw legs
-    drawCreatureLegs(
-      this.ctx,
-      x,
-      yOffset,
-      bodyLength,
-      bodyWidth * 2,
-      6,
-      time * 8,
-      { stroke: healthColors.stroke, scale }
-    );
+    drawCreatureLegs(this.ctx, x, yOffset, bodyLength, bodyWidth * 1.8, 6, this.time * 8, {
+      stroke: healthColors.stroke,
+      scale,
+    });
 
-    // Draw body
-    drawInsectBody(
-      this.ctx,
-      x,
-      yOffset,
-      bodyLength,
-      bodyWidth,
-      4,
-      {
-        fill: nightColors.fill,
-        stroke: healthColors.stroke,
-        scale,
-        rotation: wiggle
-      }
-    );
+    drawInsectBody(this.ctx, x, yOffset, bodyLength, bodyWidth, 4, {
+      fill: nightColors.fill,
+      stroke: healthColors.stroke,
+      scale,
+    });
 
-    // Draw antenna (pointing curious direction)
     const headX = x + bodyLength * 0.7;
     const headY = yOffset - bodyWidth * 0.2;
-    drawAntenna(
-      this.ctx,
-      headX,
-      headY,
-      bodyWidth * 1.5,
-      -Math.PI / 2 + antennaAngle,
-      3,
-      { stroke: healthColors.stroke, opacity: 0.8 }
-    );
-
-    // Draw eyes
-    const eyeRadius = bodyWidth * 0.25;
-    drawEye(this.ctx, headX + bodyWidth * 0.3, headY - bodyWidth * 0.1, eyeRadius, false, {
-      fill: 'white',
-      stroke: '#333'
+    drawAntenna(this.ctx, headX, headY, bodyWidth * 1.3, -Math.PI / 2 + antennaWaveAnimation(this.time, 2), 2, {
+      stroke: healthColors.stroke,
     });
-    drawEye(this.ctx, headX + bodyWidth * 0.3, headY + bodyWidth * 0.1, eyeRadius, false, {
+    drawEye(this.ctx, headX + bodyWidth * 0.2, headY, bodyWidth * 0.2, false, {
       fill: 'white',
-      stroke: '#333'
+      stroke: '#333',
     });
-
-    // Draw glow for high energy
-    if (energyFactor > 0.7) {
-      this.ctx.save();
-      const glow = this.ctx.createRadialGradient(x, yOffset, 0, x, yOffset, bodyLength * 2);
-      glow.addColorStop(0, nightColors.glow);
-      glow.addColorStop(1, 'transparent');
-      this.ctx.fillStyle = glow;
-      this.ctx.beginPath();
-      this.ctx.arc(x, yOffset, bodyLength * 2, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
-    }
   }
 
-  /**
-   * Render a carnivore entity
-   */
   private renderCarnivore(
-    entity: Entity,
+    entity: Extract<Entity, { type: 'carnivore' }>,
     x: number,
     y: number,
     scale: number,
-    colors: EntityColors,
     healthColors: { fill: string; stroke: string },
     nightColors: { fill: string; glow: string },
-    isSelected: boolean
   ): void {
     if (!this.ctx) return;
 
-    const time = this.time;
-    const healthFactor = entity.health / 100;
     const energyFactor = entity.energy / 100;
     const isHunting = energyFactor < 0.5;
-
-    // Calculate animations
-    const bob = walkBobAnimation(time, 8);
-    const tailSway = Math.sin(time * 3) * 0.2;
-
-    // Body dimensions (larger than herbivores)
     const bodyLength = (16 + energyFactor * 10) * scale;
-    const bodyWidth = (10 + healthFactor * 5) * scale;
-    const yOffset = y - bob;
+    const bodyWidth = (9 + (entity.health / 100) * 4) * scale;
+    const yOffset = y - walkBobAnimation(this.time, 7);
 
-    // Draw tail
-    this.ctx.save();
-    this.ctx.strokeStyle = healthColors.stroke;
-    this.ctx.lineWidth = 3 * scale;
-    this.ctx.lineCap = 'round';
-    this.ctx.beginPath();
-    this.ctx.moveTo(x - bodyLength * 0.4, yOffset);
-    this.ctx.quadraticCurveTo(
-      x - bodyLength * 0.8,
-      yOffset + tailSway * 20,
-      x - bodyLength,
-      yOffset + tailSway * 10
-    );
-    this.ctx.stroke();
-    this.ctx.restore();
-
-    // Draw body (elongated for predators)
-    drawInsectBody(
-      this.ctx,
-      x,
-      yOffset,
-      bodyLength,
-      bodyWidth,
-      5,
-      {
-        fill: nightColors.fill,
-        stroke: healthColors.stroke,
-        scale
-      }
-    );
-
-    // Draw legs (fewer but longer for predators)
-    drawCreatureLegs(
-      this.ctx,
-      x,
-      yOffset,
-      bodyLength,
-      bodyWidth * 2.5,
-      4, // 4 legs for predators
-      time * 10,
-      { stroke: healthColors.stroke, scale }
-    );
-
-    // Draw head
-    const headX = x + bodyLength * 0.6;
-    const headY = yOffset - bodyWidth * 0.1;
-    const headSize = bodyWidth * 0.7;
-
-    // Head
-    this.ctx.beginPath();
-    this.ctx.ellipse(headX, headY, headSize, headSize * 0.6, 0, 0, Math.PI * 2);
-    this.ctx.fillStyle = nightColors.fill;
-    this.ctx.fill();
-    this.ctx.strokeStyle = healthColors.stroke;
-    this.ctx.stroke();
-
-    // Predatory eyes (red when hunting)
-    const eyeRadius = headSize * 0.3;
-    drawEye(this.ctx, headX + headSize * 0.4, headY - headSize * 0.15, eyeRadius, isHunting, {
-      fill: isHunting ? '#ffcccc' : 'white',
-      stroke: '#333'
+    drawInsectBody(this.ctx, x, yOffset, bodyLength, bodyWidth, 5, {
+      fill: nightColors.fill,
+      stroke: healthColors.stroke,
     });
 
-    // Snout
-    this.ctx.beginPath();
-    this.ctx.ellipse(headX + headSize * 0.6, headY + headSize * 0.1, headSize * 0.5, headSize * 0.3, 0, 0, Math.PI * 2);
-    this.ctx.fillStyle = colors.base.h > 20 ? colors.accent.fill : healthColors.fill;
-    this.ctx.fill();
+    drawCreatureLegs(this.ctx, x, yOffset, bodyLength, bodyWidth * 2.2, 4, this.time * 10, {
+      stroke: healthColors.stroke,
+    });
 
-    // Hunting glow
-    if (isHunting) {
-      this.ctx.save();
-      const glow = this.ctx.createRadialGradient(x, yOffset, 0, x, yOffset, bodyLength * 2.5);
-      glow.addColorStop(0, 'rgba(255, 100, 100, 0.3)');
-      glow.addColorStop(1, 'transparent');
-      this.ctx.fillStyle = glow;
-      this.ctx.beginPath();
-      this.ctx.arc(x, yOffset, bodyLength * 2.5, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
+    const headX = x + bodyLength * 0.6;
+    const headY = yOffset - bodyWidth * 0.15;
+    drawEye(this.ctx, headX, headY, bodyWidth * 0.25, isHunting, {
+      fill: isHunting ? '#ffcccc' : 'white',
+      stroke: '#333',
+    });
+
+    if (isHunting && Math.random() < 0.01 * this.config.particleIntensity) {
+      this.particleSystem.addParticle(createGlow(x, yOffset, bodyLength * 0.3, 'rgba(255, 100, 100, 0.35)'));
     }
   }
 
-  /**
-   * Render a fungus entity
-   */
   private renderFungus(
+    entity: Extract<Entity, { type: 'fungus' }>,
+    x: number,
+    y: number,
+    scale: number,
+    healthColors: { fill: string; stroke: string },
+    nightColors: { fill: string; glow: string },
+    isNight: boolean,
+  ): void {
+    if (!this.ctx) return;
+
+    const capWidth = (11 + (entity.energy / 100) * 8) * scale;
+    const capHeight = capWidth * 0.5;
+    const stemHeight = (6 + (entity.health / 100) * 4) * scale;
+
+    drawMushroomCap(this.ctx, x, y - stemHeight, capWidth, capHeight, stemHeight, capWidth * 0.2, {
+      fill: nightColors.fill,
+      stroke: healthColors.stroke,
+    });
+
+    if (isNight && Math.random() < 0.015 * this.config.particleIntensity) {
+      this.particleSystem.addParticle(createSpore(x, y - stemHeight, nightColors.glow));
+    }
+
+    if (Math.random() < 0.008 * this.config.particleIntensity) {
+      this.particleSystem.addParticle(createMyceliumParticle(x, y));
+    }
+  }
+
+  private getEntityScale(entity: Entity): number {
+    const energyScale = 0.8 + (entity.energy / 100) * 0.5;
+    const healthScale = 0.85 + (entity.health / 100) * 0.3;
+    return Math.max(0.5, Math.min(1.8, (energyScale + healthScale) / 2));
+  }
+
+  private getEntityColors(entity: Entity): EntityColors {
+    const cached = this.entityColors.get(entity.id);
+    if (cached) return cached;
+
+    const generated = generateEntityColors(entity.species, entity.type);
+    this.entityColors.set(entity.id, generated);
+    return generated;
+  }
+
+  private isNocturnal(entity: Entity): boolean {
+    return entity.type === 'fungus' || entity.type === 'carnivore';
+  }
+
+  private renderSelectionHighlight(x: number, y: number, scale: number, entity: Entity): void {
+    if (!this.ctx) return;
+
+    const radius = (8 + entity.energy / 20) * scale;
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([4, 4]);
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  private renderNameTag(
     entity: Entity,
     x: number,
     y: number,
     scale: number,
-    colors: EntityColors,
-    healthColors: { fill: string; stroke: string },
-    nightColors: { fill: string; glow: string },
-    isSelected: boolean
+    isSelected: boolean,
   ): void {
     if (!this.ctx) return;
 
-    const time = this.time;
-    const healthFactor = entity.health / 100;
-    const energyFactor = entity.energy / 100;
-    const isNight = time % 10 > 5; // Simplified night detection
+    const labelY = y - 22 * scale;
+    this.ctx.save();
+    this.ctx.font = isSelected ? 'bold 12px sans-serif' : '10px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
 
-    // Calculate animations
-    const breath = breathingAnimation(time, 0.5, 0.2);
-    const glowPulse = isNight ? breathingAnimation(time, 1, 0.5) : 0;
+    const textWidth = this.ctx.measureText(entity.name).width;
+    const boxWidth = textWidth + 10;
+    const boxHeight = 16;
 
-    // Size based on energy
-    const capWidth = (12 + energyFactor * 10) * scale;
-    const capHeight = capWidth * 0.5;
-    const stemHeight = (6 + healthFactor * 4) * scale;
-    const stemWidth = capWidth * 0.2;
-
-    // Draw stem
+    this.ctx.fillStyle = isSelected ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.5)';
     this.ctx.beginPath();
-    this.ctx.moveTo(x - stemWidth / 2, y);
-    this.ctx.quadraticCurveTo(-stemWidth / 3, y - stemHeight / 2, -stemWidth / 4, y - stemHeight);
-    this.ctx.lineTo(stemWidth / 4, y - stemHeight);
-    this.ctx.quadraticCurveTo(stemWidth / 3, y - stemHeight / 2, stemWidth / 2, y);
-    this.ctx.fillStyle = '#f5f5f5';
-    this.ctx.globalAlpha = 0.8;
+    this.ctx.roundRect(x - boxWidth / 2, labelY - boxHeight / 2, boxWidth, boxHeight, 4);
     this.ctx.fill();
-    this.ctx.globalAlpha = 1;
-    this.ctx.strokeStyle = healthColors.stroke;
-    this.ctx.stroke();
 
-    // Draw cap
-    drawMushroomCap(
-      this.ctx,
-      x,
-      y - stemHeight,
-      capWidth,
-      capHeight,
-      stemHeight,
-      stemWidth,
-      {
-        fill: nightColors.fill,
-        stroke: healthColors.stroke,
-        scale
-      }
-    );
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    this.ctx.fillText(entity.name, x, labelY);
+    this.ctx.restore();
+  }
 
-    // Bioluminescent glow at night
-    if (isNight) {
-      this.ctx.save();
-      const glowIntensity = 0.3 + glowPulse * 0.4 +
+  private renderHealthBar(entity: Entity, x: number, y: number, scale: number): void {
+    if (!this.ctx) return;
+
+    const width = 28 * scale;
+    const height = 4;
+    const barX = x - width / 2;
+    const barY = y + 14 * scale;
+    const healthRatio = Math.max(0, Math.min(1, entity.health / 100));
+
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    this.ctx.fillRect(barX, barY, width, height);
+
+    this.ctx.fillStyle = healthRatio > 0.5 ? '#22c55e' : healthRatio > 0.25 ? '#f59e0b' : '#ef4444';
+    this.ctx.fillRect(barX, barY, width * healthRatio, height);
+    this.ctx.restore();
+
+    if (entity.energy > 90 && Math.random() < 0.004 * this.config.particleIntensity) {
+      this.particleSystem.addParticle(createSparkles(x, y - 8 * scale, 1)[0]);
+    }
+  }
+}

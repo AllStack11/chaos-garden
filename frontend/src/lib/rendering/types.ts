@@ -4,8 +4,6 @@
  * Shared type definitions for the rendering system.
  */
 
-import type { Entity } from '../../../env.d.ts';
-
 /**
  * Complete visual properties for any entity
  */

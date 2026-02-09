@@ -555,3 +555,4 @@ export function drawStem(
   ctx.stroke();
   
   ctx.restore();
+}
