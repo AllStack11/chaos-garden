@@ -31,6 +31,7 @@ const ANSI_BLUE = '\x1b[34m';
 const ANSI_MAGENTA = '\x1b[35m';
 const ANSI_CYAN = '\x1b[36m';
 const ANSI_BRIGHT_RED = '\x1b[91m';
+const ANSI_BRIGHT_YELLOW = '\x1b[93m';
 
 function getSeverityColor(severity: EventSeverity): string {
   switch (severity) {
@@ -301,7 +302,7 @@ export function createConsoleEventLogger(tick: number, gardenStateId: number): E
     const timestamp = new Date().toISOString();
     const severityColor = getSeverityColor(severity);
     const eventColor = getEventTypeColor(eventType);
-    const tickLabel = `${ANSI_DIM}[Tick ${tick}]${ANSI_RESET}`;
+    const tickLabel = `${ANSI_BOLD}${ANSI_BRIGHT_YELLOW}[Tick ${tick}]${ANSI_RESET}`;
     const severityLabel = `${ANSI_BOLD}${severityColor}[${severity}]${ANSI_RESET}`;
     const eventLabel = `${ANSI_BOLD}${eventColor}${eventType}${ANSI_RESET}`;
     const entityCount = `${ANSI_DIM}(${entities.length} entities)${ANSI_RESET}`;

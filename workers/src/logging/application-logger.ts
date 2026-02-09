@@ -24,6 +24,7 @@ const ANSI_BLUE = '\x1b[34m';
 const ANSI_MAGENTA = '\x1b[35m';
 const ANSI_CYAN = '\x1b[36m';
 const ANSI_BRIGHT_RED = '\x1b[91m';
+const ANSI_BRIGHT_YELLOW = '\x1b[93m';
 
 function getLevelColor(level: LogLevel): string {
   switch (level) {
@@ -136,7 +137,7 @@ export function createApplicationLogger(
       const tsLabel = `${ANSI_DIM}[${ts}]${ANSI_RESET}`;
       const levelLabel = `${ANSI_BOLD}${levelColor}[${level}]${ANSI_RESET}`;
       const componentLabel = `${ANSI_BOLD}${componentColor}[${component}]${ANSI_RESET}`;
-      const tickDisplay = tickLabel ? ` ${ANSI_DIM}${tickLabel}${ANSI_RESET}` : '';
+      const tickDisplay = tickLabel ? ` ${ANSI_BOLD}${ANSI_BRIGHT_YELLOW}${tickLabel}${ANSI_RESET}` : '';
       const metaDisplay = meta ? ` ${ANSI_DIM}${meta}${ANSI_RESET}` : '';
 
       console.log(`${tsLabel} ${levelLabel} ${componentLabel}${tickDisplay} ${operation}: ${message}${metaDisplay}`);
@@ -226,7 +227,7 @@ export function createConsoleLogger(component: LogComponent, tick?: number): App
       const tsLabel = `${ANSI_DIM}[${timestamp}]${ANSI_RESET}`;
       const levelLabel = `${ANSI_BOLD}${levelColor}[${level}]${ANSI_RESET}`;
       const componentLabel = `${ANSI_BOLD}${componentColor}[${component}]${ANSI_RESET}`;
-      const tickLabel = typeof tick === 'number' ? ` ${ANSI_DIM}[Tick ${tick}]${ANSI_RESET}` : '';
+      const tickLabel = typeof tick === 'number' ? ` ${ANSI_BOLD}${ANSI_BRIGHT_YELLOW}[Tick ${tick}]${ANSI_RESET}` : '';
       const metaDisplay = meta ? ` ${ANSI_DIM}${meta}${ANSI_RESET}` : '';
 
       console.log(`${tsLabel} ${levelLabel} ${componentLabel}${tickLabel} ${operation}: ${message}${metaDisplay}`);
