@@ -158,15 +158,14 @@ export function processPlantBehaviorDuringTick(
     }
   }
   
-  // Aging
-  plant.age++;
-  
   // Death checks
   if (plant.age >= MAX_AGE) {
+    plant.isAlive = false;
     plant.health = 0;
   }
   
   if (plant.energy <= 0) {
+    plant.isAlive = false;
     plant.health = 0;
     plant.energy = 0;
   }
@@ -249,7 +248,7 @@ function checkAndLogMutations(
  * Check if a plant has died.
  */
 export function isPlantDead(plant: Entity): boolean {
-  return plant.health <= 0 || plant.energy <= 0;
+  return !plant.isAlive || plant.health <= 0 || plant.energy <= 0;
 }
 
 /**

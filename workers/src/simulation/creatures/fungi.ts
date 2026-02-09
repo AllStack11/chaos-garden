@@ -114,8 +114,9 @@ export function processFungusBehaviorDuringTick(
     if (distance <= DECOMPOSITION_DISTANCE) {
       // Decompose the dead matter
       const energyGained = decomposeMatter(fungus, targetDead, environment);
-      decomposed.push(targetDead.id);
-      eventLogger.logDeath(targetDead, `decomposed by ${fungus.species}`);
+      if (energyGained > 0) {
+        decomposed.push(targetDead.id);
+      }
     }
   }
   
@@ -133,15 +134,14 @@ export function processFungusBehaviorDuringTick(
     }
   }
   
-  // 5. Aging
-  fungus.age++;
-  
-  // 6. Death checks
+  // 5. Death checks
   if (fungus.age >= MAX_AGE) {
+    fungus.isAlive = false;
     fungus.health = 0;
   }
   
   if (fungus.energy <= 0) {
+    fungus.isAlive = false;
     fungus.health = 0;
     fungus.energy = 0;
   }
@@ -230,7 +230,9 @@ function findNearestDeadEntity(
   allEntities: Entity[]
 ): Entity | null {
   const deadEntities = allEntities.filter(e => 
-    e.type !== 'fungus' && e.type !== 'carnivore' && !e.isAlive
+    e.type !== 'fungus' &&
+    !e.isAlive &&
+    e.energy > 0
   );
   
   if (deadEntities.length === 0) {
@@ -255,7 +257,7 @@ function findNearestDeadEntity(
  * Check if a fungus has died.
  */
 export function isFungusDead(fungus: Entity): boolean {
-  return fungus.health <= 0 || fungus.energy <= 0;
+  return !fungus.isAlive || fungus.health <= 0 || fungus.energy <= 0;
 }
 
 /**

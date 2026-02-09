@@ -112,6 +112,11 @@ export async function runSimulationTick(
     await appLogger.debug('entities_loaded', `Loaded ${livingEntities.length} entities`, {
       entityCount: livingEntities.length
     });
+
+    // Age all currently living entities exactly once per tick.
+    for (const entity of livingEntities) {
+      entity.age += 1;
+    }
     
     // 5. Process entities (plants → herbivores)
     const processingStart = Date.now();
@@ -141,7 +146,6 @@ export async function runSimulationTick(
 
     // Ensure all living entities are updated for this tick
     for (const entity of allLivingEntitiesAfterTick) {
-      entity.age += 1;
       entity.updatedAt = createTimestamp();
     }
     

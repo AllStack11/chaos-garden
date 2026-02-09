@@ -285,8 +285,19 @@ export function findNearestEntity(
   typeFilter?: Entity['type']
 ): Entity | null {
   const validTargets = typeFilter 
-    ? candidates.filter(e => e.type === typeFilter && e.id !== source.id)
-    : candidates.filter(e => e.id !== source.id);
+    ? candidates.filter(e =>
+      e.type === typeFilter &&
+      e.id !== source.id &&
+      e.isAlive &&
+      e.health > 0 &&
+      e.energy > 0
+    )
+    : candidates.filter(e =>
+      e.id !== source.id &&
+      e.isAlive &&
+      e.health > 0 &&
+      e.energy > 0
+    );
   
   if (validTargets.length === 0) {
     return null;
@@ -501,4 +512,3 @@ export function countEntitiesByType(entities: Entity[]): PopulationSummary {
     totalDead: dead.length
   };
 }
-

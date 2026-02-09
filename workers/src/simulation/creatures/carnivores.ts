@@ -114,7 +114,6 @@ export function processCarnivoreBehaviorDuringTick(
       // Hunt the herbivore
       const energyGained = huntHerbivore(carnivore, targetPrey);
       consumed.push(targetPrey.id);
-      eventLogger.logDeath(targetPrey, `hunted by ${carnivore.species}`);
     } else {
       // Pursue prey
       moveEntityTowardTarget(carnivore, targetPrey.position);
@@ -145,15 +144,14 @@ export function processCarnivoreBehaviorDuringTick(
     }
   }
   
-  // 5. Aging
-  carnivore.age++;
-  
-  // 6. Death checks
+  // 5. Death checks
   if (carnivore.age >= MAX_AGE) {
+    carnivore.isAlive = false;
     carnivore.health = 0;
   }
   
   if (carnivore.energy <= 0) {
+    carnivore.isAlive = false;
     carnivore.health = 0;
     carnivore.energy = 0;
   }
@@ -168,7 +166,8 @@ export function processCarnivoreBehaviorDuringTick(
 function huntHerbivore(carnivore: Entity, prey: Entity): number {
   const energyGained = Math.min(ENERGY_FROM_PREY, prey.energy + 20); // Extra energy from biomass
   carnivore.energy = clampValueToRange(carnivore.energy + energyGained, 0, MAX_ENERGY);
-  prey.energy = 0; // Prey dies
+  prey.energy = Math.max(0, prey.energy - energyGained);
+  prey.isAlive = false;
   prey.health = 0;
   return energyGained;
 }
@@ -226,7 +225,7 @@ function checkAndLogMutations(
  * Check if a carnivore has died.
  */
 export function isCarnivoreDead(carnivore: Entity): boolean {
-  return carnivore.health <= 0 || carnivore.energy <= 0;
+  return !carnivore.isAlive || carnivore.health <= 0 || carnivore.energy <= 0;
 }
 
 /**
