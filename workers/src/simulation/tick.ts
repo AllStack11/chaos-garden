@@ -31,12 +31,38 @@ import { processHerbivoreBehaviorDuringTick, isHerbivoreDead, getHerbivoreCauseO
 import { processCarnivoreBehaviorDuringTick, isCarnivoreDead, getCarnivoreCauseOfDeath } from './creatures/carnivores';
 import { processFungusBehaviorDuringTick, isFungusDead, getFungusCauseOfDeath } from './creatures/fungi';
 import {
+  getGardenStateByTickFromDatabase,
   getLatestGardenStateFromDatabase,
   saveGardenStateToDatabase,
   getAllLivingEntitiesFromDatabase,
+  deleteSimulationEventsByTickFromDatabase,
   saveEntitiesToDatabase,
   markEntitiesAsDeadInDatabase
 } from '../db/queries';
+import {
+  getLastCompletedTick,
+  releaseSimulationLock,
+  setLastCompletedTick,
+  tryAcquireSimulationLock
+} from '../db/simulation-control';
+
+type TickSkipReason = 'already_processed' | 'lock_unavailable';
+
+export interface RunSimulationTickResult {
+  executed: boolean;
+  tickNumber: number;
+  duration: number;
+  newEntities: number;
+  deaths: number;
+  populations: {
+    plants: number;
+    herbivores: number;
+    carnivores: number;
+    fungi: number;
+    total: number;
+  };
+  skipReason?: TickSkipReason;
+}
 
 // ==========================================
 // Simulation Orchestration
@@ -55,36 +81,80 @@ export async function runSimulationTick(
   db: D1Database,
   appLogger: ApplicationLogger,
   isDevelopment: boolean = false
-): Promise<{
-  tickNumber: number;
-  duration: number;
-  newEntities: number;
-  deaths: number;
-  populations: {
-    plants: number;
-    herbivores: number;
-    carnivores: number;
-    fungi: number;
-    total: number;
-  };
-}> {
+): Promise<RunSimulationTickResult> {
   const startTime = Date.now();
   const metrics: Record<string, number> = {};
+  const lockTtlMs = 120000;
+  let lockOwnerId: string | null = null;
+  let hasAcquiredLock = false;
   
   try {
     await appLogger.info('tick_start', 'Beginning simulation tick');
     
-    // 1. Load current state
+    // 1. Load latest state for baseline observability.
     const stateLoadStart = Date.now();
-    const previousState = await getLatestGardenStateFromDatabase(db);
-    if (!previousState) {
+    const latestState = await getLatestGardenStateFromDatabase(db);
+    if (!latestState) {
       await appLogger.error('tick_error', 'No garden state found - cannot run tick');
       throw new Error('No garden state found');
     }
     metrics.load_state_duration = Date.now() - stateLoadStart;
-    
-    const tickNumber = previousState.tick + 1;
-    await appLogger.info('tick_progress', `Starting tick ${tickNumber}`, { previousTick: previousState.tick });
+
+    const preLockLastCompletedTick = await getLastCompletedTick(db);
+    const requestedTickNumber = preLockLastCompletedTick + 1;
+    lockOwnerId = `${requestedTickNumber}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+    const lockAcquired = await tryAcquireSimulationLock(db, lockOwnerId, Date.now(), lockTtlMs);
+    if (!lockAcquired) {
+      const duration = Date.now() - startTime;
+      await appLogger.info('tick_skipped', `Skipping tick ${requestedTickNumber}: lock unavailable`, {
+        tick: requestedTickNumber,
+        reason: 'lock_unavailable',
+        duration
+      });
+
+      return {
+        executed: false,
+        skipReason: 'lock_unavailable',
+        tickNumber: requestedTickNumber,
+        duration,
+        newEntities: 0,
+        deaths: 0,
+        populations: latestState.populationSummary
+      };
+    }
+    hasAcquiredLock = true;
+
+    const lockedLastCompletedTick = await getLastCompletedTick(db);
+    const lockedPreviousState = await getGardenStateByTickFromDatabase(db, lockedLastCompletedTick);
+    if (!lockedPreviousState) {
+      await appLogger.error('tick_error', 'No completed garden state found after lock acquisition', {
+        lastCompletedTick: lockedLastCompletedTick
+      });
+      throw new Error(`No completed garden state found for tick ${lockedLastCompletedTick}`);
+    }
+
+    const tickNumber = lockedLastCompletedTick + 1;
+    if (lockedLastCompletedTick >= requestedTickNumber) {
+      const duration = Date.now() - startTime;
+      await appLogger.info('tick_skipped', `Skipping tick ${tickNumber}: already completed`, {
+        requestedTick: tickNumber,
+        lastCompletedTick: lockedLastCompletedTick,
+        reason: 'already_processed',
+        duration
+      });
+
+      return {
+        executed: false,
+        skipReason: 'already_processed',
+        tickNumber,
+        duration,
+        newEntities: 0,
+        deaths: 0,
+        populations: lockedPreviousState.populationSummary
+      };
+    }
+    await appLogger.info('tick_progress', `Starting tick ${tickNumber}`, { previousTick: lockedPreviousState.tick });
     
     // 2. Create buffered event logger for this tick.
     // In development, mirror events to console immediately while still buffering for DB persistence.
@@ -92,13 +162,13 @@ export async function runSimulationTick(
     let eventLogger: EventLogger = bufferedEventLogger.logger;
     
     if (isDevelopment) {
-      const consoleLogger = createConsoleEventLogger(tickNumber, previousState.id);
+      const consoleLogger = createConsoleEventLogger(tickNumber, lockedPreviousState.id);
       eventLogger = createCompositeEventLogger([bufferedEventLogger.logger, consoleLogger]);
     }
     
     // 3. Update environment
     const envUpdateStart = Date.now();
-    const updatedEnvironment = await updateEnvironmentForNextTick(previousState.environment, eventLogger);
+    const updatedEnvironment = await updateEnvironmentForNextTick(lockedPreviousState.environment, eventLogger);
     metrics.environment_update_duration = Date.now() - envUpdateStart;
     
     await appLogger.debug('environment_updated', 'Environment updated for new tick', {
@@ -154,32 +224,8 @@ export async function runSimulationTick(
       entity.updatedAt = createTimestamp();
     }
     
-    // 7. Save new garden state
-    const stateSaveStart = Date.now();
-    const newGardenState = await createAndSaveGardenState(
-      db,
-      tickNumber,
-      updatedEnvironment,
-      allEntitiesAfterTick,
-      appLogger
-    );
-    metrics.save_state_duration = Date.now() - stateSaveStart;
-
-    // 8. Save updated entities and mark dead ones
-    const entitySaveStart = Date.now();
-    await saveEntitiesAndCleanup(
-      db,
-      newGardenState.id,
-      tickNumber,
-      processingResult.newEntities,
-      deadEntities,
-      stillLivingEntities,
-      appLogger
-    );
-    metrics.save_entities_duration = Date.now() - entitySaveStart;
-    
-    // 9. Log population changes and ambient narrative to the buffered logger
-    const previousPopulations = previousState.populationSummary;
+    // 7. Log population changes and ambient narrative to the buffered logger
+    const previousPopulations = lockedPreviousState.populationSummary;
     
     await logPopulationChanges(
       tickNumber,
@@ -188,12 +234,40 @@ export async function runSimulationTick(
       eventLogger
     );
 
-    // 10. Generate ambient narrative (guarantees at least one narrative event per tick)
+    // 8. Generate ambient narrative (guarantees at least one narrative event per tick)
     await eventLogger.logAmbientNarrative(updatedEnvironment, newPopulations, allLivingEntitiesAfterTick);
 
-    // 11. Persist buffered events only after the new state exists.
-    const dbEventLogger = createEventLogger(db, tickNumber, newGardenState.id);
+    // 9. Persist state/entity/event updates.
+    const persistenceStart = Date.now();
+    const stateSaveStart = Date.now();
+    const savedGardenState = await createAndSaveGardenState(
+      db,
+      tickNumber,
+      updatedEnvironment,
+      allEntitiesAfterTick,
+      appLogger
+    );
+    metrics.save_state_duration = Date.now() - stateSaveStart;
+
+    const entitySaveStart = Date.now();
+    await saveEntitiesAndCleanup(
+      db,
+      savedGardenState.id,
+      tickNumber,
+      processingResult.newEntities,
+      deadEntities,
+      stillLivingEntities,
+      appLogger
+    );
+    metrics.save_entities_duration = Date.now() - entitySaveStart;
+
+    // Reruns of an interrupted tick should replace prior partial event logs.
+    await deleteSimulationEventsByTickFromDatabase(db, tickNumber);
+    const dbEventLogger = createEventLogger(db, tickNumber, savedGardenState.id);
     await bufferedEventLogger.flushTo(dbEventLogger);
+    await setLastCompletedTick(db, tickNumber);
+
+    metrics.persistence_duration = Date.now() - persistenceStart;
 
     const duration = Date.now() - startTime;
     metrics.total_duration = duration;
@@ -209,6 +283,7 @@ export async function runSimulationTick(
     });
     
     return {
+      executed: true,
       tickNumber,
       duration,
       newEntities: processingResult.newEntities.length,
@@ -223,6 +298,17 @@ export async function runSimulationTick(
       duration
     });
     throw error;
+  } finally {
+    if (hasAcquiredLock && lockOwnerId) {
+      try {
+        await releaseSimulationLock(db, lockOwnerId);
+      } catch (releaseError) {
+        await appLogger.error('tick_lock_release_failed', 'Failed to release simulation lock', {
+          lockOwnerId,
+          error: releaseError instanceof Error ? releaseError.message : String(releaseError)
+        });
+      }
+    }
   }
 }
 

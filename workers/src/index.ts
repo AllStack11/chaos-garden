@@ -211,7 +211,7 @@ export default {
       try {
         await logger.info('api_tick_triggered', 'Manual simulation tick starting');
         const result = await runSimulationTick(env.DB, logger, isDevelopment);
-        await logger.info('api_tick_complete', 'Manual simulation tick completed', result);
+        await logger.info('api_tick_complete', 'Manual simulation tick completed', result as unknown as Record<string, unknown>);
         return createSuccessResponse(result);
       } catch (error) {
         return createErrorResponse(
@@ -264,7 +264,7 @@ export default {
       
       const result = await runSimulationTick(env.DB, logger, isDevelopment);
       
-      await logger.info('cron_complete', 'Cron-triggered tick completed', result);
+      await logger.info('cron_complete', 'Cron-triggered tick completed', result as unknown as Record<string, unknown>);
       
     } catch (error) {
       await logger.error('cron_failed', 'Cron-triggered tick failed', {

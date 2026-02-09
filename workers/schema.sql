@@ -111,6 +111,23 @@ CREATE INDEX IF NOT EXISTS idx_simulation_events_severity ON simulation_events(s
 CREATE INDEX IF NOT EXISTS idx_simulation_events_timestamp ON simulation_events(timestamp DESC);
 
 -- ==========================================
+-- Simulation Control Table
+-- ==========================================
+-- Coordinates tick execution to prevent concurrent runs and partial state.
+
+CREATE TABLE IF NOT EXISTS simulation_control (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  lock_owner TEXT,
+  lock_acquired_at TEXT,
+  lock_expires_at INTEGER,
+  last_completed_tick INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT OR REPLACE INTO simulation_control (id, last_completed_tick, updated_at)
+VALUES (1, 0, datetime('now'));
+
+-- ==========================================
 -- Metadata Table (for future migrations)
 -- ==========================================
 -- Tracks schema version and other system metadata.
@@ -123,7 +140,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-VALUES ('schema_version', '1.2.0', datetime('now'));
+VALUES ('schema_version', '1.3.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding

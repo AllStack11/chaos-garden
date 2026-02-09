@@ -37,6 +37,7 @@ class FakePreparedStatement implements D1PreparedStatement {
 export class FakeD1Database implements D1Database {
   public lastQuery = '';
   public lastPreparedStatement: FakePreparedStatement | null = null;
+  public executedQueries: string[] = [];
 
   constructor(private readonly response: PreparedResponse = {}) {}
 
@@ -54,7 +55,8 @@ export class FakeD1Database implements D1Database {
     return statements as T[];
   }
 
-  async exec(): Promise<D1ExecResult> {
+  async exec(query: string): Promise<D1ExecResult> {
+    this.executedQueries.push(query);
     return { count: 1, duration: 0 };
   }
 }

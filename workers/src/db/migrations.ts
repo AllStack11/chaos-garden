@@ -5,7 +5,7 @@
  * Like the gradual adaptation of organisms over generations,
  * our database schema may need to evolve as the system grows.
  * 
- * Current version: 1.1.0
+ * Current version: 1.3.0
  */
 
 import type { D1Database } from '../types/worker';
@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.1.0';
+export const CURRENT_SCHEMA_VERSION = '1.3.0';
 
 /**
  * Check if the database schema is up to date.
@@ -76,14 +76,12 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
   console.log(`Starting migration from ${currentVersion || 'none'} to ${CURRENT_SCHEMA_VERSION}`);
   
   try {
-    // Migration: Initial setup (1.0.0)
     if (!currentVersion) {
       await migrateToV1_0_0(db);
       await migrateToV1_1_0(db);
-    }
-    
-    if (currentVersion === '1.0.0') {
-      await migrateToV1_1_0(db);
+      await migrateToV1_3_0(db);
+    } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
+      await migrateToV1_3_0(db);
     }
     
     console.log('Migrations completed successfully');
@@ -157,6 +155,49 @@ async function migrateToV1_1_0(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 1.3.0.
+ * Adds simulation execution control table used for lock-based tick orchestration.
+ */
+async function migrateToV1_3_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.3.0...');
+
+  const createTableResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS simulation_control (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      lock_owner TEXT,
+      lock_acquired_at TEXT,
+      lock_expires_at INTEGER,
+      last_completed_tick INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  );
+  if (!createTableResult.success) {
+    throw new Error(`Failed to create simulation_control: ${createTableResult.error}`);
+  }
+
+  const seedResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO simulation_control (id, last_completed_tick, updated_at)
+     VALUES (1, 0, datetime('now'))`
+  );
+  if (!seedResult.success) {
+    throw new Error(`Failed to seed simulation_control: ${seedResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
+     VALUES ('schema_version', '1.3.0', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.3.0 complete');
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  * 
@@ -182,6 +223,7 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     // This function handles post-schema setup
     
     await migrateToV1_1_0(db);
+    await migrateToV1_3_0(db);
     
     console.log('Database initialization complete');
     return true;

@@ -109,13 +109,22 @@ export async function saveGardenStateToDatabase(
   db: D1Database,
   state: GardenState
 ): Promise<number> {
-  // Use a transaction for safety if possible, or just log clearly
-  const result = await executeQuery<{ id: number }>(
+  await executeQuery<{ id: number }>(
     db,
     `INSERT INTO garden_state (
       tick, timestamp, temperature, sunlight, moisture,
       plants, herbivores, carnivores, fungi, total
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(tick) DO UPDATE SET
+      timestamp = excluded.timestamp,
+      temperature = excluded.temperature,
+      sunlight = excluded.sunlight,
+      moisture = excluded.moisture,
+      plants = excluded.plants,
+      herbivores = excluded.herbivores,
+      carnivores = excluded.carnivores,
+      fungi = excluded.fungi,
+      total = excluded.total`,
     [
       state.tick,
       state.timestamp,
@@ -130,12 +139,17 @@ export async function saveGardenStateToDatabase(
     ]
   );
 
-  const lastId = result.meta?.last_row_id || 0;
-  
-  // Double-check: immediately retrieve what we just saved to ensure consistency
-  // (Optional debug logging could go here)
-  
-  return lastId;
+  const persistedState = await queryFirst<{ id: number }>(
+    db,
+    'SELECT id FROM garden_state WHERE tick = ?',
+    [state.tick]
+  );
+
+  if (!persistedState) {
+    throw new Error(`Failed to persist garden state for tick ${state.tick}`);
+  }
+
+  return persistedState.id;
 }
 
 // ==========================================
@@ -364,6 +378,17 @@ export async function getSimulationEventsByTickRangeFromDatabase(
   );
 
   return rows.map(mapRowToSimulationEvent);
+}
+
+export async function deleteSimulationEventsByTickFromDatabase(
+  db: D1Database,
+  tick: number
+): Promise<void> {
+  await executeQuery(
+    db,
+    'DELETE FROM simulation_events WHERE tick = ?',
+    [tick]
+  );
 }
 
 // ==========================================

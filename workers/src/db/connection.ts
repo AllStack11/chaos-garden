@@ -90,6 +90,25 @@ export async function executeBatch<T>(
 }
 
 /**
+ * Execute a callback within a database transaction.
+ * All operations succeed or fail as one unit.
+ */
+export async function runInTransaction<T>(
+  db: D1Database,
+  operation: () => Promise<T>
+): Promise<T> {
+  await db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = await operation();
+    await db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/**
  * Execute a raw SQL command (for migrations and schema changes).
  * Use with caution—this bypasses parameter binding.
  * 
