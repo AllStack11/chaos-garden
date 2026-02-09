@@ -187,23 +187,6 @@ export type LogComponent =
   | 'LOGGING'
   | 'SYSTEM';
 
-/**
- * Structured application logs for debugging and observability.
- * These are the telemetry of our ecosystem, revealing its inner workings.
- */
-export interface ApplicationLog {
-  id?: number;                  // database assigned
-  timestamp: string;            // ISO timestamp
-  level: LogLevel;              // severity
-  component: LogComponent;      // source component
-  operation: string;            // specific operation name (descriptive)
-  message: string;              // human-readable description
-  metadata?: string;            // JSON string for structured data
-  tick?: number;                // simulation tick if applicable
-  entityId?: string;            // related entity if applicable
-  duration?: number;            // operation duration in ms
-}
-
 // ==========================================
 // Event Types - Simulation Narrative
 // ==========================================
@@ -385,19 +368,6 @@ export interface EntityRow {
   lineage: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface ApplicationLogRow {
-  id: number;
-  timestamp: string;
-  level: string;
-  component: string;
-  operation: string;
-  message: string;
-  metadata: string | null;
-  tick: number | null;
-  entity_id: string | null;
-  duration: number | null;
 }
 
 export interface SimulationEventRow {

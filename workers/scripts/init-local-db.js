@@ -317,16 +317,6 @@ function generateSeedDataSQL(gardenStateId) {
       (${gardenStateId}, 0, '${now}', 'BIRTH', '${carnivoreCount} carnivore claimed its territory', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${carnivoreCount}, "type": "carnivores"}');
   `;
   
-  // Create application logs
-  const createLogsSQL = `
-    INSERT INTO application_logs (
-      timestamp, level, component, operation, message,
-      metadata, tick
-    ) VALUES
-      ('${now}', 'INFO', 'INITIALIZATION', 'database_setup', 'Local database initialized with schema', '{"schema_version": "1.0.0"}', 0),
-      ('${now}', 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data created: ${plantCount} plants, ${herbivoreCount} herbivores, ${carnivoreCount} carnivores, ${fungusCount} fungi', '{"plants": ${plantCount}, "herbivores": ${herbivoreCount}, "carnivores": ${carnivoreCount}, "fungi": ${fungusCount}}', 0);
-  `;
-  
   return `
     -- ==========================================
     -- Seed Data for Chaos Garden
@@ -338,8 +328,6 @@ function generateSeedDataSQL(gardenStateId) {
     ${updateGardenStateSQL}
     
     ${createEventsSQL}
-    
-    ${createLogsSQL}
   `;
 }
 
@@ -428,7 +416,7 @@ async function initializeDatabase() {
     console.log('🧹 Preparing a clean garden...');
     try {
       executeSQLCommand(
-        'PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS garden_state; DROP TABLE IF EXISTS entities; DROP TABLE IF EXISTS simulation_events; DROP TABLE IF EXISTS application_logs; DROP TABLE IF EXISTS system_metadata; PRAGMA foreign_keys = ON;',
+        'PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS garden_state; DROP TABLE IF EXISTS entities; DROP TABLE IF EXISTS simulation_events; DROP TABLE IF EXISTS system_metadata; PRAGMA foreign_keys = ON;',
         'Clearing existing tables'
       );
     } catch (error) {
@@ -455,8 +443,7 @@ async function initializeDatabase() {
       SELECT 
         (SELECT COUNT(*) FROM garden_state) as garden_state_count,
         (SELECT COUNT(*) FROM entities) as entity_count,
-        (SELECT COUNT(*) FROM simulation_events) as event_count,
-        (SELECT COUNT(*) FROM application_logs) as log_count;
+        (SELECT COUNT(*) FROM simulation_events) as event_count;
     `;
     
     const verifyResult = execSync(
@@ -475,7 +462,7 @@ async function initializeDatabase() {
     console.log('✅ Schema applied');
     console.log('✅ Seed data created: 20 plants, 5 herbivores, 1 carnivore, 4 fungi');
     console.log('✅ Garden state initialized at tick 0');
-    console.log('✅ Events and logs created');
+    console.log('✅ Events created');
     console.log('\n🌱 Your local garden is ready to grow!');
     console.log('\nNext steps:');
     console.log('1. Start the backend: cd workers && npm run dev');

@@ -21,6 +21,58 @@ import { logSimulationEventToDatabase } from '../db/queries';
 import type { D1Database } from '../types/worker';
 import { extractTraits } from '../simulation/environment/helpers';
 
+const ANSI_RESET = '\x1b[0m';
+const ANSI_DIM = '\x1b[2m';
+const ANSI_BOLD = '\x1b[1m';
+const ANSI_RED = '\x1b[31m';
+const ANSI_GREEN = '\x1b[32m';
+const ANSI_YELLOW = '\x1b[33m';
+const ANSI_BLUE = '\x1b[34m';
+const ANSI_MAGENTA = '\x1b[35m';
+const ANSI_CYAN = '\x1b[36m';
+const ANSI_BRIGHT_RED = '\x1b[91m';
+
+function getSeverityColor(severity: EventSeverity): string {
+  switch (severity) {
+    case 'LOW':
+      return ANSI_GREEN;
+    case 'MEDIUM':
+      return ANSI_CYAN;
+    case 'HIGH':
+      return ANSI_YELLOW;
+    case 'CRITICAL':
+      return ANSI_BRIGHT_RED;
+  }
+}
+
+function getEventTypeColor(eventType: SimulationEventType): string {
+  if (eventType.startsWith('DISASTER_')) {
+    return ANSI_RED;
+  }
+
+  switch (eventType) {
+    case 'BIRTH':
+    case 'REPRODUCTION':
+      return ANSI_GREEN;
+    case 'MUTATION':
+      return ANSI_MAGENTA;
+    case 'DEATH':
+    case 'EXTINCTION':
+    case 'ECOSYSTEM_COLLAPSE':
+      return ANSI_RED;
+    case 'POPULATION_EXPLOSION':
+      return ANSI_YELLOW;
+    case 'USER_INTERVENTION':
+      return ANSI_BLUE;
+    case 'ENVIRONMENT_CHANGE':
+      return ANSI_CYAN;
+    case 'POPULATION_DELTA':
+      return ANSI_BLUE;
+  }
+
+  return ANSI_RESET;
+}
+
 /**
  * Event logger instance returned by the factory.
  * Bound to a specific tick and garden state for contextual logging.
@@ -237,6 +289,8 @@ export function createEventLogger(
  * Logs events to console.
  */
 export function createConsoleEventLogger(tick: number, gardenStateId: number): EventLogger {
+  void gardenStateId;
+
   async function logToConsole(
     eventType: SimulationEventType,
     description: string,
@@ -245,8 +299,15 @@ export function createConsoleEventLogger(tick: number, gardenStateId: number): E
     tags: string[] = []
   ): Promise<void> {
     const timestamp = new Date().toISOString();
-    const tagStr = tags.length > 0 ? ` [Tags: ${tags.join(', ')}]` : '';
-    console.log(`[${timestamp}] [Tick ${tick}] [${severity}] ${eventType}: ${description} (${entities.length} entities)${tagStr}`);
+    const severityColor = getSeverityColor(severity);
+    const eventColor = getEventTypeColor(eventType);
+    const tickLabel = `${ANSI_DIM}[Tick ${tick}]${ANSI_RESET}`;
+    const severityLabel = `${ANSI_BOLD}${severityColor}[${severity}]${ANSI_RESET}`;
+    const eventLabel = `${ANSI_BOLD}${eventColor}${eventType}${ANSI_RESET}`;
+    const entityCount = `${ANSI_DIM}(${entities.length} entities)${ANSI_RESET}`;
+    const tagStr = tags.length > 0 ? ` ${ANSI_DIM}[Tags: ${tags.join(', ')}]${ANSI_RESET}` : '';
+
+    console.log(`${ANSI_DIM}[${timestamp}]${ANSI_RESET} ${tickLabel} ${severityLabel} ${eventLabel}: ${description} ${entityCount}${tagStr}`);
   }
 
   return {

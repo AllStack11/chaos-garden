@@ -7,3 +7,5 @@
 
 export { PlantRenderer } from './PlantRenderer.ts';
 export { HerbivoreRenderer } from './HerbivoreRenderer.ts';
+export { FungusRenderer } from './FungusRenderer.ts';
+export { CarnivoreRenderer } from './CarnivoreRenderer.ts';

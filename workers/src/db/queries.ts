@@ -12,11 +12,9 @@
 import type {
   GardenState,
   Entity,
-  ApplicationLog,
   SimulationEvent,
   GardenStateRow,
   EntityRow,
-  ApplicationLogRow,
   SimulationEventRow,
   Environment,
   PopulationSummary
@@ -277,77 +275,6 @@ export async function markEntitiesAsDeadInDatabase(
 }
 
 // ==========================================
-// Application Log Queries
-// ==========================================
-
-/**
- * Persist a structured application log to the database.
- * This function does NOT log itself to prevent infinite recursion—
- * like a mirror that cannot reflect itself.
- * 
- * @param db - The D1 database instance
- * @param log - The application log entry
- */
-export async function logApplicationEventToDatabase(
-  db: D1Database,
-  log: ApplicationLog
-): Promise<void> {
-  try {
-    await executeQuery(
-      db,
-      `INSERT INTO application_logs (
-        timestamp, level, component, operation, message,
-        metadata, tick, entity_id, duration
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        log.timestamp,
-        log.level,
-        log.component,
-        log.operation,
-        log.message,
-        log.metadata || null,
-        log.tick || null,
-        log.entityId || null,
-        log.duration || null
-      ]
-    );
-  } catch {
-    // Fail silently to prevent recursion—logging failures should not crash the system
-  }
-}
-
-/**
- * Retrieve recent application logs for debugging.
- * Like reading the system's diary.
- * 
- * @param db - The D1 database instance
- * @param limit - Maximum number of logs to retrieve
- * @param level - Optional filter by severity level
- * @returns Array of application logs
- */
-export async function getRecentApplicationLogsFromDatabase(
-  db: D1Database,
-  limit: number = 100,
-  level?: string
-): Promise<ApplicationLog[]> {
-  let query = `SELECT id, timestamp, level, component, operation, message,
-                      metadata, tick, entity_id, duration
-               FROM application_logs`;
-  const params: unknown[] = [];
-
-  if (level) {
-    query += ' WHERE level = ?';
-    params.push(level);
-  }
-
-  query += ' ORDER BY timestamp DESC LIMIT ?';
-  params.push(limit);
-
-  const rows = await queryAll<ApplicationLogRow>(db, query, params);
-  return rows.map(mapRowToApplicationLog);
-}
-
-// ==========================================
 // Simulation Event Queries
 // ==========================================
 
@@ -388,28 +315,33 @@ export async function logSimulationEventToDatabase(
 }
 
 /**
- * Retrieve recent simulation events for a garden state.
+ * Retrieve recent simulation events.
  * Like reading the recent chapters of history.
  * 
  * @param db - The D1 database instance
- * @param gardenStateId - The garden state ID to get events for
  * @param limit - Maximum number of events to retrieve
+ * @param gardenStateId - Optional garden state ID to scope events to one snapshot
  * @returns Array of simulation events
  */
 export async function getRecentSimulationEventsFromDatabase(
   db: D1Database,
-  gardenStateId: number,
-  limit: number = 50
+  limit: number = 50,
+  gardenStateId?: number
 ): Promise<SimulationEvent[]> {
+  const whereClause = typeof gardenStateId === 'number' ? 'WHERE garden_state_id = ?' : '';
+  const queryParams = typeof gardenStateId === 'number'
+    ? [gardenStateId, limit]
+    : [limit];
+
   const rows = await queryAll<SimulationEventRow>(
     db,
     `SELECT id, garden_state_id, tick, timestamp, event_type, description,
             entities_affected, tags, severity, metadata
      FROM simulation_events
-     WHERE garden_state_id = ?
+     ${whereClause}
      ORDER BY tick DESC, timestamp DESC
      LIMIT ?`,
-    [gardenStateId, limit]
+    queryParams
   );
 
   return rows.map(mapRowToSimulationEvent);
@@ -506,24 +438,6 @@ function mapRowToEntity(row: EntityRow): Entity {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   } as Entity;
-}
-
-/**
- * Convert a database row to an ApplicationLog object.
- */
-function mapRowToApplicationLog(row: ApplicationLogRow): ApplicationLog {
-  return {
-    id: row.id,
-    timestamp: row.timestamp,
-    level: row.level as ApplicationLog['level'],
-    component: row.component as ApplicationLog['component'],
-    operation: row.operation,
-    message: row.message,
-    metadata: row.metadata || undefined,
-    tick: row.tick || undefined,
-    entityId: row.entity_id || undefined,
-    duration: row.duration || undefined
-  };
 }
 
 /**

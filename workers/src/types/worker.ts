@@ -8,7 +8,6 @@
 import type {
   GardenState,
   Entity,
-  ApplicationLog,
   SimulationEvent,
   GardenResponse,
   PopulationSummary
@@ -141,7 +140,6 @@ export interface TickProcessResult {
 export type {
   GardenState,
   Entity,
-  ApplicationLog,
   SimulationEvent,
   GardenResponse,
   PopulationSummary

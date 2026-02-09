@@ -105,7 +105,7 @@ async function handleGetGarden(env: Env): Promise<Response> {
     const entities = await getAllLivingEntitiesFromDatabase(env.DB);
     
     // Get recent events
-    const events = await getRecentSimulationEventsFromDatabase(env.DB, gardenState.id, 20);
+    const events = await getRecentSimulationEventsFromDatabase(env.DB, 20);
     
     await logger.debug('api_get_garden_success', 'Garden state retrieved', {
       tick: gardenState.tick,

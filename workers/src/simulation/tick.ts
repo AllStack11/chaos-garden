@@ -155,16 +155,6 @@ export async function runSimulationTick(
     );
     metrics.save_state_duration = Date.now() - stateSaveStart;
 
-    // Update event logger with the real garden state ID
-    if ((eventLogger as any).loggers) {
-      // Composite logger
-      for (const l of (eventLogger as any).loggers) {
-        l.gardenStateId = newGardenState.id;
-      }
-    } else {
-      (eventLogger as any).gardenStateId = newGardenState.id;
-    }
-    
     // 8. Save updated entities and mark dead ones
     const entitySaveStart = Date.now();
     await saveEntitiesAndCleanup(
@@ -466,13 +456,14 @@ async function logPopulationChanges(
   // Check for population explosions (300% growth)
   const checkExplosion = (type: string, previousCount: number, currentCount: number) => {
     if (previousCount > 0 && currentCount >= previousCount * 3) {
-      eventLogger.logPopulationExplosion(type as any, currentCount);
+      return eventLogger.logPopulationExplosion(type as any, currentCount);
     }
+    return Promise.resolve();
   };
   
-  checkExplosion('plants', previous.plants, current.plants);
-  checkExplosion('herbivores', previous.herbivores, current.herbivores);
-  checkExplosion('carnivores', previous.carnivores, current.carnivores);
+  await checkExplosion('plants', previous.plants, current.plants);
+  await checkExplosion('herbivores', previous.herbivores, current.herbivores);
+  await checkExplosion('carnivores', previous.carnivores, current.carnivores);
 
   // Log population deltas if significant
   const plantDelta = current.plants - previous.plants;

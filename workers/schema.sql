@@ -2,12 +2,11 @@
 -- Chaos Garden Database Schema
 -- 
 -- This schema defines the memory of our ecosystem—the persistent storage
--- for garden states, entities, application logs, and simulation events.
+-- for garden states, entities, and simulation events.
 -- 
 -- Tables:
 --   - garden_state: Snapshots of the world at each tick
 --   - entities: All living organisms (plants, herbivores, etc.)
---   - application_logs: Structured observability logs
 --   - simulation_events: Narrative events telling the story of life
 -- ============================================================================
 
@@ -74,33 +73,6 @@ CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
 CREATE INDEX IF NOT EXISTS idx_entities_position ON entities(position_x, position_y);
 
 -- ==========================================
--- Application Logs Table
--- ==========================================
--- Structured logs for debugging and observability.
--- These are the telemetry signals from our ecosystem's inner workings.
-
-CREATE TABLE IF NOT EXISTS application_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-  level TEXT NOT NULL CHECK (level IN ('DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL')),
-  component TEXT NOT NULL,                   -- SIMULATION, DATABASE, API, etc.
-  operation TEXT NOT NULL,                   -- Specific operation name
-  message TEXT NOT NULL,                     -- Human-readable description
-  metadata TEXT,                             -- JSON string for structured data
-  tick INTEGER,                              -- Simulation tick if applicable
-  entity_id TEXT,                            -- Related entity UUID if applicable
-  duration INTEGER,                          -- Operation duration in milliseconds
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Indexes for log analysis
-CREATE INDEX IF NOT EXISTS idx_application_logs_timestamp ON application_logs(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_application_logs_level ON application_logs(level);
-CREATE INDEX IF NOT EXISTS idx_application_logs_component ON application_logs(component);
-CREATE INDEX IF NOT EXISTS idx_application_logs_tick ON application_logs(tick);
-CREATE INDEX IF NOT EXISTS idx_application_logs_entity ON application_logs(entity_id);
-
--- ==========================================
 -- Simulation Events Table
 -- ==========================================
 -- Narrative events that tell the story of the ecosystem.
@@ -116,7 +88,7 @@ CREATE TABLE IF NOT EXISTS simulation_events (
       'BIRTH', 'DEATH', 'REPRODUCTION', 'MUTATION',
       'EXTINCTION', 'POPULATION_EXPLOSION', 'ECOSYSTEM_COLLAPSE',
       'DISASTER_FIRE', 'DISASTER_FLOOD', 'DISASTER_PLAGUE',
-      'USER_INTERVENTION', 'ENVIRONMENT_CHANGE'
+      'USER_INTERVENTION', 'ENVIRONMENT_CHANGE', 'POPULATION_DELTA'
     )
   ),
   description TEXT NOT NULL,                 -- Human-readable story
@@ -150,7 +122,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-VALUES ('schema_version', '1.0.0', datetime('now'));
+VALUES ('schema_version', '1.2.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding

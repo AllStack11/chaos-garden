@@ -8,14 +8,76 @@
  * Like the telemetry of a living organism, these logs reveal
  * the inner workings of our ecosystem without disturbing it.
  * 
- * IMPORTANT: The logging functions in this module do NOT log their own
- * database operations to prevent infinite recursion—a mirror cannot
- * reflect its own reflection.
+ * Application logs are console-only and are not persisted to D1.
  */
 
-import type { ApplicationLog, LogLevel, LogComponent } from '@chaos-garden/shared';
-import { logApplicationEventToDatabase } from '../db/queries';
+import type { LogLevel, LogComponent } from '@chaos-garden/shared';
 import type { D1Database } from '../types/worker';
+
+const ANSI_RESET = '\x1b[0m';
+const ANSI_DIM = '\x1b[2m';
+const ANSI_BOLD = '\x1b[1m';
+const ANSI_RED = '\x1b[31m';
+const ANSI_GREEN = '\x1b[32m';
+const ANSI_YELLOW = '\x1b[33m';
+const ANSI_BLUE = '\x1b[34m';
+const ANSI_MAGENTA = '\x1b[35m';
+const ANSI_CYAN = '\x1b[36m';
+const ANSI_BRIGHT_RED = '\x1b[91m';
+
+function getLevelColor(level: LogLevel): string {
+  switch (level) {
+    case 'DEBUG':
+      return ANSI_CYAN;
+    case 'INFO':
+      return ANSI_GREEN;
+    case 'WARN':
+      return ANSI_YELLOW;
+    case 'ERROR':
+      return ANSI_RED;
+    case 'FATAL':
+      return ANSI_BRIGHT_RED;
+  }
+}
+
+function getComponentColor(component: LogComponent): string {
+  switch (component) {
+    case 'SIMULATION':
+      return ANSI_MAGENTA;
+    case 'DATABASE':
+      return ANSI_BLUE;
+    case 'API':
+      return ANSI_CYAN;
+    case 'ENTITY':
+      return ANSI_GREEN;
+    case 'ENVIRONMENT':
+      return ANSI_YELLOW;
+    case 'LOGGING':
+      return ANSI_BLUE;
+    case 'SYSTEM':
+      return ANSI_RED;
+  }
+}
+
+function shouldUseAnsiColors(): boolean {
+  if (typeof process === 'undefined') return true;
+  if (process.env.NO_COLOR) return false;
+  if (process.env.FORCE_COLOR === '0') return false;
+  if (process.env.TERM === 'dumb') return false;
+  return true;
+}
+
+const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+  DEBUG: 10,
+  INFO: 20,
+  WARN: 30,
+  ERROR: 40,
+  FATAL: 50
+};
+
+function shouldEmitLog(level: LogLevel, minimumLevel: LogLevel): boolean {
+  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[minimumLevel];
+}
 
 /**
  * Logger instance returned by the factory.
@@ -44,15 +106,15 @@ export interface ApplicationLogger {
  * await logger.info('tick_start', 'Beginning simulation tick 42', { entityCount: 150 });
  */
 export function createApplicationLogger(
-  db: D1Database,
+  _db: D1Database,
   component: LogComponent,
   tick?: number,
-  mirrorToConsole: boolean = false
+  _mirrorToConsole: boolean = false
 ): ApplicationLogger {
+  const minimumLogLevel: LogLevel = 'INFO';
   
   /**
-   * Internal function to create and persist a log entry.
-   * This function does NOT log itself to prevent recursion.
+   * Internal function to create and emit a log entry.
    */
   async function log(
     level: LogLevel,
@@ -60,24 +122,30 @@ export function createApplicationLogger(
     message: string,
     metadata?: Record<string, unknown>
   ): Promise<void> {
-    if (mirrorToConsole) {
-      const ts = new Date().toISOString();
-      const meta = metadata ? ` ${JSON.stringify(metadata)}` : '';
-      console.log(`[${ts}] [${level}] [${component}] ${operation}: ${message}${meta}`);
+    if (!shouldEmitLog(level, minimumLogLevel)) {
+      return;
     }
 
-    const logEntry: ApplicationLog = {
-      timestamp: new Date().toISOString(),
-      level,
-      component,
-      operation,
-      message,
-      metadata: metadata ? JSON.stringify(metadata) : undefined,
-      tick
-    };
+    const ts = new Date().toISOString();
+    const tickLabel = typeof tick === 'number' ? `[Tick ${tick}]` : '';
+    const meta = metadata ? JSON.stringify(metadata) : '';
 
-    // Persist to database—this function fails silently to prevent disruption
-    await logApplicationEventToDatabase(db, logEntry);
+    if (shouldUseAnsiColors()) {
+      const levelColor = getLevelColor(level);
+      const componentColor = getComponentColor(component);
+      const tsLabel = `${ANSI_DIM}[${ts}]${ANSI_RESET}`;
+      const levelLabel = `${ANSI_BOLD}${levelColor}[${level}]${ANSI_RESET}`;
+      const componentLabel = `${ANSI_BOLD}${componentColor}[${component}]${ANSI_RESET}`;
+      const tickDisplay = tickLabel ? ` ${ANSI_DIM}${tickLabel}${ANSI_RESET}` : '';
+      const metaDisplay = meta ? ` ${ANSI_DIM}${meta}${ANSI_RESET}` : '';
+
+      console.log(`${tsLabel} ${levelLabel} ${componentLabel}${tickDisplay} ${operation}: ${message}${metaDisplay}`);
+      return;
+    }
+
+    const plainTickDisplay = tickLabel ? ` ${tickLabel}` : '';
+    const plainMetaDisplay = meta ? ` ${meta}` : '';
+    console.log(`[${ts}] [${level}] [${component}]${plainTickDisplay} ${operation}: ${message}${plainMetaDisplay}`);
   }
 
   return {
@@ -137,16 +205,37 @@ export function createNullLogger(): ApplicationLogger {
  * Logs to console instead of database.
  */
 export function createConsoleLogger(component: LogComponent, tick?: number): ApplicationLogger {
+  const minimumLogLevel: LogLevel = 'INFO';
+
   async function log(
     level: LogLevel,
     operation: string,
     message: string,
     metadata?: Record<string, unknown>
   ): Promise<void> {
+    if (!shouldEmitLog(level, minimumLogLevel)) {
+      return;
+    }
+
     const timestamp = new Date().toISOString();
-    const metaStr = metadata ? JSON.stringify(metadata) : '';
-    
-    console.log(`[${timestamp}] [${level}] [${component}] ${operation}: ${message} ${metaStr}`);
+    const meta = metadata ? JSON.stringify(metadata) : '';
+
+    if (shouldUseAnsiColors()) {
+      const levelColor = getLevelColor(level);
+      const componentColor = getComponentColor(component);
+      const tsLabel = `${ANSI_DIM}[${timestamp}]${ANSI_RESET}`;
+      const levelLabel = `${ANSI_BOLD}${levelColor}[${level}]${ANSI_RESET}`;
+      const componentLabel = `${ANSI_BOLD}${componentColor}[${component}]${ANSI_RESET}`;
+      const tickLabel = typeof tick === 'number' ? ` ${ANSI_DIM}[Tick ${tick}]${ANSI_RESET}` : '';
+      const metaDisplay = meta ? ` ${ANSI_DIM}${meta}${ANSI_RESET}` : '';
+
+      console.log(`${tsLabel} ${levelLabel} ${componentLabel}${tickLabel} ${operation}: ${message}${metaDisplay}`);
+      return;
+    }
+
+    const tickLabel = typeof tick === 'number' ? ` [Tick ${tick}]` : '';
+    const metaDisplay = meta ? ` ${meta}` : '';
+    console.log(`[${timestamp}] [${level}] [${component}]${tickLabel} ${operation}: ${message}${metaDisplay}`);
   }
 
   return {

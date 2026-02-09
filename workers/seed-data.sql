@@ -56,10 +56,3 @@ INSERT INTO simulation_events (
 ) VALUES
   (1, 0, datetime('now'), 'BIRTH', '10 plants sprouted from the fertile soil', '[]', 'LOW', '{"count": 10, "type": "plants"}'),
   (1, 0, datetime('now'), 'BIRTH', '5 herbivores wandered into the garden', '[]', 'LOW', '{"count": 5, "type": "herbivores"}');
-
--- Add application logs
-INSERT INTO application_logs (
-  timestamp, level, component, operation, message,
-  metadata, tick
-) VALUES
-  (datetime('now'), 'INFO', 'INITIALIZATION', 'seed_data', 'Seed data inserted: 10 plants, 5 herbivores', '{"plants": 10, "herbivores": 5}', 0);

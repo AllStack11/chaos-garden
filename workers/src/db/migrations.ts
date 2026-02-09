@@ -5,7 +5,7 @@
  * Like the gradual adaptation of organisms over generations,
  * our database schema may need to evolve as the system grows.
  * 
- * Current version: 1.0.0 (initial schema)
+ * Current version: 1.1.0
  */
 
 import type { D1Database } from '../types/worker';
@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.0.0';
+export const CURRENT_SCHEMA_VERSION = '1.1.0';
 
 /**
  * Check if the database schema is up to date.
@@ -79,12 +79,12 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
     // Migration: Initial setup (1.0.0)
     if (!currentVersion) {
       await migrateToV1_0_0(db);
+      await migrateToV1_1_0(db);
     }
     
-    // Future migrations will be added here:
-    // if (currentVersion === '1.0.0') {
-    //   await migrateToV1_1_0(db);
-    // }
+    if (currentVersion === '1.0.0') {
+      await migrateToV1_1_0(db);
+    }
     
     console.log('Migrations completed successfully');
     return true;
@@ -119,26 +119,42 @@ async function migrateToV1_0_0(db: D1Database): Promise<void> {
 }
 
 /**
- * Migration template for future versions.
- * Copy this pattern when adding new schema versions.
+ * Migration to version 1.1.0.
+ * Removes application log persistence schema artifacts.
  * 
  * @param db - The D1 database instance
  */
-// async function migrateToV1_1_0(db: D1Database): Promise<void> {
-//   console.log('Running migration to v1.1.0...');
-//   
-//   // Example: Add a new column
-//   // await executeRaw(db, 'ALTER TABLE entities ADD COLUMN new_field TEXT');
-//   
-//   // Update version
-//   await executeRaw(
-//     db,
-//     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-//      VALUES ('schema_version', '1.1.0', datetime('now'))`
-//   );
-//   
-//   console.log('Migration to v1.1.0 complete');
-// }
+async function migrateToV1_1_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.1.0...');
+
+  const dropStatements = [
+    'DROP INDEX IF EXISTS idx_application_logs_timestamp',
+    'DROP INDEX IF EXISTS idx_application_logs_level',
+    'DROP INDEX IF EXISTS idx_application_logs_component',
+    'DROP INDEX IF EXISTS idx_application_logs_tick',
+    'DROP INDEX IF EXISTS idx_application_logs_entity',
+    'DROP TABLE IF EXISTS application_logs'
+  ];
+
+  for (const statement of dropStatements) {
+    const result = await executeRaw(db, statement);
+    if (!result.success) {
+      throw new Error(`Failed to execute migration step "${statement}": ${result.error}`);
+    }
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
+     VALUES ('schema_version', '1.1.0', datetime('now'))`
+  );
+
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.1.0 complete');
+}
 
 /**
  * Initialize the database on first run.
@@ -165,7 +181,7 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     // Schema should be applied via wrangler d1 execute
     // This function handles post-schema setup
     
-    await migrateToV1_0_0(db);
+    await migrateToV1_1_0(db);
     
     console.log('Database initialization complete');
     return true;
