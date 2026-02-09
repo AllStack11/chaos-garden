@@ -43,8 +43,8 @@ export function generateEntityColors(
   const baseHue = minHue + (hash % (maxHue - minHue));
   
   // Saturation varies by health and energy
-  const baseSat = 50 + (hash % 30); // 50-80%
-  const baseLight = 35 + (hash % 25); // 35-60%
+  const baseSat = 58 + (hash % 27); // 58-85%
+  const baseLight = 45 + (hash % 20); // 45-65%
   
   // Accent is complementary, shifted
   const accentHue = (baseHue + 30) % 360;

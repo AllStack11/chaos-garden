@@ -111,6 +111,15 @@ export class GardenEntityRenderer {
     }
   }
 
+  private calculateEntityTimeOffset(entityId: string): number {
+    let hash = 0;
+    for (let i = 0; i < entityId.length; i++) {
+      hash = ((hash << 5) - hash) + entityId.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return (Math.abs(hash) % 628) / 100;
+  }
+
   private drawDetailedEntity(
     ctx: CanvasRenderingContext2D,
     entity: Entity,
@@ -118,18 +127,20 @@ export class GardenEntityRenderer {
     y: number,
     time: number,
   ): void {
+    const entityTime = time + this.calculateEntityTimeOffset(entity.id);
+
     switch (entity.type) {
       case 'plant':
-        this.drawPlantEntity(ctx, entity, x, y, time);
+        this.drawPlantEntity(ctx, entity, x, y, entityTime);
         break;
       case 'herbivore':
-        this.drawHerbivoreEntity(ctx, entity, x, y, time);
+        this.drawHerbivoreEntity(ctx, entity, x, y, entityTime);
         break;
       case 'carnivore':
-        this.drawCarnivoreEntity(ctx, entity, x, y, time);
+        this.drawCarnivoreEntity(ctx, entity, x, y, entityTime);
         break;
       case 'fungus':
-        this.drawFungusEntity(ctx, entity, x, y, time);
+        this.drawFungusEntity(ctx, entity, x, y, entityTime);
         break;
     }
   }

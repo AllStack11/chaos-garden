@@ -126,10 +126,10 @@ export class PlantRenderer {
     
     const tiers = Math.floor(3 + visual.leafCount / 4);
     const stemHeight = size * 1.5;
-    const baseColor = `hsl(${100 + visual.baseHue}, ${60 + visual.saturation}%, ${40 + visual.saturation / 2}%)`;
+    const baseColor = `hsl(${100 + visual.baseHue}, ${60 + visual.saturation}%, ${50 + visual.saturation / 2}%)`;
     
     // Central stem
-    this.ctx.strokeStyle = '#2d5016';
+    this.ctx.strokeStyle = '#4a8c2a';
     this.ctx.lineWidth = 3 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -192,7 +192,7 @@ export class PlantRenderer {
     const petalCount = Math.max(5, visual.petalCount);
     
     // Stem
-    this.ctx.strokeStyle = '#166534';
+    this.ctx.strokeStyle = '#2d9b4e';
     this.ctx.lineWidth = 4 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -200,7 +200,7 @@ export class PlantRenderer {
     this.ctx.stroke();
     
     // Stem leaves
-    this.ctx.fillStyle = `hsl(${100 + visual.baseHue}, ${60}%, ${35 + visual.baseHue / 3}%)`;
+    this.ctx.fillStyle = `hsl(${100 + visual.baseHue}, ${60}%, ${45 + visual.baseHue / 3}%)`;
     this.ctx.beginPath();
     this.ctx.ellipse(x + sway * 0.3, y - stemHeight * 0.4, size * 0.3, size * 0.15, -0.5, 0, Math.PI * 2);
     this.ctx.fill();
@@ -231,38 +231,38 @@ export class PlantRenderer {
       this.ctx.fillStyle = `hsl(${baseHue + 20}, ${70 + visual.saturation}%, ${60 + visual.baseHue / 2}%)`;
       this.ctx.beginPath();
       this.ctx.ellipse(
-        x + Math.cos(angle) * size * 0.4,
-        y + Math.sin(angle) * size * 0.4,
-        size * 0.5, size * 0.25, angle, 0, Math.PI * 2
+        x + Math.cos(angle) * size * 0.3,
+        y + Math.sin(angle) * size * 0.3,
+        size * 0.35, size * 0.17, angle, 0, Math.PI * 2
       );
       this.ctx.fill();
     }
-    
+
     // Inner petals
     for (let i = 0; i < petalCount / 2; i++) {
       const angle = (i / (petalCount / 2)) * Math.PI * 2 + Math.PI / petalCount + time * 0.1;
       this.ctx.fillStyle = `hsl(${baseHue}, ${75 + visual.saturation}%, ${65 + visual.baseHue / 2}%)`;
       this.ctx.beginPath();
       this.ctx.ellipse(
-        x + Math.cos(angle) * size * 0.2,
-        y + Math.sin(angle) * size * 0.2,
-        size * 0.3, size * 0.15, angle, 0, Math.PI * 2
+        x + Math.cos(angle) * size * 0.15,
+        y + Math.sin(angle) * size * 0.15,
+        size * 0.22, size * 0.1, angle, 0, Math.PI * 2
       );
       this.ctx.fill();
     }
-    
+
     // Center
     this.ctx.fillStyle = `hsl(${50 + visual.baseHue}, ${80}%, ${55 + visual.baseHue / 3}%)`;
     this.ctx.beginPath();
-    this.ctx.arc(x, y, size * 0.25, 0, Math.PI * 2);
+    this.ctx.arc(x, y, size * 0.18, 0, Math.PI * 2);
     this.ctx.fill();
-    
+
     // Stamens
     this.ctx.fillStyle = '#ffff00';
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2 + time * 0.2;
       this.ctx.beginPath();
-      this.ctx.arc(x + Math.cos(angle) * size * 0.12, y + Math.sin(angle) * size * 0.12, 2, 0, Math.PI * 2);
+      this.ctx.arc(x + Math.cos(angle) * size * 0.09, y + Math.sin(angle) * size * 0.09, 2, 0, Math.PI * 2);
       this.ctx.fill();
     }
   }
@@ -297,7 +297,7 @@ export class PlantRenderer {
     if (!this.ctx || !this.rng) return;
     
     const bladeCount = Math.max(4, visual.leafCount);
-    const grassColor = `hsl(${90 + visual.baseHue}, ${50 + visual.saturation}%, ${35 + visual.baseHue / 2}%)`;
+    const grassColor = `hsl(${90 + visual.baseHue}, ${50 + visual.saturation}%, ${48 + visual.baseHue / 2}%)`;
     
     for (let i = 0; i < bladeCount; i++) {
       const length = size * 1.5 * (0.7 + this.rng!.range(0, 0.6));
@@ -333,8 +333,8 @@ export class PlantRenderer {
     if (!this.ctx || !this.rng) return;
     
     const stemHeight = size * 2;
-    const vineColor = '#2d5a27';
-    const leafColor = `hsl(${100 + visual.baseHue}, ${55 + visual.saturation}%, ${35 + visual.baseHue / 3}%)`;
+    const vineColor = '#4a8f3d';
+    const leafColor = `hsl(${100 + visual.baseHue}, ${55 + visual.saturation}%, ${48 + visual.baseHue / 3}%)`;
     
     // Curved vine stem
     this.ctx.strokeStyle = vineColor;
@@ -377,8 +377,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const succColor = `hsl(${140 + visual.baseHue}, ${40 + visual.saturation}%, ${45 + visual.baseHue / 2}%)`;
-    const accentColor = `hsl(${140 + visual.baseHue}, ${50 + visual.saturation}%, ${55 + visual.baseHue / 2}%)`;
+    const succColor = `hsl(${140 + visual.baseHue}, ${40 + visual.saturation}%, ${52 + visual.baseHue / 2}%)`;
+    const accentColor = `hsl(${140 + visual.baseHue}, ${50 + visual.saturation}%, ${60 + visual.baseHue / 2}%)`;
     
     // Main succulent body (rounded shape)
     this.ctx.fillStyle = succColor;
@@ -426,7 +426,7 @@ export class PlantRenderer {
     const bloomSize = size * visual.bloomSize;
     
     // Tall elegant stem
-    this.ctx.strokeStyle = '#1a4d1a';
+    this.ctx.strokeStyle = '#2d7d2d';
     this.ctx.lineWidth = 3 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -434,7 +434,7 @@ export class PlantRenderer {
     this.ctx.stroke();
     
     // Lily pad (floating leaf)
-    this.ctx.fillStyle = `hsl(${100 + visual.baseHue}, ${45}%, ${40 + visual.baseHue / 3}%)`;
+    this.ctx.fillStyle = `hsl(${100 + visual.baseHue}, ${45}%, ${50 + visual.baseHue / 3}%)`;
     this.ctx.beginPath();
     this.ctx.ellipse(x - size * 0.8, y + size * 0.3, size * 0.6, size * 0.3, -0.3, 0, Math.PI * 2);
     this.ctx.fill();
@@ -495,8 +495,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const mossColor = `hsl(${100 + visual.baseHue}, ${45 + visual.saturation}%, ${30 + visual.baseHue / 2}%)`;
-    const highlightColor = `hsl(${100 + visual.baseHue}, ${50 + visual.saturation}%, ${45 + visual.baseHue / 2}%)`;
+    const mossColor = `hsl(${100 + visual.baseHue}, ${45 + visual.saturation}%, ${42 + visual.baseHue / 2}%)`;
+    const highlightColor = `hsl(${100 + visual.baseHue}, ${50 + visual.saturation}%, ${55 + visual.baseHue / 2}%)`;
     
     const patchRadius = size * 1.2;
     this.ctx.fillStyle = mossColor;
@@ -524,7 +524,7 @@ export class PlantRenderer {
         const stalkX = x + this.rng!.range(-patchRadius * 0.5, patchRadius * 0.5);
         const stalkHeight = size * 0.4 * (0.5 + this.rng!.range(0, 0.5));
         
-        this.ctx.strokeStyle = '#3d5a27';
+        this.ctx.strokeStyle = '#5a8040';
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
         this.ctx.moveTo(stalkX, y - patchRadius * 0.3);
@@ -554,8 +554,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const cactusColor = `hsl(${130 + visual.baseHue}, ${35 + visual.saturation}%, ${35 + visual.baseHue / 2}%)`;
-    const darkCactusColor = `hsl(${130 + visual.baseHue}, ${40}%, ${25}%)`;
+    const cactusColor = `hsl(${130 + visual.baseHue}, ${35 + visual.saturation}%, ${45 + visual.baseHue / 2}%)`;
+    const darkCactusColor = `hsl(${130 + visual.baseHue}, ${40}%, ${32}%)`;
     
     const cactusHeight = size * 2.5;
     const armCount = Math.floor(visual.leafCount / 3);
@@ -626,8 +626,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const bushColor = `hsl(${95 + visual.baseHue}, ${50 + visual.saturation}%, ${32 + visual.baseHue / 2}%)`;
-    const lightBushColor = `hsl(${95 + visual.baseHue}, ${55 + visual.saturation}%, ${42 + visual.baseHue / 2}%)`;
+    const bushColor = `hsl(${95 + visual.baseHue}, ${50 + visual.saturation}%, ${44 + visual.baseHue / 2}%)`;
+    const lightBushColor = `hsl(${95 + visual.baseHue}, ${55 + visual.saturation}%, ${52 + visual.baseHue / 2}%)`;
     
     const clusterCount = Math.floor(4 + visual.leafCount / 2);
     
@@ -678,8 +678,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const herbColor = `hsl(${85 + visual.baseHue}, ${55 + visual.saturation}%, ${38 + visual.baseHue / 2}%)`;
-    const stemColor = '#3d6b27';
+    const herbColor = `hsl(${85 + visual.baseHue}, ${55 + visual.saturation}%, ${48 + visual.baseHue / 2}%)`;
+    const stemColor = '#5a9e3d';
     
     const stalkCount = Math.max(3, Math.floor(visual.leafCount / 2));
     
