@@ -202,7 +202,8 @@ export async function getAllLivingEntitiesFromDatabase(
     `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
             energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
-     WHERE is_alive = 1`
+     WHERE is_alive = 1
+     ORDER BY born_at_tick ASC, id ASC`
   );
 
   return rows.map(mapRowToEntity);
@@ -221,7 +222,8 @@ export async function getAllDecomposableDeadEntitiesFromDatabase(
             energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
      WHERE is_alive = 0
-       AND energy > 0`
+       AND energy > 0
+     ORDER BY death_tick ASC, born_at_tick ASC, id ASC`
   );
 
   return rows.map(mapRowToEntity);

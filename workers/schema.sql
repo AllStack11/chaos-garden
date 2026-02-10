@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-VALUES ('schema_version', '1.5.0', datetime('now'));
+VALUES ('schema_version', '1.5.1', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding
@@ -184,7 +184,7 @@ INSERT INTO garden_state (
   0,
   datetime('now'),
   20.0,
-  0.5,
+  0.0,
   0.5,
   0,
   0,

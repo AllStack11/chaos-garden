@@ -5,7 +5,7 @@
  * Like the gradual adaptation of organisms over generations,
  * our database schema may need to evolve as the system grows.
  * 
- * Current version: 1.5.0
+ * Current version: 1.5.1
  */
 
 import type { D1Database } from '../types/worker';
@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.5.0';
+export const CURRENT_SCHEMA_VERSION = '1.5.1';
 
 /**
  * Check if the database schema is up to date.
@@ -82,20 +82,27 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
+      await migrateToV1_5_1(db);
     } else if (currentVersion === '1.0.0') {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
+      await migrateToV1_5_1(db);
     } else if (currentVersion === '1.1.0') {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
+      await migrateToV1_5_1(db);
     } else if (currentVersion === '1.3.0') {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
+      await migrateToV1_5_1(db);
     } else if (currentVersion === '1.4.0') {
       await migrateToV1_5_0(db);
+      await migrateToV1_5_1(db);
+    } else if (currentVersion === '1.5.0') {
+      await migrateToV1_5_1(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
@@ -320,6 +327,35 @@ async function migrateToV1_5_0(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 1.5.1.
+ * Aligns bootstrap tick-0 sunlight with the deterministic sunlight calculator.
+ */
+async function migrateToV1_5_1(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.5.1...');
+
+  const backfillResult = await executeRaw(
+    db,
+    `UPDATE garden_state
+     SET sunlight = 0
+     WHERE tick = 0`
+  );
+  if (!backfillResult.success) {
+    throw new Error(`Failed to align tick-0 sunlight: ${backfillResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '1.5.1', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.5.1 complete');
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  * 
@@ -348,6 +384,7 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_3_0(db);
     await migrateToV1_4_0(db);
     await migrateToV1_5_0(db);
+    await migrateToV1_5_1(db);
     
     console.log('Database initialization complete');
     return true;
