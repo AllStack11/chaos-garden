@@ -13,6 +13,7 @@
 import type { D1Database, ScheduledEvent } from './types/worker';
 import { createApplicationLogger } from './logging/application-logger';
 import { runSimulationTick } from './simulation/tick';
+import { runMigrations } from './db/migrations';
 import {
   getLatestGardenStateFromDatabase,
   getRecentSimulationEventsFromDatabase,
@@ -27,6 +28,21 @@ import type { HealthStatus } from '@chaos-garden/shared';
 export interface Env {
   DB: D1Database;
   ENVIRONMENT?: string;
+}
+
+let databaseReadyPromise: Promise<void> | null = null;
+
+async function ensureDatabaseReady(db: D1Database): Promise<void> {
+  if (!databaseReadyPromise) {
+    databaseReadyPromise = (async () => {
+      const migrationSuccess = await runMigrations(db);
+      if (!migrationSuccess) {
+        throw new Error('Database migrations failed');
+      }
+    })();
+  }
+
+  await databaseReadyPromise;
 }
 
 // ==========================================
@@ -184,6 +200,8 @@ export default {
    * Handle HTTP requests
    */
   async fetch(request: Request, env: Env): Promise<Response> {
+    await ensureDatabaseReady(env.DB);
+
     const url = new URL(request.url);
     const path = url.pathname;
     
@@ -248,6 +266,8 @@ export default {
    * Handle scheduled Cron triggers (every 15 minutes)
    */
   async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
+    await ensureDatabaseReady(env.DB);
+
     const isDevelopment = env.ENVIRONMENT !== 'production';
 
     if (isDevelopment) {

@@ -40,7 +40,9 @@ export async function getLatestGardenStateFromDatabase(
   const row = await queryFirst<GardenStateRow>(
     db,
     `SELECT id, tick, timestamp, temperature, sunlight, moisture,
-            plants, herbivores, carnivores, fungi, total
+            plants, herbivores, carnivores, fungi,
+            dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
+            total_living, total_dead, total
      FROM garden_state
      ORDER BY tick DESC
      LIMIT 1`
@@ -84,7 +86,9 @@ export async function getGardenStateByTickFromDatabase(
   const row = await queryFirst<GardenStateRow>(
     db,
     `SELECT id, tick, timestamp, temperature, sunlight, moisture,
-            plants, herbivores, carnivores, fungi, total
+            plants, herbivores, carnivores, fungi,
+            dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
+            total_living, total_dead, total
      FROM garden_state
      WHERE tick = ?`,
     [tick]
@@ -113,8 +117,10 @@ export async function saveGardenStateToDatabase(
     db,
     `INSERT INTO garden_state (
       tick, timestamp, temperature, sunlight, moisture,
-      plants, herbivores, carnivores, fungi, total
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      plants, herbivores, carnivores, fungi,
+      dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
+      total_living, total_dead, total
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tick) DO UPDATE SET
       timestamp = excluded.timestamp,
       temperature = excluded.temperature,
@@ -124,6 +130,12 @@ export async function saveGardenStateToDatabase(
       herbivores = excluded.herbivores,
       carnivores = excluded.carnivores,
       fungi = excluded.fungi,
+      dead_plants = excluded.dead_plants,
+      dead_herbivores = excluded.dead_herbivores,
+      dead_carnivores = excluded.dead_carnivores,
+      dead_fungi = excluded.dead_fungi,
+      total_living = excluded.total_living,
+      total_dead = excluded.total_dead,
       total = excluded.total`,
     [
       state.tick,
@@ -135,6 +147,12 @@ export async function saveGardenStateToDatabase(
       state.populationSummary.herbivores,
       state.populationSummary.carnivores,
       state.populationSummary.fungi,
+      state.populationSummary.deadPlants,
+      state.populationSummary.deadHerbivores,
+      state.populationSummary.deadCarnivores,
+      state.populationSummary.deadFungi,
+      state.populationSummary.totalLiving,
+      state.populationSummary.totalDead,
       state.populationSummary.total
     ]
   );
@@ -431,13 +449,13 @@ function mapRowToGardenState(row: GardenStateRow): GardenState {
     herbivores: row.herbivores || 0,
     carnivores: row.carnivores || 0,
     fungi: row.fungi || 0,
+    deadPlants: row.dead_plants || 0,
+    deadHerbivores: row.dead_herbivores || 0,
+    deadCarnivores: row.dead_carnivores || 0,
+    deadFungi: row.dead_fungi || 0,
+    totalLiving: row.total_living || 0,
+    totalDead: row.total_dead || 0,
     total: row.total || 0,
-    totalLiving: row.total || 0,
-    totalDead: 0,
-    deadPlants: 0,
-    deadHerbivores: 0,
-    deadCarnivores: 0,
-    deadFungi: 0
   };
 
   return {

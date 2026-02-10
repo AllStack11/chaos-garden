@@ -17,6 +17,7 @@ import {
   IDEAL_TEMPERATURE,
   IDEAL_MOISTURE_FOR_PLANTS
 } from './constants';
+import { calculateSunlightForTick } from './sunlight-calculator';
 
 /**
  * Create the initial environment for a new garden.
@@ -24,10 +25,11 @@ import {
  * @returns Starting environment with balanced conditions
  */
 export function createInitialEnvironment(): Environment {
+  const initialTick = 0;
   return {
-    tick: 0,
+    tick: initialTick,
     temperature: IDEAL_TEMPERATURE, // Pleasant 20°C
-    sunlight: 0.5,   // Midday sun
+    sunlight: calculateSunlightForTick(initialTick),
     moisture: IDEAL_MOISTURE_FOR_PLANTS // Moderate moisture
   };
 }

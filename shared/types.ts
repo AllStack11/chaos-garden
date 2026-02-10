@@ -348,6 +348,12 @@ export interface GardenStateRow {
   herbivores: number;
   carnivores: number;
   fungi: number;
+  dead_plants: number;
+  dead_herbivores: number;
+  dead_carnivores: number;
+  dead_fungi: number;
+  total_living: number;
+  total_dead: number;
   total: number;
 }
 

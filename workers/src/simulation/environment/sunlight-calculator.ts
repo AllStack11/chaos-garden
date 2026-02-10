@@ -46,11 +46,11 @@ export function isDaytime(tick: number): boolean {
  * @returns String describing the time of day
  */
 export function getTimeOfDay(tick: number): 'night' | 'dawn' | 'day' | 'dusk' {
-  const sunlight = calculateSunlightForTick(tick);
-  
-  if (sunlight < 0.25) return 'night';
-  if (sunlight < 0.5) return 'dawn';
-  if (sunlight < 0.75) return 'day';
+  const normalizedTime = (tick % TICKS_PER_DAY) / TICKS_PER_DAY;
+
+  if (normalizedTime < 0.125 || normalizedTime >= 0.875) return 'night';
+  if (normalizedTime < 0.375) return 'dawn';
+  if (normalizedTime < 0.625) return 'day';
   return 'dusk';
 }
 

@@ -353,6 +353,12 @@ function generateSeedDataSQL(gardenStateId) {
       herbivores = ${herbivoreCount},
       carnivores = ${carnivoreCount},
       fungi = ${fungusCount},
+      dead_plants = 0,
+      dead_herbivores = 0,
+      dead_carnivores = 0,
+      dead_fungi = 0,
+      total_living = ${totalCount},
+      total_dead = 0,
       total = ${totalCount},
       timestamp = '${now}'
     WHERE id = ${gardenStateId};

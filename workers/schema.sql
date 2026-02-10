@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS garden_state (
   herbivores INTEGER NOT NULL DEFAULT 0,     -- Herbivore population count
   carnivores INTEGER NOT NULL DEFAULT 0,     -- Carnivore population count
   fungi INTEGER NOT NULL DEFAULT 0,          -- Fungi population count
+  dead_plants INTEGER NOT NULL DEFAULT 0,    -- Dead plant count
+  dead_herbivores INTEGER NOT NULL DEFAULT 0,-- Dead herbivore count
+  dead_carnivores INTEGER NOT NULL DEFAULT 0,-- Dead carnivore count
+  dead_fungi INTEGER NOT NULL DEFAULT 0,     -- Dead fungus count
+  total_living INTEGER NOT NULL DEFAULT 0,   -- Total living entities
+  total_dead INTEGER NOT NULL DEFAULT 0,     -- Total dead entities
   total INTEGER NOT NULL DEFAULT 0,          -- Total entity count
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -140,7 +146,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-VALUES ('schema_version', '1.3.0', datetime('now'));
+VALUES ('schema_version', '1.4.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding
@@ -157,6 +163,12 @@ INSERT INTO garden_state (
   herbivores, 
   carnivores, 
   fungi, 
+  dead_plants,
+  dead_herbivores,
+  dead_carnivores,
+  dead_fungi,
+  total_living,
+  total_dead,
   total
 ) VALUES (
   0,
@@ -164,6 +176,12 @@ INSERT INTO garden_state (
   20.0,
   0.5,
   0.5,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
   0,
   0,
   0,
