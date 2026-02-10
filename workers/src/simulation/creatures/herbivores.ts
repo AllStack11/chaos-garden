@@ -40,8 +40,9 @@ const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
 const MAX_REPRODUCTIVE_AGE = 110; // older herbivores can no longer reproduce
 const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
-const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
-const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.85;
+const MOVE_TO_PLANT_COST_MULTIPLIER = 0.68;
+const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85; 
+const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
 
 /**
  * Create a new herbivore entity.
@@ -118,7 +119,7 @@ export async function processHerbivoreBehaviorDuringTick(
         movedDistance,
         herbivore.metabolismEfficiency
       );
-      herbivore.energy -= movementCost;
+      herbivore.energy -= movementCost * MOVE_TO_PLANT_COST_MULTIPLIER;
     }
   } else {
     // 3. Otherwise, move toward the nearest plant anywhere to prevent edge starvation.

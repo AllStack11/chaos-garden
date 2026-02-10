@@ -46,8 +46,35 @@ export async function processEntitiesForTick(
   const carnivores = entities.filter(e => e.type === 'carnivore');
   const fungi = entities.filter(e => e.type === 'fungus');
 
-  // Process plants first (they create energy)
+  // Process carnivores first so predation resolves before prey and plants act.
+  for (const carnivore of carnivores) {
+    if (isCarnivoreDead(carnivore)) {
+      continue;
+    }
+
+    const result = await processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger);
+    for (const child of result.offspring) {
+      child.lineage = carnivore.id;
+    }
+    newEntities.push(...result.offspring);
+
+    if (isCarnivoreDead(carnivore)) {
+      await appLogger.debug('carnivore_death', `Carnivore ${carnivore.id.substring(0, 8)} died`, {
+        carnivoreId: carnivore.id,
+        age: carnivore.age,
+        energy: carnivore.energy,
+        health: carnivore.health,
+        cause: getCarnivoreCauseOfDeath(carnivore)
+      });
+    }
+  }
+
+  // Process plants (they create energy)
   for (const plant of plants) {
+    if (isPlantDead(plant)) {
+      continue;
+    }
+
     const offspring = await processPlantBehaviorDuringTick(plant, environment, eventLogger);
     for (const child of offspring) {
       child.lineage = plant.id;
@@ -67,6 +94,10 @@ export async function processEntitiesForTick(
 
   // Process herbivores (they consume plants)
   for (const herbivore of herbivores) {
+    if (isHerbivoreDead(herbivore)) {
+      continue;
+    }
+
     const result = await processHerbivoreBehaviorDuringTick(herbivore, environment, plants, eventLogger);
     for (const child of result.offspring) {
       child.lineage = herbivore.id;
@@ -85,27 +116,12 @@ export async function processEntitiesForTick(
     }
   }
 
-  // Process carnivores (they hunt herbivores)
-  for (const carnivore of carnivores) {
-    const result = await processCarnivoreBehaviorDuringTick(carnivore, environment, herbivores, eventLogger);
-    for (const child of result.offspring) {
-      child.lineage = carnivore.id;
-    }
-    newEntities.push(...result.offspring);
-
-    if (isCarnivoreDead(carnivore)) {
-      await appLogger.debug('carnivore_death', `Carnivore ${carnivore.id.substring(0, 8)} died`, {
-        carnivoreId: carnivore.id,
-        age: carnivore.age,
-        energy: carnivore.energy,
-        health: carnivore.health,
-        cause: getCarnivoreCauseOfDeath(carnivore)
-      });
-    }
-  }
-
   // Process fungi (they decompose dead matter)
   for (const fungus of fungi) {
+    if (isFungusDead(fungus)) {
+      continue;
+    }
+
     const result = await processFungusBehaviorDuringTick(
       fungus,
       environment,
