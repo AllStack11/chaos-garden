@@ -182,7 +182,7 @@ export function extractTraits<T extends Entity>(entity: T):
   T extends { type: 'fungus' } ? FungusTraits : BaseTraits {
   const traitKeysMap: Record<string, string[]> = {
     plant: ['reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
-    herbivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
+    herbivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius', 'threatDetectionRadius'],
     carnivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
     fungus: ['reproductionRate', 'metabolismEfficiency', 'decompositionRate', 'perceptionRadius']
   };
@@ -210,7 +210,7 @@ export function copyTraitsWithPossibleMutations<T extends Entity>(
   // Define which keys are traits for each entity type
   const traitKeysMap: Record<string, string[]> = {
     plant: ['reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
-    herbivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
+    herbivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius', 'threatDetectionRadius'],
     carnivore: ['reproductionRate', 'metabolismEfficiency', 'movementSpeed', 'perceptionRadius'],
     fungus: ['reproductionRate', 'metabolismEfficiency', 'decompositionRate', 'perceptionRadius']
   };
@@ -605,4 +605,344 @@ export function countEntitiesByType(entities: Entity[]): PopulationSummary {
     totalDead: deadInGarden.length,
     allTimeDead: 0
   };
+}
+
+// ==========================================
+// Predator-Prey Perception Functions
+// ==========================================
+
+/**
+ * Find all entities of a specific type within a radius.
+ * Returns array (not just nearest) for threat assessment.
+ *
+ * @param source - Entity searching
+ * @param candidates - Array of entities to search
+ * @param typeFilter - Type to filter by
+ * @param radius - Maximum distance to include
+ * @returns Array of entities within radius
+ */
+export function findAllEntitiesOfTypeWithinRadius(
+  source: Entity,
+  candidates: Entity[],
+  typeFilter: EntityType,
+  radius: number
+): Entity[] {
+  return candidates.filter(entity =>
+    entity.type === typeFilter &&
+    entity.id !== source.id &&
+    entity.isAlive &&
+    entity.health > 0 &&
+    entity.energy > 0 &&
+    calculateDistanceBetweenEntities(source, entity) <= radius
+  );
+}
+
+/**
+ * Calculate threat level for a herbivore based on carnivore proximity and state.
+ * Returns threat score (higher = more dangerous).
+ *
+ * @param herbivore - Herbivore assessing threat
+ * @param carnivore - Potential predator
+ * @returns Threat score (0-100, higher = more dangerous)
+ */
+export function calculateThreatLevelForHerbivore(
+  herbivore: Entity,
+  carnivore: Entity
+): number {
+  const distance = calculateDistanceBetweenEntities(herbivore, carnivore);
+
+  // Base threat: inverse of distance (closer = more threatening)
+  const proximityThreat = 100 - (distance / 2); // Normalized to 0-100
+
+  // Carnivore energy factor: higher energy = more dangerous (can chase longer)
+  const energyThreat = carnivore.energy / 2; // 0-50 range
+
+  // Combined threat score
+  return Math.max(0, Math.min(100, proximityThreat + (energyThreat * 0.3)));
+}
+
+/**
+ * Find the most dangerous threat to a herbivore.
+ * Returns the carnivore posing the highest threat, or null if none.
+ *
+ * @param herbivore - Herbivore searching for threats
+ * @param allCarnivores - Array of all carnivores in the garden
+ * @returns Most dangerous carnivore or null
+ */
+export function findMostDangerousThreat(
+  herbivore: Entity,
+  allCarnivores: Entity[]
+): Entity | null {
+  if (herbivore.type !== 'herbivore') return null;
+
+  const threatsInRange = findAllEntitiesOfTypeWithinRadius(
+    herbivore,
+    allCarnivores,
+    'carnivore',
+    herbivore.threatDetectionRadius
+  );
+
+  if (threatsInRange.length === 0) return null;
+
+  // Score each threat and return the most dangerous
+  let mostDangerousThreat = threatsInRange[0];
+  let highestThreatScore = calculateThreatLevelForHerbivore(herbivore, threatsInRange[0]);
+
+  for (let i = 1; i < threatsInRange.length; i++) {
+    const threatScore = calculateThreatLevelForHerbivore(herbivore, threatsInRange[i]);
+    if (threatScore > highestThreatScore) {
+      highestThreatScore = threatScore;
+      mostDangerousThreat = threatsInRange[i];
+    }
+  }
+
+  return mostDangerousThreat;
+}
+
+/**
+ * Calculate optimal flee direction away from threat.
+ * Adds random jitter and handles boundary avoidance.
+ *
+ * @param herbivore - Herbivore fleeing
+ * @param threat - Threat position
+ * @param gardenWidth - Garden width in pixels
+ * @param gardenHeight - Garden height in pixels
+ * @param addJitter - Whether to add random jitter to avoid predictability
+ * @returns Target position to flee toward
+ */
+export function findOptimalFleeDirection(
+  herbivore: Entity,
+  threat: Entity,
+  gardenWidth: number,
+  gardenHeight: number,
+  addJitter: boolean
+): Position {
+  // Calculate vector away from threat
+  const deltaX = herbivore.position.x - threat.position.x;
+  const deltaY = herbivore.position.y - threat.position.y;
+  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+  if (distance === 0) {
+    // Threat is exactly on top of us, pick random direction
+    const angle = Math.random() * Math.PI * 2;
+    return {
+      x: herbivore.position.x + Math.cos(angle) * 100,
+      y: herbivore.position.y + Math.sin(angle) * 100
+    };
+  }
+
+  // Normalized flee direction
+  let fleeX = deltaX / distance;
+  let fleeY = deltaY / distance;
+
+  // Add jitter if requested (±30 degrees)
+  if (addJitter) {
+    const jitterAngle = (Math.random() - 0.5) * (Math.PI / 3); // ±60 degrees total range
+    const cosJitter = Math.cos(jitterAngle);
+    const sinJitter = Math.sin(jitterAngle);
+    const newFleeX = fleeX * cosJitter - fleeY * sinJitter;
+    const newFleeY = fleeX * sinJitter + fleeY * cosJitter;
+    fleeX = newFleeX;
+    fleeY = newFleeY;
+  }
+
+  // Project flee direction far ahead
+  let targetX = herbivore.position.x + fleeX * 100;
+  let targetY = herbivore.position.y + fleeY * 100;
+
+  // Boundary avoidance: if near edge, add perpendicular component
+  const boundaryThreshold = 50;
+  if (herbivore.position.x < boundaryThreshold) {
+    // Near left edge, bias right
+    targetX += 50;
+  } else if (herbivore.position.x > gardenWidth - boundaryThreshold) {
+    // Near right edge, bias left
+    targetX -= 50;
+  }
+
+  if (herbivore.position.y < boundaryThreshold) {
+    // Near top edge, bias down
+    targetY += 50;
+  } else if (herbivore.position.y > gardenHeight - boundaryThreshold) {
+    // Near bottom edge, bias up
+    targetY -= 50;
+  }
+
+  // Clamp to garden bounds
+  targetX = Math.max(0, Math.min(gardenWidth, targetX));
+  targetY = Math.max(0, Math.min(gardenHeight, targetY));
+
+  return { x: targetX, y: targetY };
+}
+
+/**
+ * Move entity away from a threat position.
+ * Mutates entity position in place.
+ *
+ * @param entity - Entity to move (mutated)
+ * @param threat - Threat to flee from
+ * @param speed - Movement speed
+ * @param gardenWidth - Garden width
+ * @param gardenHeight - Garden height
+ * @param addJitter - Whether to add evasion jitter
+ */
+export function moveEntityAwayFromTarget(
+  entity: Entity,
+  threat: Position,
+  speed: number,
+  gardenWidth: number,
+  gardenHeight: number,
+  addJitter: boolean
+): void {
+  if (speed <= 0) return;
+
+  // Calculate vector away from threat
+  const deltaX = entity.position.x - threat.x;
+  const deltaY = entity.position.y - threat.y;
+  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+  if (distance === 0) {
+    // Threat is exactly on top of us, move in random direction
+    const angle = Math.random() * Math.PI * 2;
+    entity.position.x += Math.cos(angle) * speed;
+    entity.position.y += Math.sin(angle) * speed;
+  } else {
+    // Normalized flee direction
+    let fleeX = deltaX / distance;
+    let fleeY = deltaY / distance;
+
+    // Add jitter if requested
+    if (addJitter && willRandomEventOccur(0.3)) {
+      const jitterAngle = (Math.random() - 0.5) * (Math.PI / 4); // ±45 degrees
+      const cosJitter = Math.cos(jitterAngle);
+      const sinJitter = Math.sin(jitterAngle);
+      const newFleeX = fleeX * cosJitter - fleeY * sinJitter;
+      const newFleeY = fleeX * sinJitter + fleeY * cosJitter;
+      fleeX = newFleeX;
+      fleeY = newFleeY;
+    }
+
+    // Move away from threat
+    entity.position.x += fleeX * speed;
+    entity.position.y += fleeY * speed;
+  }
+
+  // Boundary handling: bounce off edges
+  const boundaryThreshold = 50;
+  if (entity.position.x < boundaryThreshold) {
+    entity.position.x = Math.max(0, entity.position.x);
+  } else if (entity.position.x > gardenWidth - boundaryThreshold) {
+    entity.position.x = Math.min(gardenWidth, entity.position.x);
+  }
+
+  if (entity.position.y < boundaryThreshold) {
+    entity.position.y = Math.max(0, entity.position.y);
+  } else if (entity.position.y > gardenHeight - boundaryThreshold) {
+    entity.position.y = Math.min(gardenHeight, entity.position.y);
+  }
+
+  // Final clamp to ensure within bounds
+  entity.position.x = Math.max(0, Math.min(gardenWidth, entity.position.x));
+  entity.position.y = Math.max(0, Math.min(gardenHeight, entity.position.y));
+}
+
+/**
+ * Check if entity is near garden boundary.
+ * Returns edge information for boundary avoidance.
+ *
+ * @param entity - Entity to check
+ * @param boundaryThreshold - Distance from edge to consider "near"
+ * @param gardenWidth - Garden width
+ * @param gardenHeight - Garden height
+ * @returns Object with boundary proximity info
+ */
+export function isEntityNearGardenBoundary(
+  entity: Entity,
+  boundaryThreshold: number,
+  gardenWidth: number,
+  gardenHeight: number
+): { isNear: boolean; nearestEdge: 'top' | 'bottom' | 'left' | 'right' | null } {
+  const { x, y } = entity.position;
+
+  const nearLeft = x < boundaryThreshold;
+  const nearRight = x > gardenWidth - boundaryThreshold;
+  const nearTop = y < boundaryThreshold;
+  const nearBottom = y > gardenHeight - boundaryThreshold;
+
+  if (!nearLeft && !nearRight && !nearTop && !nearBottom) {
+    return { isNear: false, nearestEdge: null };
+  }
+
+  // Determine nearest edge
+  const distances = {
+    left: x,
+    right: gardenWidth - x,
+    top: y,
+    bottom: gardenHeight - y
+  };
+
+  const nearestEdge = (Object.keys(distances) as Array<'top' | 'bottom' | 'left' | 'right'>)
+    .reduce((nearest, edge) =>
+      distances[edge] < distances[nearest] ? edge : nearest
+    );
+
+  return { isNear: true, nearestEdge };
+}
+
+/**
+ * Generate random exploration target within garden bounds.
+ * Used when perception fails instead of omniscient search.
+ *
+ * @param entity - Entity exploring
+ * @param gardenWidth - Garden width
+ * @param gardenHeight - Garden height
+ * @returns Random target position for exploration
+ */
+export function generateExplorationTarget(
+  entity: Entity,
+  gardenWidth: number,
+  gardenHeight: number
+): Position {
+  // Generate exploration target within a reasonable range from current position
+  const explorationRange = 150; // pixels - reasonable search distance
+  const angle = Math.random() * Math.PI * 2; // Random direction
+  const distance = Math.random() * explorationRange;
+
+  let targetX = entity.position.x + Math.cos(angle) * distance;
+  let targetY = entity.position.y + Math.sin(angle) * distance;
+
+  // Clamp to garden bounds
+  targetX = Math.max(0, Math.min(gardenWidth, targetX));
+  targetY = Math.max(0, Math.min(gardenHeight, targetY));
+
+  return { x: targetX, y: targetY };
+}
+
+/**
+ * Find carnivores targeting the same prey (for pack coordination).
+ * Returns array of competing carnivores.
+ *
+ * @param carnivore - Carnivore checking for competition
+ * @param allCarnivores - Array of all carnivores
+ * @param targetPrey - The prey being targeted (null if none)
+ * @param coordinationRadius - Radius to check for other carnivores
+ * @returns Array of competing carnivores
+ */
+export function findCompetingCarnivores(
+  carnivore: Entity,
+  allCarnivores: Entity[],
+  targetPrey: Entity | null,
+  coordinationRadius: number
+): Entity[] {
+  if (!targetPrey) return [];
+
+  return allCarnivores.filter(otherCarnivore =>
+    otherCarnivore.id !== carnivore.id &&
+    otherCarnivore.isAlive &&
+    otherCarnivore.health > 0 &&
+    otherCarnivore.energy > 0 &&
+    calculateDistanceBetweenEntities(carnivore, otherCarnivore) <= coordinationRadius &&
+    // Check if other carnivore is also close to the target prey (likely competing)
+    calculateDistanceBetweenEntities(otherCarnivore, targetPrey) < calculateDistanceBetweenEntities(carnivore, targetPrey) * 1.5
+  );
 }

@@ -5,8 +5,8 @@ import { buildCarnivore, buildHerbivore } from '../../../fixtures/entities';
 import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
 
 describe('simulation/creatures/carnivores', () => {
-  it('moves toward globally nearest prey when none are in perception radius', async () => {
-    const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, perceptionRadius: 30, energy: 50 });
+  it('explores randomly when no prey in perception radius', async () => {
+    const carnivore = buildCarnivore({ position: { x: 100, y: 100 }, perceptionRadius: 30, energy: 50 });
     const farPrey = buildHerbivore({ id: 'prey-far', position: { x: 200, y: 0 } });
 
     const result = await processCarnivoreBehaviorDuringTick(
@@ -18,8 +18,11 @@ describe('simulation/creatures/carnivores', () => {
 
     expect(result.consumed).toEqual([]);
     expect(farPrey.isAlive).toBe(true);
-    expect(carnivore.position.x).toBeGreaterThan(0);
-    expect(carnivore.energy).toBeLessThan(49);
+    // Carnivore should have moved (exploration behavior)
+    const hasMoved = carnivore.position.x !== 100 || carnivore.position.y !== 100;
+    expect(hasMoved).toBe(true);
+    // Energy should have decreased
+    expect(carnivore.energy).toBeLessThan(50);
   });
 
   it('applies biomass model: prey energy 10 and health 100 gives gain 30', async () => {

@@ -43,7 +43,8 @@ export interface PlantTraits extends BaseTraits {
  */
 export interface HerbivoreTraits extends BaseTraits {
   movementSpeed: number;        // pixels per tick
-  perceptionRadius: number;     // detection range for food/predators (pixels)
+  perceptionRadius: number;     // detection range for food (pixels)
+  threatDetectionRadius: number; // detection range for predators (pixels)
 }
 
 /**

@@ -85,3 +85,78 @@ export const SEVERE_ENERGY_PENALTY_MULTIPLIER = 0.2;
 
 /** Drought stress energy penalty */
 export const DROUGHT_STRESS_ENERGY_PENALTY = 0.4;
+
+// ==========================================
+// Predator-Prey Perception Constants
+// ==========================================
+
+/** Default threat detection radius for herbivores (pixels) */
+export const THREAT_DETECTION_RADIUS_DEFAULT = 130;
+
+/** Minimum threat detection radius (mutation floor) */
+export const MIN_THREAT_DETECTION_RADIUS = 80;
+
+/** Maximum threat detection radius (mutation ceiling) */
+export const MAX_THREAT_DETECTION_RADIUS = 200;
+
+/** Ambush radius for carnivores - close-range stealth advantage (pixels) */
+export const AMBUSH_RADIUS = 35;
+
+/** Pack coordination radius - carnivores avoid competing within this range (pixels) */
+export const PACK_COORDINATION_RADIUS = 100;
+
+// ==========================================
+// Fleeing Behavior Constants
+// ==========================================
+
+/** Speed multiplier when fleeing (herbivore fleeSpeed = movementSpeed * multiplier) */
+export const FLEE_SPEED_MULTIPLIER = 1.35;
+
+/** Energy cost multiplier when fleeing (more expensive than normal movement) */
+export const FLEE_ENERGY_COST_MULTIPLIER = 1.6;
+
+/** Panic threshold distance when energy is low (flee earlier when weak) */
+export const PANIC_THRESHOLD_LOW_ENERGY = 150;
+
+/** Panic threshold distance when energy is high (flee later when strong) */
+export const PANIC_THRESHOLD_HIGH_ENERGY = 100;
+
+/** Consecutive fleeing ticks before exhaustion sets in */
+export const EXHAUSTION_THRESHOLD_TICKS = 15;
+
+/** Speed reduction when exhausted (0.6 = 40% penalty) */
+export const EXHAUSTION_SPEED_PENALTY = 0.6;
+
+/** Ticks of non-fleeing required to recover from exhaustion */
+export const RECOVERY_TICKS_REQUIRED = 5;
+
+/** Probability of zigzag juke per tick when threat is close */
+export const ZIGZAG_PROBABILITY = 0.3;
+
+/** Angular deviation for zigzag evasion (degrees) */
+export const ZIGZAG_ANGLE_DEVIATION = 45;
+
+/** Distance from garden edge to trigger boundary avoidance (pixels) */
+export const BOUNDARY_AVOIDANCE_THRESHOLD = 50;
+
+// ==========================================
+// Hunting Behavior Constants
+// ==========================================
+
+/** Stalking speed multiplier when within ambush radius */
+export const STALKING_SPEED_MULTIPLIER = 0.5;
+
+/** Energy cost multiplier when stalking (lower than normal) */
+export const STALKING_ENERGY_COST_MULTIPLIER = 0.7;
+
+/** Ticks spent hunting before abandoning target */
+export const HUNT_ABANDONMENT_TICKS = 25;
+
+/** Energy threshold above which carnivore enters resting state */
+export const RESTING_ENERGY_THRESHOLD = 80;
+
+/** Speed multiplier when resting/conserving energy */
+export const RESTING_SPEED_MULTIPLIER = 0.5;
+
+/** Metabolism reduction when resting */
+export const RESTING_METABOLISM_MULTIPLIER = 0.8;

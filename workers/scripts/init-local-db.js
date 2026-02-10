@@ -7,15 +7,18 @@
  *   node scripts/init-local-db.js --schema-only
  *   node scripts/init-local-db.js --seed=42
  *   node scripts/init-local-db.js --verify-only
+ *   node scripts/init-local-db.js --remote
+ *   node scripts/init-local-db.js --remote --database=chaos-garden-db
  */
 
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const DATABASE_NAME = 'chaos-garden-db';
-const WRANGLER_CONFIG = 'wrangler.local.jsonc';
-const PERSIST_PATH = '.wrangler/local-state';
+const DEFAULT_DATABASE_NAME = 'chaos-garden-db';
+const DEFAULT_LOCAL_WRANGLER_CONFIG = 'wrangler.local.jsonc';
+const DEFAULT_PRODUCTION_WRANGLER_CONFIG = 'wrangler.jsonc';
+const DEFAULT_PERSIST_PATH = '.wrangler/local-state';
 const WORKERS_DIR = path.resolve(__dirname, '..');
 const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
 const CURRENT_SCHEMA_VERSION = '1.6.0';
@@ -77,7 +80,11 @@ function parseCliArgs(argv) {
   const parsedArgs = {
     schemaOnly: false,
     verifyOnly: false,
-    seed: DEFAULT_SEED
+    remote: false,
+    seed: DEFAULT_SEED,
+    databaseName: DEFAULT_DATABASE_NAME,
+    wranglerConfig: DEFAULT_LOCAL_WRANGLER_CONFIG,
+    persistPath: DEFAULT_PERSIST_PATH
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -109,6 +116,51 @@ function parseCliArgs(argv) {
         throw new Error('Invalid --seed value. Expected integer.');
       }
       parsedArgs.seed = seedValue;
+      index += 1;
+      continue;
+    }
+
+    if (token === '--remote') {
+      parsedArgs.remote = true;
+      parsedArgs.wranglerConfig = DEFAULT_PRODUCTION_WRANGLER_CONFIG;
+      parsedArgs.persistPath = '';
+      continue;
+    }
+
+    if (token.startsWith('--database=')) {
+      const databaseName = token.slice('--database='.length).trim();
+      if (!databaseName) {
+        throw new Error('Invalid --database value. Expected non-empty database name.');
+      }
+      parsedArgs.databaseName = databaseName;
+      continue;
+    }
+
+    if (token === '--database') {
+      const nextToken = argv[index + 1];
+      if (!nextToken) {
+        throw new Error('Invalid --database value. Expected non-empty database name.');
+      }
+      parsedArgs.databaseName = nextToken.trim();
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith('--config=')) {
+      const configPath = token.slice('--config='.length).trim();
+      if (!configPath) {
+        throw new Error('Invalid --config value. Expected non-empty config path.');
+      }
+      parsedArgs.wranglerConfig = configPath;
+      continue;
+    }
+
+    if (token === '--config') {
+      const nextToken = argv[index + 1];
+      if (!nextToken) {
+        throw new Error('Invalid --config value. Expected non-empty config path.');
+      }
+      parsedArgs.wranglerConfig = nextToken.trim();
       index += 1;
       continue;
     }
@@ -376,18 +428,21 @@ INSERT INTO simulation_events (
 `;
 }
 
-function runWranglerExecute(extraArgs, description) {
+function runWranglerExecute(extraArgs, description, commandOptions) {
+  const modeArg = commandOptions.remote ? '--remote' : '--local';
   const baseArgs = [
     'wrangler',
     'd1',
     'execute',
-    DATABASE_NAME,
-    '--local',
+    commandOptions.databaseName,
+    modeArg,
     '--config',
-    WRANGLER_CONFIG,
-    '--persist-to',
-    PERSIST_PATH
+    commandOptions.wranglerConfig
   ];
+
+  if (!commandOptions.remote) {
+    baseArgs.push('--persist-to', commandOptions.persistPath);
+  }
 
   const commandArgs = [...baseArgs, ...extraArgs];
   const result = spawnSync('npx', commandArgs, {
@@ -410,7 +465,7 @@ function runWranglerExecute(extraArgs, description) {
   return result.stdout || '';
 }
 
-function executeSqlPhase(sql, phaseName) {
+function executeSqlPhase(sql, phaseName, commandOptions) {
   const tempFileName = `.tmp-init-${phaseName.replace(/\s+/g, '-').toLowerCase()}.sql`;
   const tempFilePath = path.resolve(WORKERS_DIR, tempFileName);
 
@@ -418,7 +473,7 @@ function executeSqlPhase(sql, phaseName) {
 
   try {
     console.log(`🧩 ${phaseName}...`);
-    runWranglerExecute([`--file=${tempFileName}`], phaseName);
+    runWranglerExecute([`--file=${tempFileName}`], phaseName, commandOptions);
     console.log(`✅ ${phaseName} complete`);
   } finally {
     if (fs.existsSync(tempFilePath)) {
@@ -427,8 +482,8 @@ function executeSqlPhase(sql, phaseName) {
   }
 }
 
-function executeSqlCommandJson(command, description) {
-  const output = runWranglerExecute([`--command=${command}`, '--json'], description);
+function executeSqlCommandJson(command, description, commandOptions) {
+  const output = runWranglerExecute([`--command=${command}`, '--json'], description, commandOptions);
   const parsedOutput = JSON.parse(output);
   const [firstResult] = Array.isArray(parsedOutput) ? parsedOutput : [];
   const [firstRow] = firstResult?.results || [];
@@ -441,7 +496,7 @@ function assertVerification(checkName, isValid, details) {
   }
 }
 
-function runVerification(schemaOnly) {
+function runVerification(schemaOnly, commandOptions) {
   console.log('🔍 Verifying local database invariants...');
 
   const expectedCounts = getExpectedSeedCounts();
@@ -450,7 +505,8 @@ function runVerification(schemaOnly) {
      FROM sqlite_master
      WHERE type = 'table'
        AND name IN ('garden_state', 'entities', 'simulation_events', 'simulation_control', 'system_metadata')`,
-    'Verifying required tables'
+    'Verifying required tables',
+    commandOptions
   );
   assertVerification(
     'required tables',
@@ -462,7 +518,8 @@ function runVerification(schemaOnly) {
     `SELECT COUNT(*) AS weather_column_count
      FROM pragma_table_info('garden_state')
      WHERE name = 'weather_state'`,
-    'Verifying weather_state column'
+    'Verifying weather_state column',
+    commandOptions
   );
   assertVerification(
     'weather_state column',
@@ -475,7 +532,8 @@ function runVerification(schemaOnly) {
      FROM system_metadata
      WHERE key = 'schema_version'
      LIMIT 1`,
-    'Verifying schema version'
+    'Verifying schema version',
+    commandOptions
   );
   assertVerification(
     'schema version',
@@ -485,7 +543,8 @@ function runVerification(schemaOnly) {
 
   const tickZeroCheck = executeSqlCommandJson(
     'SELECT COUNT(*) AS tick_zero_count FROM garden_state WHERE tick = 0',
-    'Verifying tick zero baseline'
+    'Verifying tick zero baseline',
+    commandOptions
   );
   assertVerification(
     'tick zero baseline',
@@ -495,12 +554,14 @@ function runVerification(schemaOnly) {
 
   const entityCountCheck = executeSqlCommandJson(
     'SELECT COUNT(*) AS entity_count FROM entities',
-    'Verifying entity count'
+    'Verifying entity count',
+    commandOptions
   );
 
   const eventCountCheck = executeSqlCommandJson(
     'SELECT COUNT(*) AS event_count FROM simulation_events',
-    'Verifying event count'
+    'Verifying event count',
+    commandOptions
   );
 
   if (schemaOnly) {
@@ -556,29 +617,40 @@ VALUES ('schema_version', '${CURRENT_SCHEMA_VERSION}', datetime('now'));
 }
 
 function initializeDatabase(options) {
-  const { seed, schemaOnly, verifyOnly } = options;
+  const { seed, schemaOnly, verifyOnly, remote } = options;
+  const commandOptions = {
+    remote,
+    databaseName: options.databaseName,
+    wranglerConfig: options.wranglerConfig,
+    persistPath: options.persistPath
+  };
 
-  console.log('🌿 Chaos Garden Local Database Initialization');
-  console.log('===========================================');
-  console.log(`Mode: ${verifyOnly ? 'verify-only' : schemaOnly ? 'schema-only' : 'full reset + deterministic seed'}`);
+  console.log(`🌿 Chaos Garden ${remote ? 'Remote' : 'Local'} Database Initialization`);
+  console.log('================================================');
+  console.log(
+    `Mode: ${verifyOnly ? 'verify-only' : schemaOnly ? 'schema-only' : 'full reset + deterministic seed'}`
+  );
+  console.log(`Target: ${remote ? 'remote D1' : 'local D1 emulator'}`);
+  console.log(`Database: ${commandOptions.databaseName}`);
+  console.log(`Wrangler config: ${commandOptions.wranglerConfig}`);
   console.log(`Seed: ${seed}`);
 
   if (verifyOnly) {
-    runVerification(schemaOnly);
+    runVerification(schemaOnly, commandOptions);
     return;
   }
 
-  executeSqlPhase(createCleanupSql(), 'Dropping existing schema artifacts');
-  executeSqlPhase(fs.readFileSync(SCHEMA_PATH, 'utf-8'), 'Applying schema.sql');
-  executeSqlPhase(createSchemaVersionNormalizationSql(), 'Normalizing schema version');
+  executeSqlPhase(createCleanupSql(), 'Dropping existing schema artifacts', commandOptions);
+  executeSqlPhase(fs.readFileSync(SCHEMA_PATH, 'utf-8'), 'Applying schema.sql', commandOptions);
+  executeSqlPhase(createSchemaVersionNormalizationSql(), 'Normalizing schema version', commandOptions);
 
   if (!schemaOnly) {
-    executeSqlPhase(createSeedSql(seed), 'Applying deterministic seed data');
+    executeSqlPhase(createSeedSql(seed), 'Applying deterministic seed data', commandOptions);
   }
 
-  runVerification(schemaOnly);
+  runVerification(schemaOnly, commandOptions);
 
-  console.log('🎉 Local D1 initialization completed successfully');
+  console.log(`🎉 ${remote ? 'Remote' : 'Local'} D1 initialization completed successfully`);
 }
 
 if (require.main === module) {

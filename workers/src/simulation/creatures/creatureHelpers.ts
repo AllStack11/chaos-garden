@@ -8,6 +8,7 @@ type MutationTrackableTrait =
   | 'photosynthesisRate'
   | 'movementSpeed'
   | 'perceptionRadius'
+  | 'threatDetectionRadius'
   | 'decompositionRate';
 
 function didTraitMutateEnoughToLog(previousValue: number, nextValue: number): boolean {

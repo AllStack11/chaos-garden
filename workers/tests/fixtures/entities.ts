@@ -45,6 +45,7 @@ export function buildHerbivore(overrides: Partial<Entity> = {}): Entity {
     movementSpeed: 2,
     metabolismEfficiency: 1,
     perceptionRadius: 100,
+    threatDetectionRadius: 130,
     lineage: 'origin',
     ...BASE_TIMESTAMPS,
     ...overrides

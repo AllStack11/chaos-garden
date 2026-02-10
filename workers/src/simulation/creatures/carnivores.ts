@@ -21,8 +21,20 @@ import {
   findNearestEntity,
   moveEntityTowardTarget,
   calculateDistanceBetweenEntities,
-  calculateMovementEnergyCost
+  calculateMovementEnergyCost,
+  findCompetingCarnivores,
+  generateExplorationTarget
 } from '../environment/helpers';
+import {
+  AMBUSH_RADIUS,
+  PACK_COORDINATION_RADIUS,
+  STALKING_SPEED_MULTIPLIER,
+  STALKING_ENERGY_COST_MULTIPLIER,
+  HUNT_ABANDONMENT_TICKS,
+  RESTING_ENERGY_THRESHOLD,
+  RESTING_SPEED_MULTIPLIER,
+  RESTING_METABOLISM_MULTIPLIER
+} from '../environment/constants';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
@@ -45,6 +57,12 @@ const MAX_CARCASS_ENERGY = 100;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
 const HUNT_MOVEMENT_COST_MULTIPLIER = 0.75;
 const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
+
+// State tracking for hunting behavior (ephemeral, not persisted)
+const carnivoreHuntingState = new Map<string, {
+  currentTargetId: string | null;
+  ticksSpentHunting: number;
+}>();
 
 /**
  * Create a new carnivore entity.
@@ -100,48 +118,63 @@ export async function processCarnivoreBehaviorDuringTick(
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
   const effectiveMovementSpeed = carnivore.movementSpeed * weatherModifiers.movementModifier;
 
-  // 1. Find nearest prey in perception range.
-  const targetPreyInPerception = findNearestEntity(
-    carnivore,
-    allEntities,
-    'herbivore',
-    carnivore.perceptionRadius
-  );
+  // Initialize or get hunting state for this carnivore
+  if (!carnivoreHuntingState.has(carnivore.id)) {
+    carnivoreHuntingState.set(carnivore.id, {
+      currentTargetId: null,
+      ticksSpentHunting: 0
+    });
+  }
+  const huntState = carnivoreHuntingState.get(carnivore.id)!;
 
-  // 2. If prey is in range, engage hunt behavior.
-  if (targetPreyInPerception) {
-    const distance = calculateDistanceBetweenEntities(carnivore, targetPreyInPerception);
+  // 1. Check if high energy and should rest (conserve energy)
+  if (carnivore.energy >= RESTING_ENERGY_THRESHOLD) {
+    // Check for immediate prey within ambush range
+    const immediatePreyInAmbushRange = findNearestEntity(
+      carnivore,
+      allEntities,
+      'herbivore',
+      AMBUSH_RADIUS
+    );
 
-    if (distance <= HUNTING_DISTANCE) {
-      const energyGained = huntHerbivore(carnivore, targetPreyInPerception);
-      consumed.push(targetPreyInPerception.id);
+    if (!immediatePreyInAmbushRange) {
+      // Rest and explore slowly
+      const restingTarget = generateExplorationTarget(
+        carnivore,
+        DEFAULT_SIMULATION_CONFIG.gardenWidth,
+        DEFAULT_SIMULATION_CONFIG.gardenHeight
+      );
+      moveEntityTowardTarget(carnivore, restingTarget, effectiveMovementSpeed * RESTING_SPEED_MULTIPLIER);
+      carnivore.energy -= BASE_METABOLISM_COST * RESTING_METABOLISM_MULTIPLIER;
+
+      // Skip hunting behavior and continue to reproduction/death checks
+      huntState.currentTargetId = null;
+      huntState.ticksSpentHunting = 0;
     } else {
-      moveEntityTowardTarget(carnivore, targetPreyInPerception.position, effectiveMovementSpeed);
-      const movedDistance = Math.min(distance, effectiveMovementSpeed);
-      const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
-      carnivore.energy -= movementCost * HUNT_MOVEMENT_COST_MULTIPLIER;
+      // Immediate prey - engage hunt
+      performHuntingBehavior(
+        carnivore,
+        allEntities,
+        effectiveMovementSpeed,
+        huntState,
+        consumed
+      );
     }
   } else {
-    // 3. Otherwise, move toward globally nearest prey to prevent edge starvation.
-    const targetPreyAnywhere = findNearestEntity(carnivore, allEntities, 'herbivore');
-    if (targetPreyAnywhere) {
-      const searchSpeed = effectiveMovementSpeed * SEARCH_MOVEMENT_SPEED_MULTIPLIER;
-      const distance = calculateDistanceBetweenEntities(carnivore, targetPreyAnywhere);
-
-      moveEntityTowardTarget(carnivore, targetPreyAnywhere.position, searchSpeed);
-      const movedDistance = Math.min(distance, searchSpeed);
-      const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
-      carnivore.energy -= movementCost * SEARCH_MOVEMENT_COST_MULTIPLIER;
-    } else {
-      // No prey exists at all.
-      carnivore.energy -= BASE_METABOLISM_COST * 0.25;
-    }
+    // 2. Normal hunting behavior
+    performHuntingBehavior(
+      carnivore,
+      allEntities,
+      effectiveMovementSpeed,
+      huntState,
+      consumed
+    );
   }
-  
+
   // 3. Base metabolism
   const tempMultiplier = calculateTemperatureMetabolismMultiplier(environment.temperature);
   carnivore.energy -= BASE_METABOLISM_COST * tempMultiplier;
-  
+
   // 4. Reproduction
   if (carnivore.age <= MAX_REPRODUCTIVE_AGE && carnivore.energy >= REPRODUCTION_THRESHOLD) {
     if (willRandomEventOccur(carnivore.reproductionRate * weatherModifiers.reproductionModifier)) {
@@ -151,21 +184,160 @@ export async function processCarnivoreBehaviorDuringTick(
       }
     }
   }
-  
+
   // 5. Death checks
   if (carnivore.age >= MAX_AGE) {
     carnivore.isAlive = false;
     carnivore.health = 0;
   }
-  
+
   if (carnivore.energy <= 0) {
     carnivore.isAlive = false;
     carnivore.health = 0;
     carnivore.energy = 0;
   }
-  
+
   carnivore.updatedAt = createTimestamp();
   return { offspring, consumed };
+}
+
+/**
+ * Perform hunting behavior with ambush tactics and pack coordination.
+ * Extracted to separate function for clarity.
+ */
+function performHuntingBehavior(
+  carnivore: Entity,
+  allEntities: Entity[],
+  effectiveMovementSpeed: number,
+  huntState: { currentTargetId: string | null; ticksSpentHunting: number },
+  consumed: string[]
+): void {
+  if (carnivore.type !== 'carnivore') return;
+
+  // Find prey in perception range
+  const targetPreyInPerception = findNearestEntity(
+    carnivore,
+    allEntities,
+    'herbivore',
+    carnivore.perceptionRadius
+  );
+
+  if (targetPreyInPerception) {
+    const distance = calculateDistanceBetweenEntities(carnivore, targetPreyInPerception);
+
+    // Check for pack coordination (avoid competing carnivores)
+    const allCarnivores = allEntities.filter(e => e.type === 'carnivore');
+    const competingCarnivores = findCompetingCarnivores(
+      carnivore,
+      allCarnivores,
+      targetPreyInPerception,
+      PACK_COORDINATION_RADIUS
+    );
+
+    // If too much competition, look for alternative prey
+    if (competingCarnivores.length >= 2) {
+      // Find second-best target
+      const allPreyInRange = allEntities.filter(e =>
+        e.type === 'herbivore' &&
+        e.id !== targetPreyInPerception.id &&
+        e.isAlive &&
+        e.health > 0 &&
+        e.energy > 0 &&
+        calculateDistanceBetweenEntities(carnivore, e) <= carnivore.perceptionRadius
+      );
+
+      if (allPreyInRange.length > 0) {
+        // Switch to alternative prey
+        const alternativePrey = allPreyInRange[0];
+        engageHunt(carnivore, alternativePrey, effectiveMovementSpeed, huntState, consumed);
+        return;
+      }
+    }
+
+    // Check for hunt abandonment
+    if (huntState.currentTargetId === targetPreyInPerception.id) {
+      huntState.ticksSpentHunting++;
+
+      if (huntState.ticksSpentHunting >= HUNT_ABANDONMENT_TICKS) {
+        // Abandon hunt - too many ticks chasing this prey
+        huntState.currentTargetId = null;
+        huntState.ticksSpentHunting = 0;
+
+        // Enter exploration mode
+        const explorationTarget = generateExplorationTarget(
+          carnivore,
+          DEFAULT_SIMULATION_CONFIG.gardenWidth,
+          DEFAULT_SIMULATION_CONFIG.gardenHeight
+        );
+        moveEntityTowardTarget(carnivore, explorationTarget, effectiveMovementSpeed * RESTING_SPEED_MULTIPLIER);
+        carnivore.energy -= BASE_METABOLISM_COST * RESTING_METABOLISM_MULTIPLIER;
+        return;
+      }
+    } else {
+      // New target
+      huntState.currentTargetId = targetPreyInPerception.id;
+      huntState.ticksSpentHunting = 1;
+    }
+
+    // Engage hunt
+    engageHunt(carnivore, targetPreyInPerception, effectiveMovementSpeed, huntState, consumed);
+  } else {
+    // No prey in perception - explore instead of omniscient search
+    huntState.currentTargetId = null;
+    huntState.ticksSpentHunting = 0;
+
+    const explorationTarget = generateExplorationTarget(
+      carnivore,
+      DEFAULT_SIMULATION_CONFIG.gardenWidth,
+      DEFAULT_SIMULATION_CONFIG.gardenHeight
+    );
+    const searchSpeed = effectiveMovementSpeed * SEARCH_MOVEMENT_SPEED_MULTIPLIER;
+    const distance = calculateDistanceBetweenEntities(
+      carnivore,
+      { ...carnivore, position: explorationTarget }
+    );
+
+    moveEntityTowardTarget(carnivore, explorationTarget, searchSpeed);
+    const movedDistance = Math.min(distance, searchSpeed);
+    const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
+    carnivore.energy -= movementCost * SEARCH_MOVEMENT_COST_MULTIPLIER;
+  }
+}
+
+/**
+ * Engage in hunting a specific prey with ambush tactics.
+ */
+function engageHunt(
+  carnivore: Entity,
+  prey: Entity,
+  effectiveMovementSpeed: number,
+  huntState: { currentTargetId: string | null; ticksSpentHunting: number },
+  consumed: string[]
+): void {
+  if (carnivore.type !== 'carnivore') return;
+
+  const distance = calculateDistanceBetweenEntities(carnivore, prey);
+
+  if (distance <= HUNTING_DISTANCE) {
+    // Kill prey
+    huntHerbivore(carnivore, prey);
+    consumed.push(prey.id);
+    huntState.currentTargetId = null;
+    huntState.ticksSpentHunting = 0;
+  } else if (distance <= AMBUSH_RADIUS) {
+    // Ambush range - stalk slowly for energy efficiency
+    const stalkingSpeed = effectiveMovementSpeed * STALKING_SPEED_MULTIPLIER;
+    moveEntityTowardTarget(carnivore, prey.position, stalkingSpeed);
+    const movedDistance = Math.min(distance, stalkingSpeed);
+    const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
+    carnivore.energy -= movementCost * STALKING_ENERGY_COST_MULTIPLIER;
+  } else {
+    // Active chase
+    moveEntityTowardTarget(carnivore, prey.position, effectiveMovementSpeed);
+    const movedDistance = Math.min(distance, effectiveMovementSpeed);
+    const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
+    carnivore.energy -= movementCost * HUNT_MOVEMENT_COST_MULTIPLIER;
+  }
 }
 
 /**

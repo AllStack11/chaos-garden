@@ -28,12 +28,16 @@ npm run backend                      # Workers only on localhost:8787
 npm run frontend                     # Astro only on localhost:4321
 npm run type-check:all               # Type-check all workspaces
 npm run type-check -w @chaos-garden/workers   # Type-check workers only
+npm run test -w @chaos-garden/workers         # Run unit tests
+npm run test:watch -w @chaos-garden/workers   # Run tests in watch mode
+npm run test:integration -w @chaos-garden/workers  # Run integration tests
+npm run test:coverage -w @chaos-garden/workers     # Run tests with coverage report
 npm run deploy:workers               # Deploy workers to Cloudflare
 npm run deploy:frontend              # Deploy frontend to Cloudflare Pages
 npm run tail -w @chaos-garden/workers # Stream production worker logs
 ```
 
-No test framework or linter is configured. Type checking is the primary quality mechanism.
+**Testing:** Vitest is configured for the workers workspace. Unit tests are located in `workers/tests/unit/` and integration tests in `workers/tests/integration/`. Type checking and testing are the primary quality mechanisms.
 
 ## Key Conventions
 
