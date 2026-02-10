@@ -10,6 +10,8 @@
     "dev": "echo '🌿 Shared: No dev server needed' && exit 0",
     "backend": "echo '🌿 Shared: This script should be run from the root workspace' && exit 0",
     "frontend": "echo '🎨 Shared: This script should be run from the root workspace' && exit 0",
+    "deploy:workers": "echo '🌿 Shared: Workers deploy is handled by workers workspace' && exit 0",
+    "deploy:frontend": "echo '🎨 Shared: Frontend deploy is handled by frontend workspace' && exit 0",
     "db:init:local": "echo '🌿 Shared: No database to initialize' && exit 0",
     "db:init:remote": "echo '🌿 Shared: No remote database to initialize - handled by workers workspace' && exit 0",
     "db:init:remote:verify": "echo '🌿 Shared: No remote database to verify - handled by workers workspace' && exit 0"

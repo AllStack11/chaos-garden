@@ -8,6 +8,8 @@
     "dev": "astro dev",
     "backend": "echo '🌿 Frontend: This script should be run from the root workspace' && exit 0",
     "frontend": "npm run dev",
+    "deploy:workers": "echo '🌿 Frontend: Workers deploy is handled by workers workspace' && exit 0",
+    "deploy:frontend": "npm run deploy",
     "build": "astro build",
     "preview": "astro preview",
     "deploy": "astro build && wrangler pages deploy dist --project-name ${CLOUDFLARE_PAGES_PROJECT_NAME:-chaos-garden-frontend}",

@@ -10,8 +10,11 @@ import GardenCanvas from '../components/GardenCanvas.astro';
 import StatsPanel from '../components/StatsPanel.astro';
 import NarrativeTicker from '../components/NarrativeTicker.astro';
 
-// API URL — must be set via PUBLIC_API_URL in .env.local (dev) or .env.production (prod)
-const API_URL = import.meta.env.PUBLIC_API_URL;
+// API URL — required at build time
+const API_URL = import.meta.env.PUBLIC_API_URL?.trim();
+if (!API_URL) {
+  throw new Error('Missing PUBLIC_API_URL. Set it in frontend/.env.production or your deploy environment before building.');
+}
 ---
 
 <Layout title="Chaos Garden 🌿">

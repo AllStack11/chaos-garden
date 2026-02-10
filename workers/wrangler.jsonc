@@ -23,13 +23,13 @@
     ]
   },
   "vars": {
-    "CORS_ORIGIN": "https://chaos-garden-api.saadmankabir95.workers.dev",
+    "CORS_ORIGIN": "https://chaos-garden-frontend.pages.dev",
     "ENVIRONMENT": "production"
   },
   "env": {
     "dev": {
       "vars": {
-        "CORS_ORIGIN": "*",
+        "CORS_ORIGIN": "https://chaos-garden-frontend.pages.dev",
         "ENVIRONMENT": "development"
       },
       "d1_databases": [
