@@ -18,7 +18,6 @@ import {
   generatePositionNearParent,
   clampValueToRange
 } from '../environment/helpers';
-import { calculateSunlightForTick } from '../environment/sunlight-calculator';
 import { calculateMoistureGrowthMultiplier } from '../environment/creature-effects';
 
 // Constants
@@ -182,7 +181,7 @@ export function calculatePlantEnergyGainFromPhotosynthesis(
   environment: Environment
 ): number {
   if (plant.type !== 'plant') return 0;
-  const sunlight = calculateSunlightForTick(environment.tick);
+  const sunlight = environment.sunlight;
   const plantEfficiency = plant.photosynthesisRate;
   const moistureMultiplier = calculateMoistureGrowthMultiplier(environment.moisture);
   

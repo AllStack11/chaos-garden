@@ -120,10 +120,11 @@ export async function processCarnivoreBehaviorDuringTick(
     } else {
       // Pursue prey
       moveEntityTowardTarget(carnivore, targetPrey.position);
+      const movedDistance = Math.min(distance, carnivore.movementSpeed);
       
       // Pay movement cost (higher speed = higher cost)
       const movementCost = calculateMovementEnergyCost(
-        carnivore.movementSpeed,
+        movedDistance,
         carnivore.metabolismEfficiency
       );
       carnivore.energy -= movementCost * 1.2; // Hunting is exhausting

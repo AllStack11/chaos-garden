@@ -11,7 +11,7 @@ import { createFakeEventLogger } from '../../../helpers/fake-event-logger';
 describe('simulation/creatures/plants', () => {
   it('calculates higher photosynthesis gain at peak sunlight and ideal moisture', () => {
     const plant = buildPlant({ photosynthesisRate: 1 });
-    const environment = buildEnvironment({ tick: 48, moisture: 0.5 });
+    const environment = buildEnvironment({ tick: 48, sunlight: 1, moisture: 0.5 });
 
     const energyGain = calculatePlantEnergyGainFromPhotosynthesis(plant, environment);
 

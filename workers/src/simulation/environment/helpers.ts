@@ -499,11 +499,11 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
  * @returns Population summary
  */
 export function countEntitiesByType(entities: Entity[]): PopulationSummary {
-    const living = entities.filter(e => e.isAlive === true || (e as any).isAlive === 1);
-    const dead = entities.filter(e => e.isAlive === false || (e as any).isAlive === 0);
+  const living = entities.filter(entity => entity.isAlive);
+  const deadInGarden = entities.filter(entity => !entity.isAlive && entity.energy > 0);
   
   const livingCounts = groupEntitiesByType(living);
-  const deadCounts = groupEntitiesByType(dead);
+  const deadCounts = groupEntitiesByType(deadInGarden);
   
   return {
     plants: livingCounts.plant.length,
@@ -514,8 +514,13 @@ export function countEntitiesByType(entities: Entity[]): PopulationSummary {
     deadHerbivores: deadCounts.herbivore.length,
     deadCarnivores: deadCounts.carnivore.length,
     deadFungi: deadCounts.fungus.length,
-    total: entities.length,
+    allTimeDeadPlants: 0,
+    allTimeDeadHerbivores: 0,
+    allTimeDeadCarnivores: 0,
+    allTimeDeadFungi: 0,
+    total: living.length + deadInGarden.length,
     totalLiving: living.length,
-    totalDead: dead.length
+    totalDead: deadInGarden.length,
+    allTimeDead: 0
   };
 }

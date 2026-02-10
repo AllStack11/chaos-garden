@@ -219,8 +219,18 @@ export async function runSimulationTick(
     // Create the next generation: survivors + new births
     const stillLivingEntities = livingEntities.filter(entity => !deadEntities.includes(entity));
     const allLivingEntitiesAfterTick = [...stillLivingEntities, ...processingResult.newEntities];
-    const allEntitiesAfterTick = [...allLivingEntitiesAfterTick, ...deadEntities];
+    const currentDeadEntitiesInGarden = getCurrentDeadEntitiesInGarden(
+      deadEntities,
+      decomposableDeadEntities
+    );
+    const allEntitiesAfterTick = [...allLivingEntitiesAfterTick, ...currentDeadEntitiesInGarden];
+    const previousPopulations = lockedPreviousState.populationSummary;
     const newPopulations = countEntitiesByType(allEntitiesAfterTick);
+    applyAllTimeDeadSummary(
+      newPopulations,
+      previousPopulations,
+      deadEntities
+    );
 
     // Ensure all living entities are updated for this tick
     for (const entity of allLivingEntitiesAfterTick) {
@@ -228,8 +238,6 @@ export async function runSimulationTick(
     }
     
     // 7. Log population changes and ambient narrative to the buffered logger
-    const previousPopulations = lockedPreviousState.populationSummary;
-    
     await logPopulationChanges(
       tickNumber,
       previousPopulations,
@@ -458,6 +466,54 @@ function filterDeadEntities(entities: Entity[]): Entity[] {
     if (entity.type === 'fungus') return isFungusDead(entity);
     return false;
   });
+}
+
+/**
+ * Merge newly dead entities with existing dead matter still present in the garden.
+ * "In-garden dead" means dead entities with remaining energy (> 0).
+ */
+function getCurrentDeadEntitiesInGarden(
+  newlyDeadEntities: Entity[],
+  existingDeadEntities: Entity[]
+): Entity[] {
+  const entitiesById = new Map<string, Entity>();
+  for (const entity of [...newlyDeadEntities, ...existingDeadEntities]) {
+    if (!entity.isAlive && entity.energy > 0) {
+      entitiesById.set(entity.id, entity);
+    }
+  }
+  return [...entitiesById.values()];
+}
+
+/**
+ * Apply cumulative all-time death counters using previous state + current tick deaths.
+ */
+function applyAllTimeDeadSummary(
+  nextSummary: PopulationSummary,
+  previousSummary: PopulationSummary,
+  newlyDeadEntities: Entity[]
+): void {
+  const newlyDeadByType = {
+    plant: 0,
+    herbivore: 0,
+    carnivore: 0,
+    fungus: 0
+  };
+
+  for (const deadEntity of newlyDeadEntities) {
+    newlyDeadByType[deadEntity.type] += 1;
+  }
+
+  nextSummary.allTimeDeadPlants = previousSummary.allTimeDeadPlants + newlyDeadByType.plant;
+  nextSummary.allTimeDeadHerbivores = previousSummary.allTimeDeadHerbivores + newlyDeadByType.herbivore;
+  nextSummary.allTimeDeadCarnivores = previousSummary.allTimeDeadCarnivores + newlyDeadByType.carnivore;
+  nextSummary.allTimeDeadFungi = previousSummary.allTimeDeadFungi + newlyDeadByType.fungus;
+  nextSummary.allTimeDead =
+    previousSummary.allTimeDead +
+    newlyDeadByType.plant +
+    newlyDeadByType.herbivore +
+    newlyDeadByType.carnivore +
+    newlyDeadByType.fungus;
 }
 
 // ==========================================

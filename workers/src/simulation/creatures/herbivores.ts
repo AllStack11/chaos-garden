@@ -121,10 +121,11 @@ export async function processHerbivoreBehaviorDuringTick(
     } else {
       // Move toward plant
       moveEntityTowardTarget(herbivore, targetPlant.position);
+      const movedDistance = Math.min(distance, herbivore.movementSpeed);
       
       // Pay movement cost
       const movementCost = calculateMovementEnergyCost(
-        herbivore.movementSpeed,
+        movedDistance,
         herbivore.metabolismEfficiency
       );
       herbivore.energy -= movementCost;

@@ -42,7 +42,8 @@ export async function getLatestGardenStateFromDatabase(
     `SELECT id, tick, timestamp, temperature, sunlight, moisture,
             plants, herbivores, carnivores, fungi,
             dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
-            total_living, total_dead, total
+            all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
+            total_living, total_dead, all_time_dead, total
      FROM garden_state
      ORDER BY tick DESC
      LIMIT 1`
@@ -88,7 +89,8 @@ export async function getGardenStateByTickFromDatabase(
     `SELECT id, tick, timestamp, temperature, sunlight, moisture,
             plants, herbivores, carnivores, fungi,
             dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
-            total_living, total_dead, total
+            all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
+            total_living, total_dead, all_time_dead, total
      FROM garden_state
      WHERE tick = ?`,
     [tick]
@@ -119,8 +121,9 @@ export async function saveGardenStateToDatabase(
       tick, timestamp, temperature, sunlight, moisture,
       plants, herbivores, carnivores, fungi,
       dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
-      total_living, total_dead, total
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
+      total_living, total_dead, all_time_dead, total
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tick) DO UPDATE SET
       timestamp = excluded.timestamp,
       temperature = excluded.temperature,
@@ -134,8 +137,13 @@ export async function saveGardenStateToDatabase(
       dead_herbivores = excluded.dead_herbivores,
       dead_carnivores = excluded.dead_carnivores,
       dead_fungi = excluded.dead_fungi,
+      all_time_dead_plants = excluded.all_time_dead_plants,
+      all_time_dead_herbivores = excluded.all_time_dead_herbivores,
+      all_time_dead_carnivores = excluded.all_time_dead_carnivores,
+      all_time_dead_fungi = excluded.all_time_dead_fungi,
       total_living = excluded.total_living,
       total_dead = excluded.total_dead,
+      all_time_dead = excluded.all_time_dead,
       total = excluded.total`,
     [
       state.tick,
@@ -151,8 +159,13 @@ export async function saveGardenStateToDatabase(
       state.populationSummary.deadHerbivores,
       state.populationSummary.deadCarnivores,
       state.populationSummary.deadFungi,
+      state.populationSummary.allTimeDeadPlants,
+      state.populationSummary.allTimeDeadHerbivores,
+      state.populationSummary.allTimeDeadCarnivores,
+      state.populationSummary.allTimeDeadFungi,
       state.populationSummary.totalLiving,
       state.populationSummary.totalDead,
+      state.populationSummary.allTimeDead,
       state.populationSummary.total
     ]
   );
@@ -453,8 +466,13 @@ function mapRowToGardenState(row: GardenStateRow): GardenState {
     deadHerbivores: row.dead_herbivores || 0,
     deadCarnivores: row.dead_carnivores || 0,
     deadFungi: row.dead_fungi || 0,
+    allTimeDeadPlants: row.all_time_dead_plants || 0,
+    allTimeDeadHerbivores: row.all_time_dead_herbivores || 0,
+    allTimeDeadCarnivores: row.all_time_dead_carnivores || 0,
+    allTimeDeadFungi: row.all_time_dead_fungi || 0,
     totalLiving: row.total_living || 0,
     totalDead: row.total_dead || 0,
+    allTimeDead: row.all_time_dead || 0,
     total: row.total || 0,
   };
 

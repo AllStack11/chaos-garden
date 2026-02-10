@@ -5,7 +5,7 @@
  * Like the gradual adaptation of organisms over generations,
  * our database schema may need to evolve as the system grows.
  * 
- * Current version: 1.4.0
+ * Current version: 1.5.0
  */
 
 import type { D1Database } from '../types/worker';
@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.4.0';
+export const CURRENT_SCHEMA_VERSION = '1.5.0';
 
 /**
  * Check if the database schema is up to date.
@@ -81,15 +81,21 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
+      await migrateToV1_5_0(db);
     } else if (currentVersion === '1.0.0') {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
+      await migrateToV1_5_0(db);
     } else if (currentVersion === '1.1.0') {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
+      await migrateToV1_5_0(db);
     } else if (currentVersion === '1.3.0') {
       await migrateToV1_4_0(db);
+      await migrateToV1_5_0(db);
+    } else if (currentVersion === '1.4.0') {
+      await migrateToV1_5_0(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
@@ -267,6 +273,53 @@ async function migrateToV1_4_0(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 1.5.0.
+ * Adds cumulative all-time death counters to garden state snapshots.
+ */
+async function migrateToV1_5_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.5.0...');
+
+  const addColumnStatements = [
+    'ALTER TABLE garden_state ADD COLUMN all_time_dead_plants INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE garden_state ADD COLUMN all_time_dead_herbivores INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE garden_state ADD COLUMN all_time_dead_carnivores INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE garden_state ADD COLUMN all_time_dead_fungi INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE garden_state ADD COLUMN all_time_dead INTEGER NOT NULL DEFAULT 0'
+  ];
+
+  for (const statement of addColumnStatements) {
+    const result = await executeRaw(db, statement);
+    if (!result.success && !result.error?.includes('duplicate column name')) {
+      throw new Error(`Failed to execute migration step "${statement}": ${result.error}`);
+    }
+  }
+
+  const backfillResult = await executeRaw(
+    db,
+    `UPDATE garden_state
+     SET all_time_dead_plants = COALESCE(NULLIF(all_time_dead_plants, 0), COALESCE(dead_plants, 0)),
+         all_time_dead_herbivores = COALESCE(NULLIF(all_time_dead_herbivores, 0), COALESCE(dead_herbivores, 0)),
+         all_time_dead_carnivores = COALESCE(NULLIF(all_time_dead_carnivores, 0), COALESCE(dead_carnivores, 0)),
+         all_time_dead_fungi = COALESCE(NULLIF(all_time_dead_fungi, 0), COALESCE(dead_fungi, 0)),
+         all_time_dead = COALESCE(NULLIF(all_time_dead, 0), COALESCE(total_dead, 0))`
+  );
+  if (!backfillResult.success) {
+    throw new Error(`Failed to backfill all-time dead columns: ${backfillResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '1.5.0', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.5.0 complete');
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  * 
@@ -294,6 +347,7 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_1_0(db);
     await migrateToV1_3_0(db);
     await migrateToV1_4_0(db);
+    await migrateToV1_5_0(db);
     
     console.log('Database initialization complete');
     return true;

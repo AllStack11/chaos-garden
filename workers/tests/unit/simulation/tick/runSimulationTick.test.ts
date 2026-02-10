@@ -94,9 +94,14 @@ describe('simulation/tick/runSimulationTick', () => {
         deadHerbivores: 0,
         deadCarnivores: 0,
         deadFungi: 0,
+        allTimeDeadPlants: 0,
+        allTimeDeadHerbivores: 0,
+        allTimeDeadCarnivores: 0,
+        allTimeDeadFungi: 0,
         total: 1,
         totalLiving: 1,
-        totalDead: 0
+        totalDead: 0,
+        allTimeDead: 0
       }
     };
 
@@ -148,7 +153,9 @@ describe('simulation/tick/runSimulationTick', () => {
     expect(result.deaths).toBe(1);
     expect(mockEventLoggerFactories.eventLogger.logDeath).toHaveBeenCalledTimes(1);
     expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, ['plant-dead'], 1);
-    expect(result.populations.total).toBe(1);
+    expect(result.populations.total).toBe(0);
+    expect(result.populations.totalDead).toBe(0);
+    expect(result.populations.allTimeDead).toBe(1);
   });
 
   it('persists offspring with assigned bornAtTick and gardenStateId', async () => {
@@ -261,9 +268,14 @@ describe('simulation/tick/runSimulationTick', () => {
         deadHerbivores: 0,
         deadCarnivores: 0,
         deadFungi: 0,
+        allTimeDeadPlants: 0,
+        allTimeDeadHerbivores: 0,
+        allTimeDeadCarnivores: 0,
+        allTimeDeadFungi: 0,
         total: 1,
         totalLiving: 1,
-        totalDead: 0
+        totalDead: 0,
+        allTimeDead: 0
       }
     };
 
@@ -281,9 +293,14 @@ describe('simulation/tick/runSimulationTick', () => {
         deadHerbivores: 0,
         deadCarnivores: 0,
         deadFungi: 0,
+        allTimeDeadPlants: 0,
+        allTimeDeadHerbivores: 0,
+        allTimeDeadCarnivores: 0,
+        allTimeDeadFungi: 0,
         total: 3,
         totalLiving: 3,
-        totalDead: 0
+        totalDead: 0,
+        allTimeDead: 0
       }
     };
 

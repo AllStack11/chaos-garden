@@ -132,13 +132,18 @@ export interface PopulationSummary {
   herbivores: number;
   carnivores: number;
   fungi: number;
-  deadPlants: number;
-  deadHerbivores: number;
-  deadCarnivores: number;
-  deadFungi: number;
+  deadPlants: number; // Current dead matter still in garden
+  deadHerbivores: number; // Current dead matter still in garden
+  deadCarnivores: number; // Current dead matter still in garden
+  deadFungi: number; // Current dead matter still in garden
+  allTimeDeadPlants: number;
+  allTimeDeadHerbivores: number;
+  allTimeDeadCarnivores: number;
+  allTimeDeadFungi: number;
   total: number;
   totalLiving: number;
-  totalDead: number;
+  totalDead: number; // Current dead matter still in garden
+  allTimeDead: number;
 }
 
 export interface HealthStatus {
@@ -352,8 +357,13 @@ export interface GardenStateRow {
   dead_herbivores: number;
   dead_carnivores: number;
   dead_fungi: number;
+  all_time_dead_plants: number;
+  all_time_dead_herbivores: number;
+  all_time_dead_carnivores: number;
+  all_time_dead_fungi: number;
   total_living: number;
   total_dead: number;
+  all_time_dead: number;
   total: number;
 }
 
