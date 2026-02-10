@@ -40,8 +40,7 @@ const HERBIVORE_ARCHETYPES = [
 ];
 
 const CARNIVORE_ARCHETYPES = [
-  { name: 'sprinter', count: 2, movementSpeed: 3.8, metabolismEfficiency: 1.0, reproductionRate: 0.02, perceptionRadius: 155 },
-  { name: 'hunter', count: 1, movementSpeed: 3.4, metabolismEfficiency: 1.15, reproductionRate: 0.02, perceptionRadius: 175 },
+  { name: 'sprinter', count: 1, movementSpeed: 3.8, metabolismEfficiency: 1.0, reproductionRate: 0.02, perceptionRadius: 155 },
   { name: 'patient', count: 1, movementSpeed: 3.0, metabolismEfficiency: 1.2, reproductionRate: 0.02, perceptionRadius: 165 }
 ];
 

@@ -40,6 +40,8 @@ const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
 const MAX_REPRODUCTIVE_AGE = 110; // older herbivores can no longer reproduce
 const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
+const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
+const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.85;
 
 /**
  * Create a new herbivore entity.
@@ -95,10 +97,10 @@ export async function processHerbivoreBehaviorDuringTick(
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
   const effectiveMovementSpeed = herbivore.movementSpeed * weatherModifiers.movementModifier;
 
-  // 1. Find nearest plant
+  // 1. Find nearest plant in perception range.
   const targetPlant = findNearestEntity(herbivore, allEntities, 'plant', herbivore.perceptionRadius);
 
-  // 2. Move toward plant if found
+  // 2. If a plant is in range, move/eat normally.
   if (targetPlant) {
     const distance = calculateDistanceBetweenEntities(herbivore, targetPlant);
 
@@ -119,8 +121,23 @@ export async function processHerbivoreBehaviorDuringTick(
       herbivore.energy -= movementCost;
     }
   } else {
-    // No plants found - wander randomly
-    herbivore.energy -= BASE_METABOLISM_COST * 2; // Extra cost for aimless wandering
+    // 3. Otherwise, move toward the nearest plant anywhere to prevent edge starvation.
+    const targetPlantAnywhere = findNearestEntity(herbivore, allEntities, 'plant');
+    if (targetPlantAnywhere) {
+      const searchSpeed = effectiveMovementSpeed * SEARCH_MOVEMENT_SPEED_MULTIPLIER;
+      const distance = calculateDistanceBetweenEntities(herbivore, targetPlantAnywhere);
+
+      moveEntityTowardTarget(herbivore, targetPlantAnywhere.position, searchSpeed);
+      const movedDistance = Math.min(distance, searchSpeed);
+      const movementCost = calculateMovementEnergyCost(
+        movedDistance,
+        herbivore.metabolismEfficiency
+      );
+      herbivore.energy -= movementCost * SEARCH_MOVEMENT_COST_MULTIPLIER;
+    } else {
+      // No plants exist at all.
+      herbivore.energy -= BASE_METABOLISM_COST * 0.25;
+    }
   }
   
   // 3. Base metabolism

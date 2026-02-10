@@ -225,6 +225,7 @@ export async function runSimulationTick(
     metrics.processing_duration = Date.now() - processingStart;
     
     // 6. Filter dead entities and log their passing
+    const MINIMUM_DECOMPOSABLE_CORPSE_ENERGY = 15;
     const deadEntities = filterDeadEntities(livingEntities);
     for (const dead of deadEntities) {
       let cause = 'unknown cause';
@@ -232,10 +233,17 @@ export async function runSimulationTick(
       else if (dead.type === 'herbivore') cause = getHerbivoreCauseOfDeath(dead);
       else if (dead.type === 'carnivore') cause = getCarnivoreCauseOfDeath(dead);
       else if (dead.type === 'fungus') cause = getFungusCauseOfDeath(dead);
-      
+
       await eventLogger.logDeath(dead, cause);
     }
-    
+
+    // Ensure every corpse retains enough energy to be visible and decomposable by fungi.
+    // Without this floor, starvation deaths (energy = 0) are filtered out by the
+    // database query (energy > 0) and never appear on screen.
+    for (const dead of deadEntities) {
+      dead.energy = Math.max(dead.energy, MINIMUM_DECOMPOSABLE_CORPSE_ENERGY);
+    }
+
     // Create the next generation: survivors + new births
     const stillLivingEntities = livingEntities.filter(entity => !deadEntities.includes(entity));
     const allLivingEntitiesAfterTick = [...stillLivingEntities, ...processingResult.newEntities];

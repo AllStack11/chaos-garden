@@ -350,8 +350,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL;
           if (canvas && typeof canvas.getEntityCanvasPosition === 'function') {
              const pos = canvas.getEntityCanvasPosition(this.state.selectedEntity);
              if (pos) {
-                selectionInfo.style.left = `${pos.x}px`;
-                selectionInfo.style.top = `${pos.y}px`;
+                this.positionSelectionPanel(selectionInfo, pos);
              }
           }
         }
@@ -368,6 +367,37 @@ const API_URL = import.meta.env.PUBLIC_API_URL;
       if (lastUpdate) lastUpdate.textContent = new Date().toLocaleTimeString();
 
       this.updateStatusUI();
+    }
+
+    private positionSelectionPanel(selectionInfo: HTMLElement, pos: { x: number; y: number }) {
+      const margin = 12;
+
+      // Place near entity first to measure size
+      selectionInfo.style.left = `${pos.x}px`;
+      selectionInfo.style.top = `${pos.y}px`;
+
+      requestAnimationFrame(() => {
+        const rect = selectionInfo.getBoundingClientRect();
+
+        // Center horizontally
+        const desiredLeft = pos.x - rect.width / 2;
+        const clampedLeft = Math.min(
+          Math.max(margin, desiredLeft),
+          Math.max(margin, window.innerWidth - rect.width - margin),
+        );
+
+        // Prefer placing below; if not enough room, place above
+        const spaceBelow = window.innerHeight - (pos.y + margin);
+        const placeAbove = spaceBelow < rect.height + margin;
+        const desiredTop = placeAbove ? pos.y - rect.height - margin : pos.y + margin;
+        const clampedTop = Math.min(
+          Math.max(margin, desiredTop),
+          Math.max(margin, window.innerHeight - rect.height - margin),
+        );
+
+        selectionInfo.style.left = `${clampedLeft}px`;
+        selectionInfo.style.top = `${clampedTop}px`;
+      });
     }
 
     private async checkHealth() {

@@ -343,7 +343,7 @@ export interface SimulationConfig {
   
   // Energy thresholds
   plantReproductionThreshold: number;     // 80
-  herbivoreReproductionThreshold: number; // 90
+  herbivoreReproductionThreshold: number; // 72
   carnivoreReproductionThreshold: number; // 95
   
   // Metabolism costs
@@ -373,9 +373,9 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   maxHerbivores: 100,
   maxCarnivores: 50,
   maxTotalEntities: 500,
-  plantReproductionThreshold: 80,
-  herbivoreReproductionThreshold: 90,
-  carnivoreReproductionThreshold: 95,
+  plantReproductionThreshold: 69,
+  herbivoreReproductionThreshold: 72,
+  carnivoreReproductionThreshold: 90,
   baseEnergyCostPerTick: 1,
   movementEnergyCostPerPixel: 0.08,
   basePhotosynthesisRate: 2.3,

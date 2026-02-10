@@ -45,7 +45,7 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
     },
     transitions: [
       { targetState: 'OVERCAST', weight: 30 },
-      { targetState: 'DROUGHT', weight: 10 },
+      { targetState: 'DROUGHT', weight: 6 },
       { targetState: 'FOG', weight: 15 },
     ],
   },
@@ -66,7 +66,7 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
     transitions: [
       { targetState: 'CLEAR', weight: 20 },
       { targetState: 'RAIN', weight: 35 },
-      { targetState: 'DROUGHT', weight: 10 },
+      { targetState: 'DROUGHT', weight: 6 },
       { targetState: 'FOG', weight: 15 },
     ],
   },
@@ -87,7 +87,7 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
     transitions: [
       { targetState: 'CLEAR', weight: 10 },
       { targetState: 'OVERCAST', weight: 30 },
-      { targetState: 'STORM', weight: 25 },
+      { targetState: 'STORM', weight: 16 },
       { targetState: 'FOG', weight: 5 },
     ],
   },
