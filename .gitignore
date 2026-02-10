@@ -11,6 +11,9 @@
 # Dependencies & Package Management
 # ==========================================
 
+#Agent Files
+.claude
+
 # Node.js dependencies
 node_modules/
 

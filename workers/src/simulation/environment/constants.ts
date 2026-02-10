@@ -84,4 +84,4 @@ export const SEVERE_HEALTH_PENALTY_MULTIPLIER = 0.3;
 export const SEVERE_ENERGY_PENALTY_MULTIPLIER = 0.2;
 
 /** Drought stress energy penalty */
-export const DROUGHT_STRESS_ENERGY_PENALTY = 0.5;
+export const DROUGHT_STRESS_ENERGY_PENALTY = 0.4;

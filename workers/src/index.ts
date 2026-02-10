@@ -21,6 +21,7 @@ import {
   getAllDecomposableDeadEntitiesFromDatabase,
 } from './db/queries';
 import type { HealthStatus } from '@chaos-garden/shared';
+import { checkRateLimitForRequest, getRateLimitResetTimeForRequest } from './utils/rate-limiter';
 
 // ==========================================
 // Environment Type Definition
@@ -244,6 +245,29 @@ export default {
       return new Response(null, {
         headers: getCorsHeaders(corsOrigin)
       });
+    }
+
+    // Check rate limit (skip for health check to allow monitoring)
+    if (path !== '/api/health') {
+      const isAllowed = checkRateLimitForRequest(request);
+      if (!isAllowed) {
+        const resetTime = getRateLimitResetTimeForRequest(request);
+        const retryAfterSeconds = Math.ceil((resetTime - Date.now()) / 1000);
+
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Rate limit exceeded',
+          retryAfter: retryAfterSeconds,
+          timestamp: new Date().toISOString()
+        }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': retryAfterSeconds.toString(),
+            ...getCorsHeaders(corsOrigin)
+          }
+        });
+      }
     }
 
     // Route requests

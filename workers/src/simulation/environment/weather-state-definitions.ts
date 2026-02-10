@@ -120,10 +120,10 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
     modifiers: {
       temperatureOffset: 3.0,
       sunlightMultiplier: 1.1,
-      moistureChangePerTick: -0.02,
-      photosynthesisModifier: 0.7,
-      movementModifier: 0.9,
-      reproductionModifier: 0.8,
+      moistureChangePerTick: -0.015,
+      photosynthesisModifier: 0.75,
+      movementModifier: 0.92,
+      reproductionModifier: 0.85,
     },
     transitions: [
       { targetState: 'CLEAR', weight: 40 },
