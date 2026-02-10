@@ -15,7 +15,11 @@ interface SeedEntity {
 interface ParsedArgs {
   schemaOnly: boolean;
   verifyOnly: boolean;
+  remote: boolean;
   seed: number;
+  databaseName: string;
+  wranglerConfig: string;
+  persistPath: string;
 }
 
 const {
@@ -44,7 +48,11 @@ describe('scripts/init-local-db', () => {
     expect(parsed).toEqual({
       schemaOnly: false,
       verifyOnly: false,
-      seed: DEFAULT_SEED
+      remote: false,
+      seed: DEFAULT_SEED,
+      databaseName: 'chaos-garden-db',
+      wranglerConfig: 'wrangler.local.jsonc',
+      persistPath: '.wrangler/local-state'
     });
   });
 
@@ -54,7 +62,11 @@ describe('scripts/init-local-db', () => {
     expect(parsed).toEqual({
       schemaOnly: true,
       verifyOnly: false,
-      seed: 42
+      remote: false,
+      seed: 42,
+      databaseName: 'chaos-garden-db',
+      wranglerConfig: 'wrangler.local.jsonc',
+      persistPath: '.wrangler/local-state'
     });
   });
 

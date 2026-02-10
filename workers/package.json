@@ -20,6 +20,7 @@
     "test:integration": "vitest run tests/integration",
     "test:coverage": "vitest run tests/unit tests/integration --coverage",
     "test:ci": "npm run type-check && npm run test:coverage",
+    "test:all": "npm run test:ci",
     "tail": "wrangler tail -e dev",
     "clean": "echo '🧹 Workers: No build artifacts to clean'",
     "type-check": "tsc --noEmit"

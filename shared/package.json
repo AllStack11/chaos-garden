@@ -6,6 +6,9 @@
   "main": "types.ts",
   "scripts": {
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:all": "npm run test",
     "clean": "echo '🧹 Shared: No build artifacts to clean'",
     "dev": "echo '🌿 Shared: No dev server needed' && exit 0",
     "backend": "echo '🌿 Shared: This script should be run from the root workspace' && exit 0",

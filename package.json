@@ -15,6 +15,7 @@
     "db:init:local": "npm run db:init:local -w @chaos-garden/workers",
     "db:init:remote": "npm run db:init:remote -w @chaos-garden/workers",
     "db:init:remote:verify": "npm run db:init:remote:verify -w @chaos-garden/workers",
+    "test:all": "npm run test -w @chaos-garden/shared && npm run test:ci -w @chaos-garden/workers && npm run test -w @chaos-garden/frontend",
     "type-check:all": "npm run type-check -w @chaos-garden/shared && npm run type-check -w @chaos-garden/workers && npm run type-check -w @chaos-garden/frontend",
     "deploy:workers": "npm run deploy -w @chaos-garden/workers",
     "deploy:workers:with-db-init": "npm run db:init:remote && npm run deploy:workers",

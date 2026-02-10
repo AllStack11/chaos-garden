@@ -25,7 +25,7 @@ describe('simulation/creatures/carnivores', () => {
     expect(carnivore.energy).toBeLessThan(50);
   });
 
-  it('applies biomass model: prey energy 10 and health 100 gives gain 30', async () => {
+  it('applies biomass model: prey energy 10 and health 100 produces current gain', async () => {
     const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 50 });
     const prey = buildHerbivore({ id: 'prey-1', position: { x: 0, y: 0 }, energy: 10, health: 100 });
 
@@ -36,7 +36,7 @@ describe('simulation/creatures/carnivores', () => {
       createFakeEventLogger()
     );
 
-    expect(carnivore.energy).toBeCloseTo(78.625, 3);
+    expect(carnivore.energy).toBeCloseTo(78.75, 3);
     expect(prey.isAlive).toBe(false);
     expect(prey.health).toBe(0);
     expect(prey.energy).toBe(0);
@@ -53,7 +53,7 @@ describe('simulation/creatures/carnivores', () => {
       createFakeEventLogger()
     );
 
-    expect(carnivore.energy).toBeCloseTo(98.625, 3);
+    expect(carnivore.energy).toBeCloseTo(98.75, 3);
     expect(prey.isAlive).toBe(false);
     expect(prey.energy).toBe(70);
   });

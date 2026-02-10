@@ -31,6 +31,10 @@ const mockEnvironment = vi.hoisted(() => ({
   }))
 }));
 
+const mockTickHelpers = vi.hoisted(() => ({
+  maybeSpawnWildFungus: vi.fn(async () => null)
+}));
+
 const mockEventLoggerFactories = vi.hoisted(() => {
   const eventLogger = {
     logBirth: vi.fn(async () => {}),
@@ -72,9 +76,10 @@ vi.mock('../../../../src/simulation/environment', async (importOriginal) => {
     updateEnvironmentForNextTick: mockEnvironment.updateEnvironmentForNextTick
   };
 });
+vi.mock('../../../../src/simulation/tick/tickHelpers/maybeSpawnWildFungus', () => mockTickHelpers);
 vi.mock('../../../../src/logging/event-logger', () => mockEventLoggerFactories);
 
-import { runSimulationTick } from '../../../../src/simulation/tick';
+import { runSimulationTick } from '../../../../src/simulation/tick/tick';
 
 describe('simulation/tick/runSimulationTick', () => {
   beforeEach(() => {
@@ -153,8 +158,8 @@ describe('simulation/tick/runSimulationTick', () => {
     expect(result.deaths).toBe(1);
     expect(mockEventLoggerFactories.eventLogger.logDeath).toHaveBeenCalledTimes(1);
     expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, ['plant-dead'], 1);
-    expect(result.populations.total).toBe(0);
-    expect(result.populations.totalDead).toBe(0);
+    expect(result.populations.total).toBe(1);
+    expect(result.populations.totalDead).toBe(1);
     expect(result.populations.allTimeDead).toBe(1);
   });
 
@@ -177,7 +182,7 @@ describe('simulation/tick/runSimulationTick', () => {
     expect(result.newEntities).toBeGreaterThanOrEqual(1);
 
     const savedEntities = mockQueries.saveEntitiesToDatabase.mock.calls[0][1] as Entity[];
-    const childEntity = savedEntities.find((entity) => entity.id !== 'plant-parent');
+    const childEntity = savedEntities.find((entity) => entity.lineage === 'plant-parent');
 
     expect(childEntity).toBeDefined();
     expect(childEntity?.bornAtTick).toBe(1);

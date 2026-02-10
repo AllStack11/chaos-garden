@@ -29,6 +29,33 @@ const GARDEN_HEIGHT = 600;
 const DEFAULT_TOTAL_ENTITIES = 22;
 const MIN_TOTAL_ENTITIES = 11;
 
+const NAME_GENERATION_CONFIG = {
+  plant: {
+    classifierKeywords: ['fern', 'flower', 'grass', 'vine', 'succulent', 'lily', 'moss', 'cactus', 'bush', 'herb'],
+    descriptors: ['sun', 'mist', 'river', 'stone', 'verdant', 'wild', 'silver', 'amber', 'meadow', 'dawn'],
+    suffixes: ['sprout', 'canopy', 'bloom', 'frond', 'petal', 'branch', 'grove', 'bud', 'thicket', 'stem'],
+    speciesFamilies: ['flora', 'canopy', 'grove', 'rootline']
+  },
+  herbivore: {
+    classifierKeywords: ['butterfly', 'beetle', 'rabbit', 'snail', 'cricket', 'ladybug', 'grasshopper', 'ant', 'bee', 'moth'],
+    descriptors: ['swift', 'quiet', 'field', 'wind', 'fleet', 'bright', 'nimble', 'dapple', 'hollow', 'reed'],
+    suffixes: ['stride', 'dash', 'bound', 'graze', 'hop', 'skitter', 'forage', 'trail', 'flutter', 'rush'],
+    speciesFamilies: ['kin', 'folk', 'colony', 'wanderers']
+  },
+  carnivore: {
+    classifierKeywords: ['wolf', 'fox', 'tiger', 'panther', 'shadow', 'hunt', 'claw', 'fang', 'night', 'stalk'],
+    descriptors: ['grim', 'ashen', 'frost', 'ember', 'void', 'scar', 'iron', 'silent', 'storm', 'thorn'],
+    suffixes: ['strike', 'pounce', 'prowl', 'snare', 'hunter', 'rake', 'lunge', 'ambush', 'howl', 'raid'],
+    speciesFamilies: ['pack', 'pride', 'stalkers', 'hunters']
+  }
+};
+
+const TRAIT_SAMPLING_KEYS = {
+  plant: ['energy', 'reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
+  herbivore: ['energy', 'reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius', 'threatDetectionRadius'],
+  carnivore: ['energy', 'reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius']
+};
+
 function parseCliArgs(argv) {
   const parsedArgs = {
     verifyOnly: false,
@@ -152,6 +179,59 @@ function randomFloatInRange(random, min, max) {
   return min + random() * (max - min);
 }
 
+function shuffleArrayDeterministically(random, values) {
+  const shuffledValues = [...values];
+  for (let index = shuffledValues.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(random, index + 1);
+    [shuffledValues[index], shuffledValues[swapIndex]] = [shuffledValues[swapIndex], shuffledValues[index]];
+  }
+  return shuffledValues;
+}
+
+function createShuffledIndexOrder(random, count) {
+  const indices = Array.from({ length: count }, (_, index) => index);
+  return shuffleArrayDeterministically(random, indices);
+}
+
+function createTraitSamplingPlan(random, count, traitKeys) {
+  const samplingPlan = {};
+  for (const traitKey of traitKeys) {
+    samplingPlan[traitKey] = createShuffledIndexOrder(random, count);
+  }
+  return samplingPlan;
+}
+
+function sampleStratifiedValue(random, index, count, min, max) {
+  if (count <= 1) {
+    return min + ((max - min) * 0.5);
+  }
+
+  const bucketSize = (max - min) / count;
+  return min + (bucketSize * index) + (random() * bucketSize);
+}
+
+function sampleTraitValue(random, traitSamplingPlan, traitKey, entityIndex, min, max) {
+  const traitIndices = traitSamplingPlan[traitKey];
+  return sampleStratifiedValue(random, traitIndices[entityIndex], traitIndices.length, min, max);
+}
+
+function createCycledOrder(random, values, count) {
+  const cycledValues = [];
+  while (cycledValues.length < count) {
+    cycledValues.push(...shuffleArrayDeterministically(random, values));
+  }
+  return cycledValues.slice(0, count);
+}
+
+function createNameSamplingPlan(random, type, count) {
+  const config = NAME_GENERATION_CONFIG[type];
+  return {
+    keywords: createCycledOrder(random, config.classifierKeywords, count),
+    descriptors: createCycledOrder(random, config.descriptors, count),
+    suffixes: createCycledOrder(random, config.suffixes, count)
+  };
+}
+
 function createDeterministicUuid(random) {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
     const n = randomInt(random, 16);
@@ -200,30 +280,47 @@ function generatePopulationCounts(random, totalEntities) {
   return { plantCount, herbivoreCount, carnivoreCount };
 }
 
-function generateName(type, index) {
-  const prefixes = {
-    plant: 'Flora',
-    herbivore: 'Grazer',
-    carnivore: 'Stalker'
-  };
-
-  return `${prefixes[type]}-${String(index + 1).padStart(2, '0')}`;
+function titleCase(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function createEntity(type, index, random, timestamp) {
+function createEntityIdentity(type, index, random, usedNames, nameSamplingPlan) {
+  const config = NAME_GENERATION_CONFIG[type];
+  const keyword = nameSamplingPlan.keywords[index];
+  const descriptor = nameSamplingPlan.descriptors[index];
+  const suffix = nameSamplingPlan.suffixes[index];
+  const baseName = `${keyword}-${descriptor}-${suffix}`;
+
+  let candidateName = baseName;
+  let dedupeCounter = 2;
+  while (usedNames.has(candidateName)) {
+    candidateName = `${baseName}-${dedupeCounter}`;
+    dedupeCounter += 1;
+  }
+
+  usedNames.add(candidateName);
+  return {
+    name: candidateName,
+    species: `${titleCase(keyword)} ${titleCase(config.speciesFamilies[index % config.speciesFamilies.length])}`
+  };
+}
+
+function createEntity(type, index, random, timestamp, usedNames, traitSamplingPlan, nameSamplingPlan) {
+  const identity = createEntityIdentity(type, index, random, usedNames, nameSamplingPlan);
+
   if (type === 'plant') {
     return {
       id: createDeterministicUuid(random),
       type,
-      name: generateName(type, index),
-      species: 'Flora',
+      name: identity.name,
+      species: identity.species,
       positionX: randomFloatInRange(random, 0, GARDEN_WIDTH),
       positionY: randomFloatInRange(random, 0, GARDEN_HEIGHT),
-      energy: randomFloatInRange(random, 46, 58),
+      energy: sampleTraitValue(random, traitSamplingPlan, 'energy', index, 44, 62),
       traits: {
-        reproductionRate: randomFloatInRange(random, 0.04, 0.07),
-        metabolismEfficiency: randomFloatInRange(random, 0.9, 1.15),
-        photosynthesisRate: randomFloatInRange(random, 0.85, 1.25)
+        reproductionRate: sampleTraitValue(random, traitSamplingPlan, 'reproductionRate', index, 0.035, 0.075),
+        metabolismEfficiency: sampleTraitValue(random, traitSamplingPlan, 'metabolismEfficiency', index, 0.85, 1.2),
+        photosynthesisRate: sampleTraitValue(random, traitSamplingPlan, 'photosynthesisRate', index, 0.8, 1.3)
       },
       timestamp
     };
@@ -233,16 +330,17 @@ function createEntity(type, index, random, timestamp) {
     return {
       id: createDeterministicUuid(random),
       type,
-      name: generateName(type, index),
-      species: 'Grazers',
+      name: identity.name,
+      species: identity.species,
       positionX: randomFloatInRange(random, 0, GARDEN_WIDTH),
       positionY: randomFloatInRange(random, 0, GARDEN_HEIGHT),
-      energy: randomFloatInRange(random, 54, 66),
+      energy: sampleTraitValue(random, traitSamplingPlan, 'energy', index, 50, 70),
       traits: {
-        reproductionRate: randomFloatInRange(random, 0.024, 0.036),
-        movementSpeed: randomFloatInRange(random, 1.7, 2.7),
-        metabolismEfficiency: randomFloatInRange(random, 0.9, 1.2),
-        perceptionRadius: randomFloatInRange(random, 90, 130)
+        reproductionRate: sampleTraitValue(random, traitSamplingPlan, 'reproductionRate', index, 0.02, 0.04),
+        movementSpeed: sampleTraitValue(random, traitSamplingPlan, 'movementSpeed', index, 1.5, 2.9),
+        metabolismEfficiency: sampleTraitValue(random, traitSamplingPlan, 'metabolismEfficiency', index, 0.82, 1.25),
+        perceptionRadius: sampleTraitValue(random, traitSamplingPlan, 'perceptionRadius', index, 80, 140),
+        threatDetectionRadius: sampleTraitValue(random, traitSamplingPlan, 'threatDetectionRadius', index, 95, 170)
       },
       timestamp
     };
@@ -251,16 +349,16 @@ function createEntity(type, index, random, timestamp) {
   return {
     id: createDeterministicUuid(random),
     type,
-    name: generateName(type, index),
-    species: 'Stalkers',
+    name: identity.name,
+    species: identity.species,
     positionX: randomFloatInRange(random, 0, GARDEN_WIDTH),
     positionY: randomFloatInRange(random, 0, GARDEN_HEIGHT),
-    energy: randomFloatInRange(random, 50, 62),
+    energy: sampleTraitValue(random, traitSamplingPlan, 'energy', index, 46, 66),
     traits: {
-      reproductionRate: randomFloatInRange(random, 0.015, 0.025),
-      movementSpeed: randomFloatInRange(random, 3.0, 3.9),
-      metabolismEfficiency: randomFloatInRange(random, 0.95, 1.2),
-      perceptionRadius: randomFloatInRange(random, 140, 175)
+      reproductionRate: sampleTraitValue(random, traitSamplingPlan, 'reproductionRate', index, 0.012, 0.03),
+      movementSpeed: sampleTraitValue(random, traitSamplingPlan, 'movementSpeed', index, 2.8, 4.2),
+      metabolismEfficiency: sampleTraitValue(random, traitSamplingPlan, 'metabolismEfficiency', index, 0.85, 1.25),
+      perceptionRadius: sampleTraitValue(random, traitSamplingPlan, 'perceptionRadius', index, 130, 190)
     },
     timestamp
   };
@@ -270,15 +368,30 @@ function generateEntities(seed, totalEntities) {
   const random = createSeededRandom(seed);
   const seedTimestamp = new Date().toISOString();
   const counts = generatePopulationCounts(random, totalEntities);
+  const usedNamesByType = {
+    plant: new Set(),
+    herbivore: new Set(),
+    carnivore: new Set()
+  };
+  const traitPlansByType = {
+    plant: createTraitSamplingPlan(random, counts.plantCount, TRAIT_SAMPLING_KEYS.plant),
+    herbivore: createTraitSamplingPlan(random, counts.herbivoreCount, TRAIT_SAMPLING_KEYS.herbivore),
+    carnivore: createTraitSamplingPlan(random, counts.carnivoreCount, TRAIT_SAMPLING_KEYS.carnivore)
+  };
+  const namePlansByType = {
+    plant: createNameSamplingPlan(random, 'plant', counts.plantCount),
+    herbivore: createNameSamplingPlan(random, 'herbivore', counts.herbivoreCount),
+    carnivore: createNameSamplingPlan(random, 'carnivore', counts.carnivoreCount)
+  };
 
   const plants = Array.from({ length: counts.plantCount }, (_, index) =>
-    createEntity('plant', index, random, seedTimestamp)
+    createEntity('plant', index, random, seedTimestamp, usedNamesByType.plant, traitPlansByType.plant, namePlansByType.plant)
   );
   const herbivores = Array.from({ length: counts.herbivoreCount }, (_, index) =>
-    createEntity('herbivore', index, random, seedTimestamp)
+    createEntity('herbivore', index, random, seedTimestamp, usedNamesByType.herbivore, traitPlansByType.herbivore, namePlansByType.herbivore)
   );
   const carnivores = Array.from({ length: counts.carnivoreCount }, (_, index) =>
-    createEntity('carnivore', index, random, seedTimestamp)
+    createEntity('carnivore', index, random, seedTimestamp, usedNamesByType.carnivore, traitPlansByType.carnivore, namePlansByType.carnivore)
   );
 
   return {
@@ -314,6 +427,119 @@ function runWranglerExecute(extraArgs, description, commandOptions) {
   return result.stdout || '';
 }
 
+function isRemoteImportAuthenticationError(error) {
+  const errorMessage = error instanceof Error ? error.message : String(error || '');
+  if (!errorMessage) {
+    return false;
+  }
+
+  const hasAuthCode = /code:\s*10000/i.test(errorMessage);
+  const mentionsAuthFailure = /authentication error/i.test(errorMessage);
+  const mentionsImportEndpoint = /\/import\b/i.test(errorMessage);
+
+  if (hasAuthCode && mentionsAuthFailure) {
+    return true;
+  }
+
+  return hasAuthCode && mentionsImportEndpoint;
+}
+
+function parseSqlStatements(sql) {
+  const statements = [];
+  let currentStatement = '';
+  let quoteState = null;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql[index];
+    const nextChar = sql[index + 1];
+
+    if (inLineComment) {
+      currentStatement += char;
+      if (char === '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      currentStatement += char;
+      if (char === '*' && nextChar === '/') {
+        currentStatement += '/';
+        index += 1;
+        inBlockComment = false;
+      }
+      continue;
+    }
+
+    if (quoteState) {
+      currentStatement += char;
+
+      if (char === quoteState) {
+        if (quoteState === '\'' && nextChar === '\'') {
+          currentStatement += nextChar;
+          index += 1;
+        } else {
+          quoteState = null;
+        }
+      }
+      continue;
+    }
+
+    if (char === '-' && nextChar === '-') {
+      currentStatement += '--';
+      index += 1;
+      inLineComment = true;
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      currentStatement += '/*';
+      index += 1;
+      inBlockComment = true;
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      quoteState = char;
+      currentStatement += char;
+      continue;
+    }
+
+    if (char === ';') {
+      const trimmedStatement = currentStatement.trim();
+      if (trimmedStatement.length > 0) {
+        statements.push(trimmedStatement);
+      }
+      currentStatement = '';
+      continue;
+    }
+
+    currentStatement += char;
+  }
+
+  const trailingStatement = currentStatement.trim();
+  if (trailingStatement.length > 0) {
+    statements.push(trailingStatement);
+  }
+
+  return statements;
+}
+
+function executeSqlStatementsIndividually(sql, phaseName, commandOptions) {
+  const statements = parseSqlStatements(sql);
+  if (statements.length === 0) {
+    return;
+  }
+
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index];
+    const statementLabel = `${phaseName} [${index + 1}/${statements.length}]`;
+    runWranglerExecute([`--command=${statement}`], statementLabel, commandOptions);
+  }
+}
+
 function executeSqlPhase(sql, phaseName, commandOptions) {
   const tempFileName = `.tmp-prod-init-${phaseName.replace(/\s+/g, '-').toLowerCase()}.sql`;
   const tempFilePath = path.resolve(WORKERS_DIR, tempFileName);
@@ -322,7 +548,16 @@ function executeSqlPhase(sql, phaseName, commandOptions) {
 
   try {
     console.log(`🧩 ${phaseName}...`);
-    runWranglerExecute([`--file=${tempFileName}`], phaseName, commandOptions);
+    try {
+      runWranglerExecute([`--file=${tempFileName}`], phaseName, commandOptions);
+    } catch (error) {
+      if (!isRemoteImportAuthenticationError(error)) {
+        throw error;
+      }
+
+      console.warn('⚠️ Remote SQL file import rejected by Cloudflare auth. Retrying as statement-by-statement execution.');
+      executeSqlStatementsIndividually(sql, phaseName, commandOptions);
+    }
     console.log(`✅ ${phaseName} complete`);
   } finally {
     if (fs.existsSync(tempFilePath)) {
@@ -519,6 +754,8 @@ if (require.main === module) {
 
 module.exports = {
   parseCliArgs,
+  parseSqlStatements,
+  isRemoteImportAuthenticationError,
   generatePopulationCounts,
   generateEntities,
   createSeedSql,

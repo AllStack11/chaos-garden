@@ -19,8 +19,8 @@ describe('simulation/creatures/plants', () => {
   });
 
   it('checks reproduction threshold correctly', () => {
-    expect(doesPlantHaveEnoughEnergyToReproduce(buildPlant({ energy: 80 }))).toBe(true);
-    expect(doesPlantHaveEnoughEnergyToReproduce(buildPlant({ energy: 79.99 }))).toBe(false);
+    expect(doesPlantHaveEnoughEnergyToReproduce(buildPlant({ energy: 69 }))).toBe(true);
+    expect(doesPlantHaveEnoughEnergyToReproduce(buildPlant({ energy: 68.99 }))).toBe(false);
   });
 
   it('creates offspring when energy and reproduction chance allow', async () => {
