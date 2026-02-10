@@ -26,7 +26,6 @@ import {
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
-  createInitialPopulationWithRandomPositions,
   logTraitMutationsForOffspring,
   isEntityDead,
   getEntityCauseOfDeath
@@ -78,16 +77,6 @@ export function createNewHerbivoreEntity(
     createdAt: now,
     updatedAt: now
   };
-}
-
-/**
- * Create initial herbivores for a new garden.
- */
-export function createInitialHerbivorePopulation(
-  count: number,
-  gardenStateId: number
-): Entity[] {
-  return createInitialPopulationWithRandomPositions(count, gardenStateId, createNewHerbivoreEntity);
 }
 
 /**

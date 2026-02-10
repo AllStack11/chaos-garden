@@ -28,7 +28,6 @@ import {
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
-  createInitialPopulationWithRandomPositions,
   logTraitMutationsForOffspring,
   isEntityDead,
   getEntityCauseOfDeath
@@ -82,16 +81,6 @@ export function createNewFungusEntity(
     createdAt: now,
     updatedAt: now
   };
-}
-
-/**
- * Create initial fungi for a new garden.
- */
-export function createInitialFungusPopulation(
-  count: number,
-  gardenStateId: number
-): Entity[] {
-  return createInitialPopulationWithRandomPositions(count, gardenStateId, createNewFungusEntity);
 }
 
 /**
