@@ -61,15 +61,13 @@ export function getTimeOfDay(tick: number): 'night' | 'dawn' | 'day' | 'dusk' {
  * @returns Percentage (0-100) of daylight remaining in current cycle
  */
 export function calculateDaylightRemainingPercentage(tick: number): number {
-  const sunlight = calculateSunlightForTick(tick);
-  
-  // If it's nighttime, return 0
-  if (sunlight <= 0.5) {
+  const normalizedTime = (tick % TICKS_PER_DAY) / TICKS_PER_DAY;
+
+  // Daylight for this sine-wave cycle occurs between 25% and 75% of the day.
+  if (normalizedTime <= 0.25 || normalizedTime >= 0.75) {
     return 0;
   }
-  
-  // Calculate how far we are through the daylight portion
-  // Sunlight goes from 0.5 to 1.0 and back to 0.5 during daylight
-  const daylightProgress = (sunlight - 0.5) * 2;
-  return Math.round((1 - daylightProgress) * 100);
+
+  const daylightRemaining = (0.75 - normalizedTime) / 0.5;
+  return Math.round(daylightRemaining * 100);
 }

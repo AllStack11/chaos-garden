@@ -325,7 +325,7 @@ export async function markEntitiesAsDeadInDatabase(
   }
 
   const statements = entityIds.map(id => ({
-    query: 'UPDATE entities SET is_alive = 0, death_tick = ?, updated_at = datetime(\'now\') WHERE id = ?',
+    query: 'UPDATE entities SET is_alive = 0, death_tick = ?, updated_at = strftime(\'%Y-%m-%dT%H:%M:%fZ\', \'now\') WHERE id = ?',
     params: [deathTick, id]
   }));
 
