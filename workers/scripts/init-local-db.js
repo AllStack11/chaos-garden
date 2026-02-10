@@ -45,11 +45,8 @@ const CARNIVORE_ARCHETYPES = [
   { name: 'patient', count: 1, movementSpeed: 3.0, metabolismEfficiency: 1.2, reproductionRate: 0.02, perceptionRadius: 165 }
 ];
 
-const FUNGUS_ARCHETYPES = [
-  { name: 'standard', count: 4, decompositionRate: 1.0, reproductionRate: 0.04, metabolismEfficiency: 1.2, perceptionRadius: 55 },
-  { name: 'efficient', count: 3, decompositionRate: 1.35, reproductionRate: 0.03, metabolismEfficiency: 1.2, perceptionRadius: 50 },
-  { name: 'spreader', count: 3, decompositionRate: 0.9, reproductionRate: 0.05, metabolismEfficiency: 1.1, perceptionRadius: 60 }
-];
+// Start with no fungi; spores now enter the garden dynamically during simulation ticks.
+const FUNGUS_ARCHETYPES = [];
 
 function createSeededRandom(seed) {
   let state = seed >>> 0;
@@ -317,7 +314,7 @@ function getExpectedSeedCounts() {
     carnivoreCount,
     fungusCount,
     totalLivingCount: plantCount + herbivoreCount + carnivoreCount + fungusCount,
-    eventCount: 5
+    eventCount: 4
   };
 }
 
@@ -376,7 +373,6 @@ INSERT INTO simulation_events (
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', 'The Chaos Garden was created', '[]', '["genesis", "birth"]', 'LOW', '{"source": "initialization", "seed": ${seed}}'),
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.plantCount} plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": ${counts.plantCount}, "type": "plants"}'),
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.herbivoreCount} herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": ${counts.herbivoreCount}, "type": "herbivores"}'),
-  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.fungusCount} fungi established their networks', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": ${counts.fungusCount}, "type": "fungi"}'),
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.carnivoreCount} carnivores claimed their territories', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${counts.carnivoreCount}, "type": "carnivores"}');
 `;
 }

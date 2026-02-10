@@ -12,7 +12,7 @@
 
 import type { D1Database, ScheduledEvent } from './types/worker';
 import { createApplicationLogger } from './logging/application-logger';
-import { runSimulationTick } from './simulation/tick';
+import { runSimulationTick } from './simulation/tick/tick';
 import { CURRENT_SCHEMA_VERSION } from './db/migrations';
 import {
   getLatestGardenStateFromDatabase,
