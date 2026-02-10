@@ -26,6 +26,29 @@ describe('simulation/creatures/fungi', () => {
     expect(farDead.energy).toBe(50);
   });
 
+  it('moves slowly toward dead matter within perception but outside decomposition range', async () => {
+    const fungus = buildFungus({ position: { x: 0, y: 0 }, perceptionRadius: 50, energy: 40 });
+    const nearbyDead = buildHerbivore({
+      id: 'dead-mid',
+      position: { x: 20, y: 0 },
+      isAlive: false,
+      health: 0,
+      energy: 50
+    });
+
+    const result = await processFungusBehaviorDuringTick(
+      fungus,
+      buildEnvironment(),
+      [nearbyDead],
+      createFakeEventLogger()
+    );
+
+    expect(result.decomposed).toEqual([]);
+    expect(nearbyDead.energy).toBe(50);
+    expect(fungus.position.x).toBeGreaterThan(0);
+    expect(fungus.position.x).toBeLessThan(1);
+  });
+
   it('decomposes dead matter in range and gains energy', async () => {
     const fungus = buildFungus({ position: { x: 0, y: 0 }, perceptionRadius: 100, energy: 40, decompositionRate: 1 });
     const deadHerbivore = buildHerbivore({

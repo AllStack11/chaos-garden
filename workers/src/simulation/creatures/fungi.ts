@@ -20,7 +20,9 @@ import {
   generatePositionNearParent,
   clampValueToRange,
   findNearestEntity,
-  calculateDistanceBetweenEntities
+  calculateDistanceBetweenEntities,
+  moveEntityTowardTarget,
+  calculateMovementEnergyCost
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 
@@ -33,6 +35,8 @@ const DECOMPOSITION_DISTANCE = 10; // pixels - fungi can decompose nearby dead m
 const MAX_AGE = 300; // Fungi live longer than plants/herbivores
 const ENERGY_FROM_DECOMPOSITION = 20; // energy gained per decomposition
 const SPORE_SPREAD_RADIUS = 40; // how far spores can travel
+const FUNGUS_MOVEMENT_SPEED = 0.4; // slow creeping movement toward dead matter
+const FUNGUS_MOVEMENT_COST_MULTIPLIER = 0.25; // moving is cheap but not free
 
 /**
  * Create a new fungus entity.
@@ -117,6 +121,15 @@ export async function processFungusBehaviorDuringTick(
       if (energyGained > 0) {
         decomposed.push(targetDead.id);
       }
+    } else {
+      // Fungi slowly creep toward nearby dead matter.
+      moveEntityTowardTarget(fungus, targetDead.position, FUNGUS_MOVEMENT_SPEED);
+      const movedDistance = Math.min(distance, FUNGUS_MOVEMENT_SPEED);
+      const movementCost = calculateMovementEnergyCost(
+        movedDistance,
+        fungus.metabolismEfficiency
+      ) * FUNGUS_MOVEMENT_COST_MULTIPLIER;
+      fungus.energy -= movementCost;
     }
   }
   
