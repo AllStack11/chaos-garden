@@ -43,7 +43,8 @@ const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
-const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.85;
+const HUNT_MOVEMENT_COST_MULTIPLIER = 0.75;
+const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
 
 /**
  * Create a new carnivore entity.
@@ -118,7 +119,7 @@ export async function processCarnivoreBehaviorDuringTick(
       moveEntityTowardTarget(carnivore, targetPreyInPerception.position, effectiveMovementSpeed);
       const movedDistance = Math.min(distance, effectiveMovementSpeed);
       const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
-      carnivore.energy -= movementCost * 1.2; // Hunting is exhausting
+      carnivore.energy -= movementCost * HUNT_MOVEMENT_COST_MULTIPLIER;
     }
   } else {
     // 3. Otherwise, move toward globally nearest prey to prevent edge starvation.

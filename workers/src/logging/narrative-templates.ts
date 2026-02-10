@@ -28,6 +28,17 @@ const AMBIENT_DAWN_TEMPLATES: readonly string[] = [
   'A soft dawn at {temperature}°C. The garden exhales overnight stillness.',
   'The horizon glows. {carnivoreCount} predators sharpen their instincts for the hunt ahead.',
   'Morning breaks gently. The ecosystem stretches its legs.',
+  'Dawn compiles successfully. {totalLiving} entities boot up with varying levels of confidence.',
+  'Breakfast bell rings: {herbivoreCount} herbivores look for salad while {carnivoreCount} carnivores look for herbivores.',
+  'The sun clocks in for its shift. No overtime pay. No complaints. Just photons.',
+  'Dawn pushes its first commit of the day: light. The plants approve the PR immediately.',
+  'Sunrise at {sunlightPercent}% luminosity. The plants are like interns on their first day: absurdly eager.',
+  'Morning arrives and {totalLiving} entities begin their daily standups. The fungi do not attend.',
+  'The sky boots from dark mode to light mode. The herbivores prefer light mode. The carnivores preferred dark.',
+  'Dawn cracks open like an egg over the garden. {plantCount} plants scramble for the yolk (sunlight).',
+  'Good morning, garden. {herbivoreCount} herbivores have already opened the fridge. {carnivoreCount} carnivores have already opened the herbivores.',
+  'The sun arrives like a senior engineer: late, bright, and immediately changes everything.',
+  'Morning check: {plantCount} plants photosynthesizing, {herbivoreCount} herbivores panicking, {carnivoreCount} carnivores stretching. All systems nominal.',
 ];
 
 const AMBIENT_DAY_TEMPLATES: readonly string[] = [
@@ -41,6 +52,17 @@ const AMBIENT_DAY_TEMPLATES: readonly string[] = [
   'The afternoon sun hangs heavy. {fungusCount} fungi wait patiently in the shadows.',
   'Daylight hours. The predator-prey dance continues its ancient choreography.',
   'A bright day unfolds. The garden buzzes with the quiet drama of survival.',
+  'It is aggressively daytime. Photosynthesis is at full send.',
+  'Midday stand-up: plants share growth metrics, herbivores interrupt by chewing the slides.',
+  'The sun is absolutely cooking. {plantCount} plants are printing energy like the Fed prints money.',
+  'High noon. The {type} population is out here living their best lives (or worst lives, depending on the {type}).',
+  'Peak daylight. The plants are thriving. The herbivores are eating. The carnivores are scheming. The fungi are just waiting for everyone to die. Classic.',
+  '{sunlightPercent}% sunlight. The plants are making more energy than a blockchain consumes. Impressive.',
+  'Midday energy audit: plants are up, herbivores are hustling, carnivores are hunting, fungi are napping. Standard.',
+  'The afternoon sun beats down at {temperature}°C. The garden is a productivity machine with no manager and no Slack.',
+  'It is so bright that even the fungi briefly consider photosynthesis. They do not pursue it.',
+  'The sun hits different at {sunlightPercent}%. Every chloroplast in the garden just got a raise.',
+  'Afternoon vibes: {totalLiving} organisms speedrunning survival. No save states.',
 ];
 
 const AMBIENT_DUSK_TEMPLATES: readonly string[] = [
@@ -54,6 +76,17 @@ const AMBIENT_DUSK_TEMPLATES: readonly string[] = [
   'Evening falls softly. {totalLiving} inhabitants settle into their routines.',
   'The last rays of light slip away. The garden shifts to night mode.',
   'Twilight hush. Even the most restless creatures pause to watch the sky.',
+  'Golden hour hits and every leaf suddenly looks cinematic.',
+  'Dusk deploys soft lighting and hard consequences.',
+  'The sun logs off. Out-of-office reply: "back in 48 ticks."',
+  'Dusk falls. The plants start power-saving mode. The carnivores start power-hunting mode.',
+  'Twilight: the hour where herbivores wish they had invested more in perception radius.',
+  'The sky dims to {sunlightPercent}%. The plants are clocking out. The fungi are clocking in.',
+  'Sunset at {temperature}°C. The garden shifts from "productive workspace" to "horror game lobby."',
+  'Dusk settles over {totalLiving} entities. Half are going to sleep. The other half are about to ruin someone\'s sleep.',
+  'The sun dips below the horizon like a mic drop. Tomorrow\'s problem: tomorrow.',
+  'Golden hour. Even the carnivores look beautiful. Still terrifying, but beautiful.',
+  'Evening falls. The ecosystem switches from hard mode to nightmare mode.',
 ];
 
 const AMBIENT_NIGHT_TEMPLATES: readonly string[] = [
@@ -67,6 +100,17 @@ const AMBIENT_NIGHT_TEMPLATES: readonly string[] = [
   'Moonless dark. The fungi continue their patient work of decomposition.',
   'The garden sleeps. Well, the plants do. Everyone else is anxious.',
   'Deep night. {fungusCount} fungi spread their mycelium in the darkness, unbothered.',
+  'Night mode enabled. Visibility low, tension high.',
+  'At this hour, even the bugs in the code feel nocturnal.',
+  'Midnight. The plants are asleep. The herbivores are anxious. The carnivores are thriving. The fungi are decomposing. Nature has no off-hours.',
+  'The garden enters dark mode. Not the UI kind. The kind where things eat you.',
+  'Night descends. {totalLiving} entities pretend to be brave. The fungi genuinely do not care.',
+  '{temperature}°C after dark. The only thing growing is the anxiety of every herbivore.',
+  'The stars come out. The plants cannot see them. The herbivores do not care. The fungi are the stars now.',
+  'Deep night. The garden runs its nightly batch jobs: decomposition, existential dread, and the occasional murder.',
+  'Nighttime in the garden: where every shadow is either a predator, a mushroom, or your imagination.',
+  'The moon does not provide photosynthesis. The plants have filed a feature request.',
+  '3 AM garden energy: {totalLiving} entities, zero productivity, maximum drama.',
 ];
 
 const AMBIENT_RAIN_TEMPLATES: readonly string[] = [
@@ -78,6 +122,15 @@ const AMBIENT_RAIN_TEMPLATES: readonly string[] = [
   'Rain drums on the garden. {herbivoreCount} herbivores trudge through the wet, movement slowed.',
   'The air smells of wet earth and possibility. The garden drinks deeply.',
   'Water pools between the roots. The ecosystem adjusts to the slower rhythm of rain.',
+  'Rain applies a hydration patch. Soil metrics immediately improve.',
+  'The rain is democratic: everyone gets soaked, nobody opts out.',
+  'Rain falls on the garden like unsolicited code reviews: wet, persistent, and ultimately good for you.',
+  'It is raining. The plants are thriving. The herbivores are soggy. The fungi are having a spa day.',
+  'Moisture hits {moisturePercent}%. The soil is hydrated. The fungi are moisturized. Everyone else is miserable.',
+  'The rain turns the garden floor into a slip-n-slide. {herbivoreCount} herbivores recalculate their routes.',
+  'Rainfall detected. The plants celebrate silently (they always celebrate silently; they are plants).',
+  'Rain washes over {totalLiving} entities. Those who photosynthesize: delighted. Those who chase: irritated.',
+  'The garden receives a moisture injection of {moisturePercent}%. The fungi rate this weather 10/10.',
 ];
 
 const AMBIENT_STORM_TEMPLATES: readonly string[] = [
@@ -89,6 +142,16 @@ const AMBIENT_STORM_TEMPLATES: readonly string[] = [
   'The storm pounds relentlessly. {herbivoreCount} herbivores scatter, burning precious energy.',
   'Lightning flashes. The temperature plunges to {temperature}°C. Survival is the only priority.',
   'The full fury of the storm descends. The garden will remember this.',
+  'Wind speed: rude. Lightning frequency: concerning.',
+  'Emergency weather protocol now active: crouch, cling, and hope.',
+  'The storm hits like a production outage at 2 AM: sudden, violent, and nobody is prepared.',
+  'Lightning strikes and for one frame, the entire garden is rendered in HDR.',
+  'The storm is throwing hands. {totalLiving} entities just want to survive the merge conflict between sky and ground.',
+  'Thunder shakes the garden at {temperature}°C. The plants wish they could run. They cannot. They are plants.',
+  'Storm damage report: sunlight at {sunlightPercent}%, morale at 0%, fungi at "unbothered."',
+  'The wind is not a breeze. The wind is a hostile takeover.',
+  'The sky has beef with the garden today. Lightning is the strongly worded email.',
+  'Storm warning: all entities are advised to shelter in place. No entities have shelters. Good luck.',
 ];
 
 const AMBIENT_FOG_TEMPLATES: readonly string[] = [
@@ -100,6 +163,16 @@ const AMBIENT_FOG_TEMPLATES: readonly string[] = [
   'Fog clings to everything. Sunlight barely reaches {sunlightPercent}%.',
   'In the fog, predator and prey move as ghosts. The garden holds its breath.',
   'A quiet fog settles. The moisture rises to {moisturePercent}%. The mycelium network hums.',
+  'Fog turns the biome into a stealth game with no minimap.',
+  'Visibility reduced, suspense increased.',
+  'The fog is so thick you could cut it with a herbivore\'s panic. Which is also thick.',
+  'Fog rolls in. {carnivoreCount} predators just got free camouflage. {herbivoreCount} herbivores just got free anxiety.',
+  'The garden is buffering. Please wait while the atmosphere loads. Estimated time: unclear.',
+  'Visibility: none. Dramatic tension: maximum. Fungi satisfaction: also maximum.',
+  'Fog at {moisturePercent}% moisture. Navigation is now faith-based.',
+  'The fog is so dense that two entities at ({posX}, {posY}) could bump into each other and still not know who it was.',
+  'Dense fog turns the garden into a horror game. The predators love it. The prey do not.',
+  'Fog advisory: if you can read this, you are already inside it.',
 ];
 
 const AMBIENT_DROUGHT_TEMPLATES: readonly string[] = [
@@ -111,6 +184,16 @@ const AMBIENT_DROUGHT_TEMPLATES: readonly string[] = [
   'No rain in sight. Moisture at {moisturePercent}%. The fungi slow to a crawl.',
   'The drought is relentless. Herbivores range farther, burning more energy for less food.',
   'Heat and dryness press down on the garden. Only the most efficient will last.',
+  'The sun is doing too much. Moisture is doing too little.',
+  'Drought logic: spend less, waste nothing, survive somehow.',
+  'The drought hits different when you are a plant. You cannot even pace nervously. You just stand there and dehydrate.',
+  'Moisture at {moisturePercent}%. The soil is drier than the humor in this garden.',
+  'Drought status: the garden looks like a website from 2003. Dry, flat, and struggling.',
+  '{temperature}°C and falling moisture. The herbivores are stress-eating. The plants are stress-existing.',
+  'The drought continues. Water is a myth. Moisture is a legend. Photosynthesis is a prayer.',
+  'Drought day {moisturePercent}: the plants have given up on rain and started a GoFundMe.',
+  'It is so dry that the fungi are considering a career change. There is nothing to decompose if nothing can grow.',
+  'The drought squeezes the garden like a deadline squeezes a developer. Something is going to break.',
 ];
 
 const AMBIENT_WEATHER_TEMPLATES: readonly string[] = [
@@ -124,6 +207,15 @@ const AMBIENT_WEATHER_TEMPLATES: readonly string[] = [
   'Weather report: {temperature}°C, {moisturePercent}% moisture. The garden takes note.',
   'Conditions are {temperatureAdjective}. The creatures adjust their metabolisms.',
   'The garden thermometer reads {temperature}°C. {moisturePercent}% moisture hangs in the air.',
+  'Forecast: {temperature}°C with a high chance of biological overreaction.',
+  'Atmospheric middleware reports stable conditions and unstable ambitions.',
+  'Weather update: {temperature}°C. The garden responds by doing exactly what it was already doing but slightly different.',
+  'The air is {moistureAdjective} and {temperatureAdjective}. If the garden had a thermostat, someone would be fighting over it.',
+  '{temperature}°C and {moisturePercent}% moisture. The plants call this "workable." The carnivores call this "irrelevant."',
+  'Current conditions: {temperatureAdjective}. The fungi have no temperature preference. They are built different.',
+  'Weather check: {temperature}°C. The herbivores do not check the weather. They check for carnivores. Priorities.',
+  'The atmosphere is {moistureAdjective} at {moisturePercent}%. The garden takes what it gets and pretends it is fine.',
+  'Climate report: {temperature}°C, {moisturePercent}% humidity. Suitable for life. Also suitable for death. It is a versatile temperature.',
 ];
 
 const AMBIENT_POPULATION_TEMPLATES: readonly string[] = [
@@ -135,6 +227,15 @@ const AMBIENT_POPULATION_TEMPLATES: readonly string[] = [
   '{herbivoreCount} herbivores wander among {plantCount} plants. The ratio seems sustainable. For now.',
   'The fungi number {fungusCount}, quietly recycling what the others leave behind.',
   'Population dynamics: plenty of drama, zero complaints filed.',
+  '{totalLiving} entities share this biome, and none of them read the terms of service.',
+  'Headcount: {plantCount} producers, {herbivoreCount} grazers, {carnivoreCount} hunters, {fungusCount} cleanup specialists.',
+  'Garden HR report: {plantCount} remote workers (plants), {herbivoreCount} freelancers (herbivores), {carnivoreCount} executives (carnivores), {fungusCount} janitors (fungi).',
+  '{totalLiving} entities coexist. "Coexist" is doing a lot of heavy lifting in that sentence.',
+  'The org chart: {plantCount} plants at the bottom, {herbivoreCount} herbivores in the middle, {carnivoreCount} carnivores at the top, and {fungusCount} fungi in the basement running the whole operation.',
+  '{totalLiving} living things. Each one thinking it is the main character. Only the fungi are correct.',
+  'Census results: {plantCount} green, {herbivoreCount} hungry, {carnivoreCount} dangerous, {fungusCount} patient. Garden total: {totalLiving} and counting (mostly down).',
+  'Population snapshot: {totalLiving} entities that all want the same thing (to not die) and all have wildly different strategies for achieving it.',
+  'Current active users: {totalLiving}. Daily active users: also {totalLiving}. There is no logging out of this garden.',
 ];
 
 const AMBIENT_ENTITY_SPOTLIGHT_TEMPLATES: readonly string[] = [
@@ -146,6 +247,18 @@ const AMBIENT_ENTITY_SPOTLIGHT_TEMPLATES: readonly string[] = [
   'If you could ask {name} how it feels, it would probably say "photosynthesis."',
   '{name} surveys its surroundings from ({posX}, {posY}) with quiet confidence.',
   '{name} is doing absolutely nothing remarkable, and that is perfectly fine.',
+  '{name} ({type}) has {energy} energy and a suspiciously confident posture.',
+  '{name} pauses at ({posX}, {posY}), either buffering or contemplating destiny.',
+  '{name} is at ({posX}, {posY}) with {energy} energy. Its daily affirmation: "I am more than my position in the food chain."',
+  'Spotlight on {name} the {type}: currently alive, which in this garden is already an achievement.',
+  '{name} chills at ({posX}, {posY}). If this were a reality show, {name} would be in the confessional saying "I did not come here to make friends."',
+  '{name} exists at ({posX}, {posY}) with the quiet dignity of an entity that does not know it is in a simulation.',
+  'Camera pans to {name}. The {type} stares into the middle distance with {energy} energy and zero complaints.',
+  '{name} is just vibing at ({posX}, {posY}). No drama. No predators nearby. This is the good timeline.',
+  'Fun fact: {name} the {type} has been alive for this long and still does not know what a "tick" is.',
+  '{name} at ({posX}, {posY}): living proof that doing the bare minimum can constitute a survival strategy.',
+  'The camera finds {name} at ({posX}, {posY}), looking exactly like a {type} that has {energy} energy and opinions about it.',
+  'Let us check in on {name}. Status: alive. Energy: {energy}. Location: ({posX}, {posY}). Vibes: immaculate.',
 ];
 
 const AMBIENT_HUMOR_TEMPLATES: readonly string[] = [
@@ -159,6 +272,21 @@ const AMBIENT_HUMOR_TEMPLATES: readonly string[] = [
   'Another tick, another day in paradise. Or at least, in a simulation.',
   'The ecosystem hums along. No complaints from management.',
   'Nothing to report. The garden is simply gardening.',
+  'If this tick had a stack trace, it would just say "everything normal."',
+  'No heroics today. Just organisms doing their best not to segfault.',
+  'This tick brought to you by: absolutely nothing happening. Tune in next tick for potential carnage.',
+  'The most dramatic event this tick was a leaf moving slightly. Gripping television.',
+  'Breaking news from the garden: nothing. More nothing at 11.',
+  'The garden is quiet. Too quiet. Just kidding, it is the normal amount of quiet.',
+  'Today\'s garden forecast: mild chaos with a chance of existential dread.',
+  'The ecosystem is in that liminal space between "thriving" and "about to collapse." It is always in that space.',
+  'A tick passes. Nothing dies. Nothing is born. The universe checks its watch.',
+  'Tick complete. Status: nominal. Drama: zero. Fungi: still plotting.',
+  'The garden briefly considers being boring. The thought passes.',
+  'Nothing to see here. Just {totalLiving} entities collectively agreeing that this tick was fine.',
+  'This tick is the silence between the notes. The music will return. With teeth.',
+  'All systems operational. No one was eaten. No one starved. This counts as a holiday in the garden.',
+  'Somewhere a developer watches this tick and thinks "maybe I should add more predators."',
 ];
 
 const AMBIENT_PHILOSOPHY_TEMPLATES: readonly string[] = [
@@ -172,6 +300,21 @@ const AMBIENT_PHILOSOPHY_TEMPLATES: readonly string[] = [
   'Every creature in this garden is optimizing for survival. None of them know the word.',
   '{totalLiving} entities, each running the same basic algorithm: eat, reproduce, do not die. The results are endlessly different.',
   'The plants cannot run. The herbivores cannot photosynthesize. The carnivores cannot eat plants. Specialization is a prison and a gift.',
+  'Natural selection is a reviewer that never sleeps and never leaves comments.',
+  'Entropy remains undefeated, but life keeps shipping updates.',
+  'The garden is an open-source project with no maintainer, no documentation, and somehow it still works.',
+  'Every entity in this garden is a temporary arrangement of matter that briefly thinks it matters. It does.',
+  'The herbivores do not resent the plants for being immobile. The carnivores do not resent the herbivores for being delicious. There is no resentment in nature. Only lunch.',
+  'Life in the garden is a distributed system with no coordinator, eventual consistency, and a very aggressive garbage collector (fungi).',
+  'The universe runs the garden as a background process. Priority: low. Uptime: surprisingly high.',
+  'Every death feeds a life. Every life delays a death. The garden is a while(true) loop that somehow never crashes.',
+  'Consciousness is not required for survival. The plants prove this every single tick. The herbivores disprove it.',
+  'In the garden, the fittest survive. "Fittest" is defined by the garden, retroactively, after you are dead.',
+  'This garden has no save button. Every tick is permanent. Every choice is final. Even the choices made by things without brains.',
+  'If you squint at the garden long enough, you realize it is just a very complicated argument about who gets to eat whom.',
+  'The garden teaches one lesson repeatedly: you are either growing or you are being composted. There is no third option.',
+  'Every entity here is proof that the universe, given enough time and energy, will produce something that can be eaten by something else.',
+  'The meaning of life in the garden: convert energy. The meaning of death: be converted into energy. Elegant, really.',
 ];
 
 const AMBIENT_INTERSPECIES_TEMPLATES: readonly string[] = [
@@ -185,6 +328,18 @@ const AMBIENT_INTERSPECIES_TEMPLATES: readonly string[] = [
   '{carnivoreCount} predators stalk {herbivoreCount} grazers across {plantCount} patches of green. The ratios tell a story.',
   'The plants grow. The herbivores eat. The carnivores hunt. The fungi decompose. Everybody has a job.',
   'A herbivore grazes near a carnivore\'s path. It does not know how close it came. Ignorance is survival.',
+  'The herbivores think the plants are lunch. The carnivores think the herbivores are lunch. Fungi think long-term.',
+  '{carnivoreCount} hunters and {herbivoreCount} grazers run a daily experiment in risk management.',
+  'The plants produce energy. The herbivores redistribute it. The carnivores redistribute the redistributors. The fungi are the IRS.',
+  '{herbivoreCount} herbivores walk past {carnivoreCount} carnivores and somehow survive. Plot armor is real.',
+  'The food chain is less of a chain and more of a food Rube Goldberg machine. Sun goes in, compost comes out.',
+  '{plantCount} plants stand firm. {herbivoreCount} herbivores approach menacingly. This is the world\'s slowest heist movie.',
+  'The herbivores and carnivores are locked in an eternal arms race. The plants are just trying to photosynthesize in peace.',
+  'Interspecies relations: plants tolerate herbivores, herbivores fear carnivores, carnivores ignore fungi, fungi outlast everyone. Standard hierarchy.',
+  '{carnivoreCount} apex predators, {herbivoreCount} walking calories, {plantCount} solar panels, {fungusCount} cleanup crews. The ratio tells the story.',
+  'The garden is a restaurant where the food is also a customer and the customer is also on the menu.',
+  'The ecosystem runs on a simple loop: grow, eat, be eaten, decompose, repeat. The comments in the code just say "trust the process."',
+  '{fungusCount} fungi observe the predator-prey drama with the patience of a database that knows all records eventually get archived.',
 ];
 
 const AMBIENT_TENSION_TEMPLATES: readonly string[] = [
@@ -198,6 +353,18 @@ const AMBIENT_TENSION_TEMPLATES: readonly string[] = [
   'The garden holds steady, but barely. One bad tick could cascade into something worse.',
   '{totalLiving} entities in a garden that feels smaller every tick. Competition intensifies.',
   'The quiet before the storm. Or maybe just quiet. The garden is not telling.',
+  'The ecosystem feels one unlucky roll away from a cascade.',
+  'Resource charts are trending toward "uh-oh."',
+  'The vibe in the garden just shifted from "sustainable" to "we should have planned for this."',
+  'Tension rises. The food chain is a rubber band stretched to its limit. Something will snap. The only question is what.',
+  '{totalLiving} entities, shrinking resources, and zero exit strategy. This is the worst escape room ever.',
+  'The garden is running low on everything except drama and fungi.',
+  'Resource scarcity at {moisturePercent}% moisture. The garden just entered "every entity for itself" mode.',
+  'The ecosystem is giving "last 10% of phone battery" energy. Technically alive. Functionally panicking.',
+  'Conditions tighten. {herbivoreCount} herbivores compete for {plantCount} plants. The math is getting hostile.',
+  'Alert: the garden is now operating in "technical debt" mode. Everything works. Nothing is sustainable.',
+  'The tension in this garden is thicker than the fog. And the fog was already pretty thick.',
+  '{totalLiving} entities and falling resources. This is what the graphs looked like right before every collapse in history.',
 ];
 
 const AMBIENT_MILESTONE_TEMPLATES: readonly string[] = [
@@ -209,6 +376,17 @@ const AMBIENT_MILESTONE_TEMPLATES: readonly string[] = [
   '{fungusCount} fungi quietly maintain the garden\'s recycling program. Unpaid, unappreciated, essential.',
   'At {totalLiving} entities, the garden is a city in miniature. Complete with politics and resource wars.',
   'The garden census reads {totalLiving}. Each one a story. Most of them short.',
+  'Milestone reached: {totalLiving} active processes pretending to be destiny.',
+  'Population achievement unlocked: "Chaotic, but functioning."',
+  '{totalLiving} entities! The garden just hit product-market fit. The product is survival. The market is chaos.',
+  'The ecosystem supports {totalLiving} lives. That is {totalLiving} more than most empty JavaScript objects.',
+  'Achievement unlocked: {plantCount} plants, {herbivoreCount} herbivores, {carnivoreCount} carnivores, and {fungusCount} fungi all existing at the same time without a segfault.',
+  '{totalLiving} inhabitants. The garden is officially more populated than the average developer\'s social life.',
+  'The garden census reveals {totalLiving} active entities. Each one a miracle. Each one one bad tick away from being a statistic.',
+  '{totalLiving} living entities thriving in 480,000 square pixels. Real estate prices are through the roof.',
+  'Population milestone: {totalLiving}. The garden has more residents than bugs in its codebase. Barely.',
+  '{fungusCount} fungi maintain the recycling infrastructure for {totalLiving} entities. The real MVPs. No cap.',
+  'The garden hits {totalLiving} total lives. This is either an achievement or a warning. Context determines everything.',
 ];
 
 // ==========================================
