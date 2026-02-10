@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chaos Garden icon">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f2b1a" />
+      <stop offset="1" stop-color="#0a120d" />
+    </linearGradient>
+    <radialGradient id="glow" cx="32" cy="24" r="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#46f68a" stop-opacity="0.55" />
+      <stop offset="1" stop-color="#46f68a" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="leaf" x1="18" y1="18" x2="46" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#52ffb7" />
+      <stop offset="1" stop-color="#7cf0ff" />
+    </linearGradient>
+  </defs>
+
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="url(#bg)" />
+  <circle cx="32" cy="30" r="24" fill="url(#glow)" />
+  <path fill="#0b1c12" opacity="0.6" d="M17 45c8.5-1.5 14.2-7 16.9-14.6 4.3 7.3 10.5 11.7 17.1 13.2-3.4 3.2-8.7 5.4-15 5.4-7.4 0-14.2-2.9-19-4z" />
+  <path fill="url(#leaf)" d="M31.2 45.5c-.7-12.7 6-20.3 15.7-23.2-1.3 8.9-6.3 15.6-13.6 19.9l-.4.2-.3.2-1.4 2.9z" />
+  <path fill="url(#leaf)" d="M29.5 42.8c-6.8-2.8-11.1-9.2-11.5-17.3 8.4 1.7 13.8 6.9 15.8 14.2l-2.6 3.1-.7.7z" />
+  <path fill="none" stroke="#9fffd8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M32 18c0 7-2.5 12-7.5 15" />
+  <circle cx="32" cy="16" r="3" fill="#7dfcc8" />
+  <circle cx="35" cy="18" r="1.2" fill="#d9fff1" />
+</svg>
