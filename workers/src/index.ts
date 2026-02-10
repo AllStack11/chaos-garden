@@ -18,6 +18,7 @@ import {
   getLatestGardenStateFromDatabase,
   getRecentSimulationEventsFromDatabase,
   getAllLivingEntitiesFromDatabase,
+  getAllDecomposableDeadEntitiesFromDatabase,
 } from './db/queries';
 import type { HealthStatus } from '@chaos-garden/shared';
 
@@ -131,8 +132,10 @@ async function handleGetGarden(env: Env): Promise<Response> {
       return createNotFoundResponse('No garden state found - garden may not be initialized');
     }
     
-    // Get all living entities
-    const entities = await getAllLivingEntitiesFromDatabase(env.DB);
+    // Get all entities currently visible in the garden (living + decomposable dead matter)
+    const livingEntities = await getAllLivingEntitiesFromDatabase(env.DB);
+    const decomposableDeadEntities = await getAllDecomposableDeadEntitiesFromDatabase(env.DB);
+    const entities = [...livingEntities, ...decomposableDeadEntities];
     
     // Get recent events
     const events = await getRecentSimulationEventsFromDatabase(env.DB, 20);
@@ -140,6 +143,8 @@ async function handleGetGarden(env: Env): Promise<Response> {
     await logger.debug('api_get_garden_success', 'Garden state retrieved', {
       tick: gardenState.tick,
       entityCount: entities.length,
+      livingEntityCount: livingEntities.length,
+      deadEntityCount: decomposableDeadEntities.length,
       eventCount: events.length
     });
     

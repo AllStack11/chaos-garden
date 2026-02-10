@@ -281,7 +281,10 @@ export class GardenEntityRenderer {
     prepared: PreparedEntity,
     config: EntityRenderConfig,
   ): void {
-    if (!prepared.entity.isAlive) return;
+    if (!prepared.entity.isAlive) {
+      this.drawDeadEntityCarcass(ctx, prepared);
+      return;
+    }
 
     ctx.save();
     this.applyTypeMotionTransform(ctx, prepared, config);
@@ -301,6 +304,52 @@ export class GardenEntityRenderer {
         break;
     }
 
+    ctx.restore();
+  }
+
+  private drawDeadEntityCarcass(
+    ctx: CanvasRenderingContext2D,
+    prepared: PreparedEntity,
+  ): void {
+    const remainingEnergyFactor = Math.max(0, Math.min(1, prepared.entity.energy / 100));
+    const decayFactor = 1 - remainingEnergyFactor;
+    const carcassScale = 0.25 + (remainingEnergyFactor * 0.75);
+    const carcassRadius = Math.max(1.5, prepared.radius * carcassScale);
+    const darkness = 16 + Math.round(decayFactor * 56);
+    const alpha = 0.24 + (remainingEnergyFactor * 0.2);
+    const flattenY = 0.55 - (decayFactor * 0.2);
+
+    ctx.save();
+    ctx.fillStyle = `rgba(${darkness}, ${darkness}, ${darkness}, ${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(
+      prepared.x,
+      prepared.y,
+      carcassRadius,
+      carcassRadius * flattenY,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    // Keep a faint rim while the carcass still has decomposable mass.
+    if (remainingEnergyFactor > 0.05) {
+      const rimAlpha = 0.08 + (remainingEnergyFactor * 0.12);
+      ctx.strokeStyle = `rgba(${darkness + 20}, ${darkness + 16}, ${darkness + 12}, ${rimAlpha})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(
+        prepared.x,
+        prepared.y,
+        carcassRadius,
+        carcassRadius * flattenY,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
