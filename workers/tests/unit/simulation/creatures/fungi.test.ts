@@ -71,7 +71,7 @@ describe('simulation/creatures/fungi', () => {
     expect(deadHerbivore.energy).toBe(10);
   });
 
-  it('dies when energy reaches zero', async () => {
+  it('loses health first when energy reaches zero', async () => {
     const fungus = buildFungus({ energy: 0.01 });
 
     await processFungusBehaviorDuringTick(
@@ -81,7 +81,8 @@ describe('simulation/creatures/fungi', () => {
       createFakeEventLogger()
     );
 
-    expect(fungus.isAlive).toBe(false);
+    expect(fungus.isAlive).toBe(true);
     expect(fungus.energy).toBe(0);
+    expect(fungus.health).toBe(99);
   });
 });

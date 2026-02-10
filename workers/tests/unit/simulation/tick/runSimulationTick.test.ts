@@ -148,19 +148,24 @@ describe('simulation/tick/runSimulationTick', () => {
     expect(persistedPlant?.age).toBe(4);
   });
 
-  it('marks dead entities when energy depletes', async () => {
+  it('applies starvation decay when energy depletes', async () => {
     const dyingPlant = buildPlant({ id: 'plant-dead', energy: 0.1, photosynthesisRate: 0, reproductionRate: 0 });
     mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([dyingPlant]);
 
     const result = await runSimulationTick({} as any, createFakeApplicationLogger(), false);
+    const savedEntities = mockQueries.saveEntitiesToDatabase.mock.calls[0][1] as Entity[];
+    const persistedPlant = savedEntities.find((entity) => entity.id === 'plant-dead');
 
     expect(result.executed).toBe(true);
-    expect(result.deaths).toBe(1);
-    expect(mockEventLoggerFactories.eventLogger.logDeath).toHaveBeenCalledTimes(1);
-    expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, ['plant-dead'], 1);
+    expect(result.deaths).toBe(0);
+    expect(mockEventLoggerFactories.eventLogger.logDeath).not.toHaveBeenCalled();
+    expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, [], 1);
+    expect(persistedPlant?.isAlive).toBe(true);
+    expect(persistedPlant?.energy).toBe(0);
+    expect(persistedPlant?.health).toBe(99);
     expect(result.populations.total).toBe(1);
-    expect(result.populations.totalDead).toBe(1);
-    expect(result.populations.allTimeDead).toBe(1);
+    expect(result.populations.totalDead).toBe(0);
+    expect(result.populations.allTimeDead).toBe(0);
   });
 
   it('persists offspring with assigned bornAtTick and gardenStateId', async () => {

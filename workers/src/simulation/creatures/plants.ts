@@ -22,6 +22,7 @@ import { calculateMoistureGrowthMultiplier } from '../environment/creature-effec
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
   logTraitMutationsForOffspring,
+  applyStarvationHealthDecay,
   isEntityDead,
   getEntityCauseOfDeath
 } from './creatureHelpers';
@@ -34,6 +35,7 @@ const REPRODUCTION_COST = 30;
 const BASE_METABOLISM_COST = 0.2;
 const MAX_AGE = 200;
 const SEED_SPREAD_RADIUS = 50; // Increased from 30 for more spread out offspring
+const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 /**
  * Create a new plant entity.
@@ -109,12 +111,9 @@ export async function processPlantBehaviorDuringTick(
   if (plant.age >= MAX_AGE) {
     plant.isAlive = false;
     plant.health = 0;
-  }
-  
-  if (plant.energy <= 0) {
-    plant.isAlive = false;
-    plant.health = 0;
     plant.energy = 0;
+  } else {
+    applyStarvationHealthDecay(plant, STARVATION_HEALTH_DECAY_PER_TICK);
   }
   
   plant.updatedAt = createTimestamp();

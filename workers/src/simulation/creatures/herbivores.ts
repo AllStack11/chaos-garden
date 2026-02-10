@@ -41,6 +41,7 @@ import { calculateTemperatureMetabolismMultiplier } from '../environment/creatur
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
   logTraitMutationsForOffspring,
+  applyStarvationHealthDecay,
   isEntityDead,
   getEntityCauseOfDeath
 } from './creatureHelpers';
@@ -54,9 +55,11 @@ const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
 const MAX_REPRODUCTIVE_AGE = 110; // older herbivores can no longer reproduce
 const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
+const HEALTH_RECOVERY_FROM_FEED = 5;
 const MOVE_TO_PLANT_COST_MULTIPLIER = 0.68;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
 const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
+const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 // State tracking for fleeing behavior (ephemeral, not persisted)
 const herbivoreFleeingState = new Map<string, {
@@ -215,12 +218,9 @@ export async function processHerbivoreBehaviorDuringTick(
   if (herbivore.age >= MAX_AGE) {
     herbivore.isAlive = false;
     herbivore.health = 0;
-  }
-
-  if (herbivore.energy <= 0) {
-    herbivore.isAlive = false;
-    herbivore.health = 0;
     herbivore.energy = 0;
+  } else {
+    applyStarvationHealthDecay(herbivore, STARVATION_HEALTH_DECAY_PER_TICK);
   }
 
   herbivore.updatedAt = createTimestamp();
@@ -290,6 +290,9 @@ function performForagingBehavior(
 function eatPlant(herbivore: Entity, plant: Entity): number {
   const energyGained = Math.min(ENERGY_FROM_PLANT, plant.energy);
   herbivore.energy = clampValueToRange(herbivore.energy + energyGained, 0, MAX_ENERGY);
+  if (energyGained > 0) {
+    herbivore.health = clampValueToRange(herbivore.health + HEALTH_RECOVERY_FROM_FEED, 0, 100);
+  }
   plant.energy = Math.max(0, plant.energy - energyGained);
   plant.isAlive = false;
   plant.health = 0;

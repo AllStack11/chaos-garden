@@ -37,7 +37,48 @@ describe('simulation/creatures/herbivores', () => {
     expect(plant.health).toBe(0);
   });
 
-  it('dies when energy falls to zero', async () => {
+  it('restores health when a starving herbivore feeds', async () => {
+    const herbivore = buildHerbivore({
+      position: { x: 0, y: 0 },
+      energy: 0,
+      health: 40
+    });
+    const plant = buildPlant({ id: 'plant-recovery', position: { x: 1, y: 1 }, energy: 20 });
+
+    await processHerbivoreBehaviorDuringTick(
+      herbivore,
+      buildEnvironment(),
+      [plant],
+      createFakeEventLogger()
+    );
+
+    expect(herbivore.health).toBeGreaterThan(40);
+    expect(herbivore.energy).toBeGreaterThan(0);
+  });
+
+  it('applies regular feeding effects to both energy and health', async () => {
+    const herbivore = buildHerbivore({
+      position: { x: 0, y: 0 },
+      energy: 40,
+      health: 80
+    });
+    const plant = buildPlant({ id: 'plant-regular-feed', position: { x: 1, y: 1 }, energy: 20 });
+
+    const result = await processHerbivoreBehaviorDuringTick(
+      herbivore,
+      buildEnvironment(),
+      [plant],
+      createFakeEventLogger()
+    );
+
+    expect(result.consumed).toEqual(['plant-regular-feed']);
+    expect(herbivore.energy).toBe(59);
+    expect(herbivore.health).toBe(85);
+    expect(plant.isAlive).toBe(false);
+    expect(plant.energy).toBe(0);
+  });
+
+  it('loses health first when energy falls to zero', async () => {
     const herbivore = buildHerbivore({ energy: 0.1, position: { x: 0, y: 0 }, perceptionRadius: 10 });
 
     await processHerbivoreBehaviorDuringTick(
@@ -47,8 +88,9 @@ describe('simulation/creatures/herbivores', () => {
       createFakeEventLogger()
     );
 
-    expect(herbivore.isAlive).toBe(false);
+    expect(herbivore.isAlive).toBe(true);
     expect(herbivore.energy).toBe(0);
+    expect(herbivore.health).toBe(99);
   });
 
   it('does not reproduce after max reproductive age', async () => {

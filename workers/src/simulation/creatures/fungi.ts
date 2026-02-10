@@ -29,6 +29,7 @@ import { calculateTemperatureMetabolismMultiplier } from '../environment/creatur
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
   logTraitMutationsForOffspring,
+  applyStarvationHealthDecay,
   isEntityDead,
   getEntityCauseOfDeath
 } from './creatureHelpers';
@@ -44,6 +45,7 @@ const ENERGY_FROM_DECOMPOSITION = 20; // energy gained per decomposition
 const SPORE_SPREAD_RADIUS = 40; // how far spores can travel
 const FUNGUS_MOVEMENT_SPEED = 0.4; // slow creeping movement toward dead matter
 const FUNGUS_MOVEMENT_COST_MULTIPLIER = 0.25; // moving is cheap but not free
+const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 /**
  * Create a new fungus entity.
@@ -142,12 +144,8 @@ export async function processFungusBehaviorDuringTick(
     fungus.isAlive = false;
     fungus.health = 0;
     fungus.energy = 0;
-  }
-  
-  if (fungus.energy <= 0) {
-    fungus.isAlive = false;
-    fungus.health = 0;
-    fungus.energy = 0;
+  } else {
+    applyStarvationHealthDecay(fungus, STARVATION_HEALTH_DECAY_PER_TICK);
   }
   
   fungus.updatedAt = createTimestamp();

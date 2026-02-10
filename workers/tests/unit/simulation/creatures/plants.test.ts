@@ -44,13 +44,14 @@ describe('simulation/creatures/plants', () => {
     expect(plant.health).toBe(0);
   });
 
-  it('dies when energy reaches zero', async () => {
+  it('loses health first when energy reaches zero', async () => {
     const plant = buildPlant({ energy: 0.1, photosynthesisRate: 0 });
     const environment = buildEnvironment({ tick: 0, moisture: 0.5 });
 
     await processPlantBehaviorDuringTick(plant, environment, createFakeEventLogger());
 
-    expect(plant.isAlive).toBe(false);
+    expect(plant.isAlive).toBe(true);
     expect(plant.energy).toBe(0);
+    expect(plant.health).toBe(99);
   });
 });

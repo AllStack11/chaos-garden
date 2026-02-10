@@ -58,6 +58,48 @@ describe('simulation/creatures/carnivores', () => {
     expect(prey.energy).toBe(70);
   });
 
+  it('restores health when a starving carnivore feeds', async () => {
+    const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 0, health: 40 });
+    const prey = buildHerbivore({ id: 'prey-recovery', position: { x: 0, y: 0 }, energy: 20, health: 100 });
+
+    await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [prey],
+      createFakeEventLogger()
+    );
+
+    expect(carnivore.health).toBeGreaterThan(40);
+    expect(carnivore.energy).toBeGreaterThan(0);
+  });
+
+  it('applies regular feeding effects to both energy and health', async () => {
+    const carnivore = buildCarnivore({
+      position: { x: 0, y: 0 },
+      energy: 30,
+      health: 70
+    });
+    const prey = buildHerbivore({
+      id: 'prey-regular-feed',
+      position: { x: 0, y: 0 },
+      energy: 20,
+      health: 60
+    });
+
+    const result = await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [prey],
+      createFakeEventLogger()
+    );
+
+    expect(result.consumed).toEqual(['prey-regular-feed']);
+    expect(carnivore.energy).toBe(60.75);
+    expect(carnivore.health).toBe(75);
+    expect(prey.isAlive).toBe(false);
+    expect(prey.energy).toBe(0);
+  });
+
   it('does not reproduce after max reproductive age', async () => {
     const carnivore = buildCarnivore({
       age: 170,

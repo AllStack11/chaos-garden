@@ -49,7 +49,29 @@ export async function logTraitMutationsForOffspring(
  * Shared definition for whether an entity is dead in simulation terms.
  */
 export function isEntityDead(entity: Entity): boolean {
-  return !entity.isAlive || entity.health <= 0 || entity.energy <= 0;
+  return !entity.isAlive || (entity.health <= 0 && entity.energy <= 0);
+}
+
+/**
+ * Apply starvation decay when an entity has exhausted its energy reserves.
+ * Energy is clamped at zero, then health decays each tick until death.
+ */
+export function applyStarvationHealthDecay(
+  entity: Entity,
+  healthDecayPerTick: number
+): void {
+  if (entity.energy > 0 || !entity.isAlive) {
+    return;
+  }
+
+  entity.energy = 0;
+  entity.health = Math.max(0, entity.health - healthDecayPerTick);
+
+  if (entity.health <= 0 && entity.energy <= 0) {
+    entity.health = 0;
+    entity.energy = 0;
+    entity.isAlive = false;
+  }
 }
 
 /**

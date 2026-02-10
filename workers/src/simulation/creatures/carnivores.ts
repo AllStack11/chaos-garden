@@ -39,6 +39,7 @@ import { calculateTemperatureMetabolismMultiplier } from '../environment/creatur
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 import {
   logTraitMutationsForOffspring,
+  applyStarvationHealthDecay,
   isEntityDead,
   getEntityCauseOfDeath
 } from './creatureHelpers';
@@ -52,11 +53,13 @@ const HUNTING_DISTANCE = 8; // pixels (slightly larger than herbivore eating)
 const MAX_AGE = 200; // ticks (carnivores live longer but are fewer)
 const MAX_REPRODUCTIVE_AGE = 150; // older carnivores can no longer reproduce
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
+const HEALTH_RECOVERY_FROM_FEED = 5;
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
 const HUNT_MOVEMENT_COST_MULTIPLIER = 0.75;
 const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
+const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 // State tracking for hunting behavior (ephemeral, not persisted)
 const carnivoreHuntingState = new Map<string, {
@@ -189,12 +192,9 @@ export async function processCarnivoreBehaviorDuringTick(
   if (carnivore.age >= MAX_AGE) {
     carnivore.isAlive = false;
     carnivore.health = 0;
-  }
-
-  if (carnivore.energy <= 0) {
-    carnivore.isAlive = false;
-    carnivore.health = 0;
     carnivore.energy = 0;
+  } else {
+    applyStarvationHealthDecay(carnivore, STARVATION_HEALTH_DECAY_PER_TICK);
   }
 
   carnivore.updatedAt = createTimestamp();
@@ -349,6 +349,9 @@ function huntHerbivore(carnivore: Entity, prey: Entity): number {
   const remainingCarcassEnergy = clampValueToRange(availablePreyEnergy - energyGained, 0, MAX_CARCASS_ENERGY);
 
   carnivore.energy = clampValueToRange(carnivore.energy + energyGained, 0, MAX_ENERGY);
+  if (energyGained > 0) {
+    carnivore.health = clampValueToRange(carnivore.health + HEALTH_RECOVERY_FROM_FEED, 0, 100);
+  }
   prey.energy = remainingCarcassEnergy;
   prey.isAlive = false;
   prey.health = 0;
