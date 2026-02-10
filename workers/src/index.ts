@@ -80,7 +80,44 @@ function getCorsHeaders(origin: string): Record<string, string> {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
   };
+}
+
+/**
+ * Resolve request-specific CORS origin.
+ * Allows Pages preview subdomains when CORS_ORIGIN is a pages.dev host.
+ */
+function resolveCorsOrigin(request: Request, configuredOrigin: string): string {
+  if (configuredOrigin === '*') {
+    return '*';
+  }
+
+  const requestOrigin = request.headers.get('Origin');
+  if (!requestOrigin) {
+    return configuredOrigin;
+  }
+
+  try {
+    const configuredUrl = new URL(configuredOrigin);
+    const requestUrl = new URL(requestOrigin);
+
+    const configuredHost = configuredUrl.hostname;
+    const requestHost = requestUrl.hostname;
+    const isSameOrigin = configuredUrl.origin === requestUrl.origin;
+    const isPagesPreviewOrigin =
+      configuredHost.endsWith('.pages.dev') &&
+      requestHost.endsWith(`.${configuredHost}`) &&
+      requestUrl.protocol === configuredUrl.protocol;
+
+    if (isSameOrigin || isPagesPreviewOrigin) {
+      return requestUrl.origin;
+    }
+  } catch {
+    // Fall back to configured origin if URL parsing fails.
+  }
+
+  return configuredOrigin;
 }
 
 // ==========================================
@@ -232,7 +269,8 @@ export default {
    * Handle HTTP requests
    */
   async fetch(request: Request, env: Env): Promise<Response> {
-    const corsOrigin = env.CORS_ORIGIN ?? '*';
+    const configuredCorsOrigin = env.CORS_ORIGIN ?? '*';
+    const corsOrigin = resolveCorsOrigin(request, configuredCorsOrigin);
     const environmentName = env.ENVIRONMENT ?? 'production';
 
     if (!hasDatabaseBinding(env)) {
