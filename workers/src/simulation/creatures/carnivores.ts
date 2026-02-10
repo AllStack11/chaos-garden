@@ -31,6 +31,7 @@ const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 50;
 const HUNTING_DISTANCE = 8; // pixels (slightly larger than herbivore eating)
 const MAX_AGE = 200; // ticks (carnivores live longer but are fewer)
+const MAX_REPRODUCTIVE_AGE = 150; // older carnivores can no longer reproduce
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
@@ -137,7 +138,7 @@ export async function processCarnivoreBehaviorDuringTick(
   carnivore.energy -= BASE_METABOLISM_COST * tempMultiplier;
   
   // 4. Reproduction
-  if (carnivore.energy >= REPRODUCTION_THRESHOLD) {
+  if (carnivore.age <= MAX_REPRODUCTIVE_AGE && carnivore.energy >= REPRODUCTION_THRESHOLD) {
     if (willRandomEventOccur(carnivore.reproductionRate)) {
       const child = await attemptCarnivoreReproduction(carnivore, carnivore.gardenStateId ?? 0, eventLogger);
       if (child) {

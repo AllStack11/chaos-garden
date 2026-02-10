@@ -35,6 +35,7 @@ import {
   getLatestGardenStateFromDatabase,
   saveGardenStateToDatabase,
   getAllLivingEntitiesFromDatabase,
+  getAllDecomposableDeadEntitiesFromDatabase,
   deleteSimulationEventsByTickFromDatabase,
   saveEntitiesToDatabase,
   markEntitiesAsDeadInDatabase
@@ -180,6 +181,7 @@ export async function runSimulationTick(
     // 4. Load all living entities
     const entityLoadStart = Date.now();
     const livingEntities = await getAllLivingEntitiesFromDatabase(db);
+    const decomposableDeadEntities = await getAllDecomposableDeadEntitiesFromDatabase(db);
     metrics.load_entities_duration = Date.now() - entityLoadStart;
     
     await appLogger.debug('entities_loaded', `Loaded ${livingEntities.length} entities`, {
@@ -195,6 +197,7 @@ export async function runSimulationTick(
     const processingStart = Date.now();
     const processingResult = await processEntitiesForTick(
       livingEntities,
+      decomposableDeadEntities,
       updatedEnvironment,
       eventLogger,
       appLogger
@@ -257,6 +260,7 @@ export async function runSimulationTick(
       processingResult.newEntities,
       deadEntities,
       stillLivingEntities,
+      processingResult.updatedDeadEntities,
       appLogger
     );
     metrics.save_entities_duration = Date.now() - entitySaveStart;
@@ -323,6 +327,7 @@ export async function runSimulationTick(
  */
 async function processEntitiesForTick(
   entities: Entity[],
+  decomposableDeadEntities: Entity[],
   environment: Environment,
   eventLogger: EventLogger,
   appLogger: ApplicationLogger
@@ -330,6 +335,7 @@ async function processEntitiesForTick(
   newEntities: Entity[];
   consumedPlantIds: string[];
   decomposedEntityIds: string[];
+  updatedDeadEntities: Entity[];
 }> {
   const newEntities: Entity[] = [];
   const consumedPlantIds: string[] = [];
@@ -408,7 +414,12 @@ async function processEntitiesForTick(
   
   // Process fungi (they decompose dead matter)
   for (const fungus of fungi) {
-    const result = await processFungusBehaviorDuringTick(fungus, environment, entities, eventLogger);
+    const result = await processFungusBehaviorDuringTick(
+      fungus,
+      environment,
+      [...entities, ...decomposableDeadEntities],
+      eventLogger
+    );
     // Link offspring to parent for lineage
     for (const child of result.offspring) {
       child.lineage = fungus.id;
@@ -427,8 +438,13 @@ async function processEntitiesForTick(
       });
     }
   }
-  
-  return { newEntities, consumedPlantIds, decomposedEntityIds };
+
+  const decomposedEntityIdsSet = new Set(decomposedEntityIds);
+  const updatedDeadEntities = decomposableDeadEntities.filter(entity =>
+    decomposedEntityIdsSet.has(entity.id)
+  );
+
+  return { newEntities, consumedPlantIds, decomposedEntityIds, updatedDeadEntities };
 }
 
 /**
@@ -496,6 +512,7 @@ async function saveEntitiesAndCleanup(
   newEntities: Entity[],
   deadEntities: Entity[],
   livingEntities: Entity[],
+  updatedDeadEntities: Entity[],
   appLogger: ApplicationLogger
 ): Promise<void> {
   // 1. Prepare new entities for the world
@@ -504,8 +521,12 @@ async function saveEntitiesAndCleanup(
     entity.gardenStateId = gardenStateId;
   }
 
-  // 2. Save all entities (new offspring + updated living ones)
-  const entitiesToSave = [...newEntities, ...livingEntities];
+  // 2. Save all entities (new offspring + updated living/dead ones)
+  const entitiesToSaveById = new Map<string, Entity>();
+  for (const entity of [...newEntities, ...livingEntities, ...deadEntities, ...updatedDeadEntities]) {
+    entitiesToSaveById.set(entity.id, entity);
+  }
+  const entitiesToSave = [...entitiesToSaveById.values()];
   await saveEntitiesToDatabase(db, entitiesToSave);
   
   await appLogger.debug('entities_saved', `Saved ${entitiesToSave.length} entities at tick ${tickNumber}`, {

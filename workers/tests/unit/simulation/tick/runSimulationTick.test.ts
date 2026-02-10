@@ -10,6 +10,7 @@ const mockQueries = vi.hoisted(() => ({
   saveGardenStateToDatabase: vi.fn(),
   getAllEntitiesFromDatabase: vi.fn(),
   getAllLivingEntitiesFromDatabase: vi.fn(),
+  getAllDecomposableDeadEntitiesFromDatabase: vi.fn(),
   deleteSimulationEventsByTickFromDatabase: vi.fn(),
   saveEntitiesToDatabase: vi.fn(),
   markEntitiesAsDeadInDatabase: vi.fn()
@@ -104,6 +105,7 @@ describe('simulation/tick/runSimulationTick', () => {
     mockQueries.getLatestGardenStateFromDatabase.mockResolvedValue(previousState);
     mockQueries.getGardenStateByTickFromDatabase.mockResolvedValue(previousState);
     mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([livingPlant]);
+    mockQueries.getAllDecomposableDeadEntitiesFromDatabase.mockResolvedValue([]);
     mockQueries.deleteSimulationEventsByTickFromDatabase.mockResolvedValue(undefined);
     mockQueries.saveGardenStateToDatabase.mockResolvedValue(2);
     mockQueries.saveEntitiesToDatabase.mockResolvedValue(undefined);

@@ -50,4 +50,22 @@ describe('simulation/creatures/herbivores', () => {
     expect(herbivore.isAlive).toBe(false);
     expect(herbivore.energy).toBe(0);
   });
+
+  it('does not reproduce after max reproductive age', async () => {
+    const herbivore = buildHerbivore({
+      age: 120,
+      energy: 100,
+      reproductionRate: 1
+    });
+    const nearbyPlant = buildPlant({ position: { x: 0, y: 0 } });
+
+    const result = await processHerbivoreBehaviorDuringTick(
+      herbivore,
+      buildEnvironment(),
+      [nearbyPlant],
+      createFakeEventLogger()
+    );
+
+    expect(result.offspring).toEqual([]);
+  });
 });

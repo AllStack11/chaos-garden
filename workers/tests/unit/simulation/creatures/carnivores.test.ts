@@ -52,4 +52,23 @@ describe('simulation/creatures/carnivores', () => {
     expect(prey.isAlive).toBe(false);
     expect(prey.energy).toBe(70);
   });
+
+  it('does not reproduce after max reproductive age', async () => {
+    const carnivore = buildCarnivore({
+      age: 170,
+      energy: 100,
+      reproductionRate: 1,
+      position: { x: 0, y: 0 }
+    });
+    const prey = buildHerbivore({ id: 'prey-old-age', position: { x: 0, y: 0 }, energy: 100, health: 100 });
+
+    const result = await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [prey],
+      createFakeEventLogger()
+    );
+
+    expect(result.offspring).toEqual([]);
+  });
 });

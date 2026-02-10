@@ -178,6 +178,26 @@ export async function getAllLivingEntitiesFromDatabase(
 }
 
 /**
+ * Load dead entities that still contain decomposable energy.
+ * These are potential food sources for fungi across ticks.
+ */
+export async function getAllDecomposableDeadEntitiesFromDatabase(
+  db: D1Database
+): Promise<Entity[]> {
+  const rows = await queryAll<EntityRow>(
+    db,
+    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
+            energy, health, age, traits, lineage, created_at, updated_at
+     FROM entities
+     WHERE is_alive = 0
+       AND energy > 0
+       AND type != 'fungus'`
+  );
+
+  return rows.map(mapRowToEntity);
+}
+
+/**
  * Retrieve a specific entity by its ID.
  * Like calling forth a specific creature by name.
  * 

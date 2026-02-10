@@ -32,6 +32,7 @@ const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 40;
 const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
+const MAX_REPRODUCTIVE_AGE = 110; // older herbivores can no longer reproduce
 const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
 
 /**
@@ -138,7 +139,7 @@ export async function processHerbivoreBehaviorDuringTick(
   herbivore.energy -= BASE_METABOLISM_COST * tempMultiplier;
   
   // 4. Reproduction
-  if (herbivore.energy >= REPRODUCTION_THRESHOLD) {
+  if (herbivore.age <= MAX_REPRODUCTIVE_AGE && herbivore.energy >= REPRODUCTION_THRESHOLD) {
     if (willRandomEventOccur(herbivore.reproductionRate)) {
       const child = await attemptHerbivoreReproduction(herbivore, herbivore.gardenStateId ?? 0, eventLogger);
       if (child) {
