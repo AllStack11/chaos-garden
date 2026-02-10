@@ -142,7 +142,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
     private gardenService: GardenService;
     private refreshInterval = 30000;
     private healthInterval = 10000;
+    private gardenRefreshTimer: number | null = null;
+    private healthCheckTimer: number | null = null;
     private countdownTimer: number | null = null;
+    private uiTimeout: number | null = null;
     
     private state: {
       gardenState: GardenState | null;
@@ -176,37 +179,57 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
       this.loadGardenData();
       this.checkHealth();
       
-      setInterval(() => this.loadGardenData(), this.refreshInterval);
-      setInterval(() => this.checkHealth(), this.healthInterval);
+      this.gardenRefreshTimer = window.setInterval(() => this.loadGardenData(), this.refreshInterval);
+      this.healthCheckTimer = window.setInterval(() => this.checkHealth(), this.healthInterval);
       
       // Start countdown timer (every second)
       this.countdownTimer = window.setInterval(() => this.updateCountdown(), 1000);
     }
 
     disconnectedCallback() {
-      if (this.countdownTimer) clearInterval(this.countdownTimer);
+      if (this.gardenRefreshTimer) {
+        clearInterval(this.gardenRefreshTimer);
+        this.gardenRefreshTimer = null;
+      }
+      if (this.healthCheckTimer) {
+        clearInterval(this.healthCheckTimer);
+        this.healthCheckTimer = null;
+      }
+      if (this.countdownTimer) {
+        clearInterval(this.countdownTimer);
+        this.countdownTimer = null;
+      }
+      if (this.uiTimeout) {
+        clearTimeout(this.uiTimeout);
+        this.uiTimeout = null;
+      }
+      this.removeEventListener('entity-selected', this.handleEntitySelected as EventListener);
+      window.removeEventListener('mousemove', this.resetUIOverlayOpacity);
+      window.removeEventListener('click', this.resetUIOverlayOpacity);
     }
 
-    private setupEventListeners() {
-      this.addEventListener('entity-selected', (event: any) => {
-        this.state.selectedEntity = event.detail;
-        this.updateUI();
-      });
+    private readonly handleEntitySelected = (event: Event) => {
+      const entitySelectedEvent = event as CustomEvent<Entity | null>;
+      this.state.selectedEntity = entitySelectedEvent.detail;
+      this.updateUI();
+    };
 
-      // UI Fade out logic
-      let uiTimeout: number;
+    private readonly resetUIOverlayOpacity = () => {
       const overlay = this.querySelector('#ui-overlay');
-      const resetUI = () => {
-        if (overlay) overlay.classList.remove('opacity-0');
-        clearTimeout(uiTimeout);
-        uiTimeout = window.setTimeout(() => {
-          if (overlay && !this.state.selectedEntity) overlay.classList.add('opacity-0');
-        }, 5000);
-      };
+      if (overlay) overlay.classList.remove('opacity-0');
+      if (this.uiTimeout) {
+        clearTimeout(this.uiTimeout);
+      }
+      this.uiTimeout = window.setTimeout(() => {
+        if (overlay && !this.state.selectedEntity) overlay.classList.add('opacity-0');
+      }, 5000);
+    };
 
-      window.addEventListener('mousemove', resetUI);
-      window.addEventListener('click', resetUI);
-      resetUI();
+    private setupEventListeners() {
+      this.addEventListener('entity-selected', this.handleEntitySelected as EventListener);
+      window.addEventListener('mousemove', this.resetUIOverlayOpacity);
+      window.addEventListener('click', this.resetUIOverlayOpacity);
+      this.resetUIOverlayOpacity();
     }
 
     private async loadGardenData() {
@@ -219,9 +242,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
 
         if (data) {
           console.log('[GardenApp] Data received:', data);
+          const selectedEntityId = this.state.selectedEntity?.id;
           this.state.gardenState = data.gardenState;
           this.state.entities = data.entities;
           this.state.recentEvents = data.events;
+          this.state.selectedEntity = selectedEntityId
+            ? this.state.entities.find((entity) => entity.id === selectedEntityId) ?? null
+            : null;
           
           if (data.gardenState.timestamp) {
             const newTickTime = new Date(data.gardenState.timestamp);
@@ -454,5 +481,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
     }
   }
 
-  customElements.define('garden-app', GardenApp);
+  if (!customElements.get('garden-app')) {
+    customElements.define('garden-app', GardenApp);
+  }
 </script>

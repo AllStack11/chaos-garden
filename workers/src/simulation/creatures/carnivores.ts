@@ -12,6 +12,7 @@ import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
   generateRandomName,
+  extractCategoryFromName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -49,6 +50,8 @@ export function createNewCarnivoreEntity(
   parentName?: string
 ): Entity {
   const now = createTimestamp();
+  const name = generateRandomName('carnivore', parentName);
+  const species = extractCategoryFromName(name);
   
   return {
     id: generateEntityId(),
@@ -57,8 +60,8 @@ export function createNewCarnivoreEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'carnivore',
-    name: generateRandomName('carnivore', parentName),
-    species: 'Stalkers',
+    name,
+    species,
     position: { ...position },
     energy: 50,
     health: 100,

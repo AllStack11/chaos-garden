@@ -14,6 +14,7 @@ import type { EventLogger } from '../../logging/event-logger';
 import {
   generateEntityId,
   generateRandomName,
+  extractCategoryFromName,
   createTimestamp,
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
@@ -51,6 +52,8 @@ export function createNewFungusEntity(
   parentName?: string
 ): Entity {
   const now = createTimestamp();
+  const name = generateRandomName('fungus', parentName);
+  const species = extractCategoryFromName(name);
   
   return {
     id: generateEntityId(),
@@ -59,8 +62,8 @@ export function createNewFungusEntity(
     deathTick: undefined,
     isAlive: true,
     type: 'fungus',
-    name: generateRandomName('fungus', parentName),
-    species: 'Mycelium',
+    name,
+    species,
     position: { ...position },
     energy: 40, // Start with moderate energy
     health: 100,

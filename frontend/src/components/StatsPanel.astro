@@ -89,5 +89,7 @@ const { gardenState } = Astro.props;
     }
   }
 
-  customElements.define('stats-panel', StatsPanel);
+  if (!customElements.get('stats-panel')) {
+    customElements.define('stats-panel', StatsPanel);
+  }
 </script>

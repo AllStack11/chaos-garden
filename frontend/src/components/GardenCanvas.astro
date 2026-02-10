@@ -369,5 +369,7 @@ const {
     }
   }
 
-  customElements.define('garden-canvas', GardenCanvas);
+  if (!customElements.get('garden-canvas')) {
+    customElements.define('garden-canvas', GardenCanvas);
+  }
 </script>

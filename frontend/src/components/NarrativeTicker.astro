@@ -151,5 +151,7 @@
     }
   }
 
-  customElements.define('narrative-ticker', NarrativeTicker);
+  if (!customElements.get('narrative-ticker')) {
+    customElements.define('narrative-ticker', NarrativeTicker);
+  }
 </script>

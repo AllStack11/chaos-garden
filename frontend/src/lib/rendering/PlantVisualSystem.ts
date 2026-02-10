@@ -147,7 +147,10 @@ function determinePlantType(name: string, species: string): PlantType {
   if (combined.includes('vine') || combined.includes('climb') || combined.includes('trail')) {
     return 'vine';
   }
-  if (combined.includes('cactus') || combined.includes('succulent') || combined.includes('thick') || combined.includes('jade')) {
+  if (combined.includes('cactus')) {
+    return 'cactus';
+  }
+  if (combined.includes('succulent') || combined.includes('thick') || combined.includes('jade')) {
     return 'succulent';
   }
   if (combined.includes('moss') || combined.includes('creep') || combined.includes('carpet')) {
