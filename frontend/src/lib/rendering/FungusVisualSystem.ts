@@ -92,61 +92,47 @@ function generateVisualSeed(entity: Entity): number {
 }
 
 function determineFungusType(name: string, species: string): FungusType {
+  const tokens = createWordTokenSet(name, species);
   const normalizedName = name.toLowerCase();
   const normalizedSpecies = species.toLowerCase();
   const prefix = normalizedName.includes('-') ? normalizedName.split('-')[0] : normalizedName;
 
   // Name-prefix alignment with backend fungus name generation:
   // Spore, Cap, Mycel, Mold, Glow, Damp, Shroom, Puff, Web, Rot
-  if (prefix === 'spore' || prefix === 'puff') {
-    return 'puffball';
-  }
-
-  if (prefix === 'cap' || prefix === 'shroom') {
-    return 'toadstool';
-  }
-
-  if (prefix === 'mycel' || prefix === 'web' || prefix === 'glow') {
-    return 'cluster';
-  }
-
-  if (prefix === 'mold' || prefix === 'damp' || prefix === 'rot') {
-    return 'shelf';
-  }
+  const prefixTypeMap: Partial<Record<string, FungusType>> = {
+    spore: 'puffball',
+    puff: 'puffball',
+    cap: 'toadstool',
+    shroom: 'toadstool',
+    mycel: 'cluster',
+    web: 'cluster',
+    glow: 'cluster',
+    mold: 'shelf',
+    damp: 'shelf',
+    rot: 'shelf',
+  };
+  const prefixType = prefixTypeMap[prefix];
+  if (prefixType) return prefixType;
 
   // Species fallback and support for legacy/custom names
-  if (
-    normalizedSpecies.includes('mycel') ||
-    normalizedName.includes('cluster') ||
-    normalizedName.includes('drift') ||
-    normalizedName.includes('creep')
-  ) {
+  if (hasAnyToken(tokens, ['mycel', 'cluster', 'drift', 'creep'])) {
     return 'cluster';
   }
 
-  if (normalizedName.includes('puff') || normalizedName.includes('spore') || normalizedName.includes('cloud')) {
+  if (hasAnyToken(tokens, ['puff', 'spore', 'cloud'])) {
     return 'puffball';
   }
 
-  if (
-    normalizedName.includes('mushroom') ||
-    normalizedName.includes('cap') ||
-    normalizedName.includes('toad') ||
-    normalizedName.includes('stool')
-  ) {
+  if (hasAnyToken(tokens, ['mushroom', 'cap', 'toad', 'stool'])) {
     return 'toadstool';
   }
 
-  if (
-    normalizedName.includes('shelf') ||
-    normalizedName.includes('bracket') ||
-    normalizedName.includes('fan') ||
-    normalizedName.includes('wood')
-  ) {
+  if (hasAnyToken(tokens, ['shelf', 'bracket', 'fan', 'wood'])) {
     return 'shelf';
   }
 
-  return 'cluster';
+  const fallbackOrder: FungusType[] = ['toadstool', 'shelf', 'puffball', 'cluster'];
+  return pickDeterministicType(fallbackOrder, normalizedSpecies, normalizedName);
 }
 
 export function generateFungusVisual(entity: Entity): FungusVisual {
@@ -304,3 +290,4 @@ export function clearFungusVisualCache(): void {
 }
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
+import { createWordTokenSet, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';

@@ -130,41 +130,32 @@ function generateVisualSeed(entity: Entity): number {
  * Get plant type based on species name characteristics
  */
 function determinePlantType(name: string, species: string): PlantType {
-  const combined = (name + ' ' + species).toLowerCase();
-  
-  if (combined.includes('fern') || combined.includes('frond') || combined.includes('ancient')) {
-    return 'fern';
-  }
-  if (combined.includes('rose') || combined.includes('lily') || combined.includes('tulip')) {
-    return 'lily';
-  }
-  if (combined.includes('flower') || combined.includes('petal') || combined.includes('blossom')) {
-    return 'flower';
-  }
-  if (combined.includes('grass') || combined.includes('wheat') || combined.includes('reed')) {
-    return 'grass';
-  }
-  if (combined.includes('vine') || combined.includes('climb') || combined.includes('trail')) {
-    return 'vine';
-  }
-  if (combined.includes('cactus')) {
-    return 'cactus';
-  }
-  if (combined.includes('succulent') || combined.includes('thick') || combined.includes('jade')) {
-    return 'succulent';
-  }
-  if (combined.includes('moss') || combined.includes('creep') || combined.includes('carpet')) {
-    return 'moss';
-  }
-  if (combined.includes('bush') || combined.includes('shrub') || combined.includes('bushy')) {
-    return 'bush';
-  }
-  if (combined.includes('herb') || combined.includes('mint') || combined.includes('thyme')) {
-    return 'herb';
-  }
-  
-  // Default to flower type for variety
-  return 'flower';
+  const tokens = createWordTokenSet(name, species);
+
+  if (hasAnyToken(tokens, ['fern', 'frond', 'ancient'])) return 'fern';
+  if (hasAnyToken(tokens, ['rose', 'lily', 'tulip'])) return 'lily';
+  if (hasAnyToken(tokens, ['flower', 'petal', 'blossom'])) return 'flower';
+  if (hasAnyToken(tokens, ['grass', 'wheat', 'reed'])) return 'grass';
+  if (hasAnyToken(tokens, ['vine', 'climb', 'trail'])) return 'vine';
+  if (hasAnyToken(tokens, ['cactus', 'spine', 'spiny'])) return 'cactus';
+  if (hasAnyToken(tokens, ['succulent', 'thick', 'jade'])) return 'succulent';
+  if (hasAnyToken(tokens, ['moss', 'creep', 'carpet'])) return 'moss';
+  if (hasAnyToken(tokens, ['bush', 'shrub', 'bushy'])) return 'bush';
+  if (hasAnyToken(tokens, ['herb', 'mint', 'thyme', 'basil'])) return 'herb';
+
+  const fallbackOrder: PlantType[] = [
+    'fern',
+    'flower',
+    'grass',
+    'vine',
+    'succulent',
+    'lily',
+    'moss',
+    'cactus',
+    'bush',
+    'herb',
+  ];
+  return pickDeterministicType(fallbackOrder, species, name);
 }
 
 /**
@@ -292,3 +283,4 @@ export function clearVisualCache(): void {
 }
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
+import { createWordTokenSet, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';

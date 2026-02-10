@@ -90,44 +90,29 @@ function generateVisualSeed(entity: Entity): number {
   return Math.abs(hash);
 }
 
-function determineCarnivoreType(entity: Entity, random: SeededRandom): CarnivoreType {
-  const normalizedName = entity.name.toLowerCase();
-  const normalizedSpecies = entity.species.toLowerCase();
+function determineCarnivoreType(entity: Entity): CarnivoreType {
+  const tokens = createWordTokenSet(entity.name, entity.species);
 
   if (
-    normalizedSpecies.includes('wolf') ||
-    normalizedSpecies.includes('hound') ||
-    normalizedName.includes('night') ||
-    normalizedName.includes('shadow') ||
-    normalizedName.includes('hunt') ||
-    normalizedName.includes('stalk')
+    hasAnyToken(tokens, ['wolf', 'hound', 'night', 'shadow', 'hunt', 'stalk'])
   ) {
     return 'wolf';
   }
 
   if (
-    normalizedSpecies.includes('fox') ||
-    normalizedSpecies.includes('vulp') ||
-    normalizedName.includes('claw') ||
-    normalizedName.includes('sharp') ||
-    normalizedName.includes('pounce')
+    hasAnyToken(tokens, ['fox', 'vulp', 'claw', 'sharp', 'pounce'])
   ) {
     return 'fox';
   }
 
   if (
-    normalizedSpecies.includes('cat') ||
-    normalizedSpecies.includes('lynx') ||
-    normalizedSpecies.includes('tiger') ||
-    normalizedSpecies.includes('panther') ||
-    normalizedName.includes('fang') ||
-    normalizedName.includes('blood') ||
-    normalizedName.includes('roar')
+    hasAnyToken(tokens, ['cat', 'lynx', 'tiger', 'panther', 'fang', 'blood', 'roar'])
   ) {
     return 'bigCat';
   }
 
-  return random.choice(['wolf', 'fox', 'bigCat']);
+  const fallbackOrder: CarnivoreType[] = ['wolf', 'fox', 'bigCat'];
+  return pickDeterministicType(fallbackOrder, entity.species, entity.name);
 }
 
 function getPalette(type: CarnivoreType, random: SeededRandom): {
@@ -177,7 +162,7 @@ export function generateCarnivoreVisual(entity: Entity): CarnivoreVisual {
     },
   });
 
-  const predatorType = determineCarnivoreType(entity, random);
+  const predatorType = determineCarnivoreType(entity);
   const colors = getPalette(predatorType, random);
 
   const speedInfluence = Math.max(0.65, Math.min(1.45, traits.movementSpeed / 3));
@@ -273,3 +258,4 @@ export function clearCarnivoreVisualCache(): void {
 }
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
+import { createWordTokenSet, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';

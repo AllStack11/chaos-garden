@@ -146,41 +146,37 @@ function generateVisualSeed(entity: Entity): number {
  * Get herbivore type based on species name characteristics
  */
 function determineHerbivoreType(name: string, species: string): HerbivoreType {
-  const combined = (name + ' ' + species).toLowerCase();
-  
-  if (combined.includes('butterfly') || combined.includes('flutter') || combined.includes('wing')) {
-    return 'butterfly';
-  }
-  if (combined.includes('beetle') || combined.includes('shell') || combined.includes('armor')) {
-    return 'beetle';
-  }
-  if (combined.includes('rabbit') || combined.includes('hare') || combined.includes('bunny') || combined.includes('long-ear')) {
+  const tokens = createWordTokenSet(name, species);
+
+  if (hasAnyToken(tokens, ['butterfly', 'flutter', 'wing'])) return 'butterfly';
+  if (hasAnyToken(tokens, ['beetle', 'armor', 'carapace', 'elytra'])) return 'beetle';
+  if (
+    hasAnyToken(tokens, ['rabbit', 'hare', 'bunny', 'mouse', 'mice', 'rodent', 'vole']) ||
+    hasAllTokens(tokens, ['long', 'ear'])
+  ) {
     return 'rabbit';
   }
-  if (combined.includes('snail') || combined.includes('shell') || combined.includes('slow') || combined.includes('spiral')) {
-    return 'snail';
-  }
-  if (combined.includes('cricket') || combined.includes('chirp') || combined.includes('jump')) {
-    return 'cricket';
-  }
-  if (combined.includes('ladybug') || combined.includes('ladybird') || combined.includes('spots') || combined.includes('red')) {
-    return 'ladybug';
-  }
-  if (combined.includes('grasshopper') || combined.includes('hopper') || combined.includes('leg')) {
-    return 'grasshopper';
-  }
-  if (combined.includes('ant') || combined.includes('worker') || combined.includes('small')) {
-    return 'ant';
-  }
-  if (combined.includes('bee') || combined.includes('honey') || combined.includes('stripe') || combined.includes('fuzzy')) {
-    return 'bee';
-  }
-  if (combined.includes('moth') || combined.includes('night') || combined.includes('dusty') || combined.includes('nocturnal')) {
-    return 'moth';
-  }
-  
-  // Default to butterfly for variety (most visually interesting)
-  return 'butterfly';
+  if (hasAnyToken(tokens, ['snail', 'slug', 'slow', 'spiral'])) return 'snail';
+  if (hasAnyToken(tokens, ['cricket', 'chirp', 'jump'])) return 'cricket';
+  if (hasAnyToken(tokens, ['ladybug', 'ladybird', 'spots', 'spotted'])) return 'ladybug';
+  if (hasAnyToken(tokens, ['grasshopper', 'hopper', 'locust'])) return 'grasshopper';
+  if (hasAnyToken(tokens, ['ant', 'worker', 'colony'])) return 'ant';
+  if (hasAnyToken(tokens, ['bee', 'honey', 'stripe', 'striped', 'fuzzy', 'bumble'])) return 'bee';
+  if (hasAnyToken(tokens, ['moth', 'night', 'dusty', 'nocturnal'])) return 'moth';
+
+  const fallbackOrder: HerbivoreType[] = [
+    'rabbit',
+    'beetle',
+    'grasshopper',
+    'ant',
+    'cricket',
+    'snail',
+    'ladybug',
+    'bee',
+    'moth',
+    'butterfly',
+  ];
+  return pickDeterministicType(fallbackOrder, species, name);
 }
 
 /**
@@ -519,3 +515,4 @@ export function getHerbivoreColor(baseColor: string, visual: HerbivoreVisual): s
 }
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
+import { createWordTokenSet, hasAllTokens, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';

@@ -393,6 +393,33 @@ export function pickRandomElement<T>(array: T[]): T | undefined {
 }
 
 /**
+ * Pick a random element from weighted options.
+ *
+ * @param options - Candidate values with weights
+ * @returns Random element or undefined if empty/invalid
+ */
+export function pickWeightedRandomElement<T>(
+  options: Array<{ value: T; weight: number }>
+): T | undefined {
+  if (options.length === 0) return undefined;
+
+  const normalized = options
+    .filter((option) => option.weight > 0);
+
+  if (normalized.length === 0) return undefined;
+
+  const totalWeight = normalized.reduce((sum, option) => sum + option.weight, 0);
+  let roll = Math.random() * totalWeight;
+
+  for (const option of normalized) {
+    roll -= option.weight;
+    if (roll <= 0) return option.value;
+  }
+
+  return normalized[normalized.length - 1]?.value;
+}
+
+/**
  * Shuffle an array in place (Fisher-Yates algorithm).
  * 
  * @param array - Array to shuffle
@@ -454,22 +481,77 @@ export function extractCategoryFromName(name: string): string {
 export function generateRandomName(type: EntityType, parentName?: string): string {
   // Type-specific prefixes that map to visual renderers
   const prefixes: Record<EntityType, string[]> = {
-    plant: ['Fern', 'Flower', 'Grass', 'Vine', 'Succulent', 'Lily', 'Moss', 'Cactus', 'Bush', 'Herb'],
-    herbivore: ['Butterfly', 'Beetle', 'Rabbit', 'Snail', 'Cricket', 'Ladybug', 'Grasshopper', 'Ant', 'Bee', 'Moth'],
-    carnivore: ['Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar'],
-    fungus: ['Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot']
+    plant: [
+      'Fern', 'Flower', 'Grass', 'Vine', 'Succulent', 'Lily', 'Moss', 'Cactus', 'Bush', 'Herb',
+      'Rose', 'Tulip', 'Mint', 'Thyme', 'Shrub', 'Jade', 'Blossom', 'Willow', 'Clover', 'Bramble'
+    ],
+    herbivore: [
+      'Butterfly', 'Beetle', 'Rabbit', 'Snail', 'Cricket', 'Ladybug', 'Grasshopper', 'Ant', 'Bee', 'Moth',
+      'Mouse', 'Hare', 'Bunny', 'Locust', 'Caterpillar', 'Mite', 'Weevil', 'Firefly', 'Wren', 'Finch'
+    ],
+    carnivore: [
+      'Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar',
+      'Wolf', 'Fox', 'Lynx', 'Tiger', 'Panther', 'Raptor', 'Rend', 'Howl', 'Strike', 'Raze'
+    ],
+    fungus: [
+      'Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot',
+      'Bract', 'Shelf', 'Gill', 'Lichen', 'Murk', 'Hypha', 'Truffle', 'Bloom', 'Smut', 'Veil'
+    ]
   };
 
   // Suffixes that work with any prefix
   const suffixes: Record<EntityType, string[]> = {
-    plant: ['whisper', 'glow', 'heart', 'reach', 'shade', 'burst', 'thorn', 'bud', 'leaf', 'petal'],
-    herbivore: ['stride', 'dash', 'leap', 'bound', 'graze', 'fleet', 'fur', 'step', 'breeze', 'song'],
-    carnivore: ['strike', 'rip', 'tear', 'kill', 'fang', 'pounce', 'shade', 'hunter', 'stalker', 'howl'],
-    fungus: ['pulse', 'spread', 'bloom', 'rot', 'puff', 'creep', 'glow', 'web', 'drift', 'spore']
+    plant: [
+      'whisper', 'glow', 'heart', 'reach', 'shade', 'burst', 'thorn', 'bud', 'leaf', 'petal',
+      'sprout', 'bloom', 'frond', 'tangle', 'briar', 'root', 'breeze', 'dew', 'canopy', 'verdant'
+    ],
+    herbivore: [
+      'stride', 'dash', 'leap', 'bound', 'graze', 'fleet', 'fur', 'step', 'breeze', 'song',
+      'flutter', 'forage', 'skip', 'scurry', 'nibble', 'drift', 'glide', 'hum', 'trill', 'meadow'
+    ],
+    carnivore: [
+      'strike', 'rip', 'tear', 'kill', 'fang', 'pounce', 'shade', 'hunter', 'stalker', 'howl',
+      'ambush', 'prowl', 'maul', 'snare', 'ravenous', 'chase', 'snarl', 'grim', 'rush', 'fury'
+    ],
+    fungus: [
+      'pulse', 'spread', 'bloom', 'rot', 'puff', 'creep', 'glow', 'web', 'drift', 'spore',
+      'gloom', 'veil', 'smolder', 'decay', 'mist', 'mire', 'wilt', 'clump', 'mycelia', 'dust'
+    ]
   };
 
   const typePrefixes = prefixes[type];
   const typeSuffixes = suffixes[type];
+  const plantPrefixWeights: Partial<Record<string, number>> = {
+    Grass: 0.35,
+    Moss: 0.85,
+    Rose: 1.15,
+    Tulip: 1.15,
+    Mint: 1.2,
+    Thyme: 1.2,
+    Shrub: 1.1,
+    Jade: 1.1,
+    Blossom: 1.1,
+    Clover: 1.05,
+  };
+
+  const pickTypePrefix = (): string => {
+    if (type === 'plant') {
+      const weighted = typePrefixes.map((prefix) => ({
+        value: prefix,
+        weight: plantPrefixWeights[prefix] ?? 1,
+      }));
+      return pickWeightedRandomElement(weighted) ?? typePrefixes[0] ?? 'Entity';
+    }
+    return pickRandomElement(typePrefixes) ?? typePrefixes[0] ?? 'Entity';
+  };
+  const pickTypeSuffix = (): string => pickRandomElement(typeSuffixes) ?? typeSuffixes[0] ?? 'form';
+  const canonicalPrefixByLowercase = new Map(
+    typePrefixes.map((prefix) => [prefix.toLowerCase(), prefix] as const)
+  );
+  const getSafeInheritedPrefix = (candidatePrefix: string): string => {
+    const canonicalPrefix = canonicalPrefixByLowercase.get(candidatePrefix.toLowerCase());
+    return canonicalPrefix ?? pickTypePrefix();
+  };
 
   // Inheritance logic - 70% chance to inherit part of parent name
   if (parentName && parentName.includes('-') && willRandomEventOccur(0.7)) {
@@ -478,18 +560,18 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
       if (willRandomEventOccur(0.5)) {
         // Inherit prefix (with 30% chance of mutation to different type)
         if (willRandomEventOccur(0.3)) {
-          return `${pickRandomElement(typePrefixes)}-${parts[1]}`;
+          return `${pickTypePrefix()}-${parts[1]}`;
         }
-        return `${parts[0]}-${pickRandomElement(typeSuffixes)}`;
+        return `${getSafeInheritedPrefix(parts[0])}-${pickTypeSuffix()}`;
       } else {
         // Inherit suffix
-        return `${pickRandomElement(typePrefixes)}-${parts[1]}`;
+        return `${pickTypePrefix()}-${parts[1]}`;
       }
     }
   }
 
   // Pure random name
-  return `${pickRandomElement(typePrefixes)}-${pickRandomElement(typeSuffixes)}`;
+  return `${pickTypePrefix()}-${pickTypeSuffix()}`;
 }
 
 /**
