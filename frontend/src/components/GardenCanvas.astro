@@ -18,7 +18,7 @@ const {
 
 <garden-canvas data-width={width} data-height={height} class="block h-full w-full overflow-hidden">
   <canvas
-    class="h-full w-full cursor-crosshair transition-opacity duration-1000"
+    class="h-full w-full cursor-default md:cursor-crosshair transition-opacity duration-1000"
   ></canvas>
 </garden-canvas>
 
@@ -85,8 +85,11 @@ const {
       totalEntities: 0,
     };
     private frameStartTime = performance.now();
+    private readonly coarsePointerMediaQuery = window.matchMedia('(pointer: coarse)');
+    private readonly mobileViewportMediaQuery = window.matchMedia('(max-width: 767px)');
 
     private readonly handleWindowResize = () => this.handleResize();
+    private readonly handleInteractionProfileChange = () => this.handleResize();
 
     constructor() {
       super();
@@ -112,32 +115,63 @@ const {
 
     private setupEventListeners() {
       window.addEventListener('resize', this.handleWindowResize);
-      this.canvas.addEventListener('mousemove', this.handleMouseMove);
-      this.canvas.addEventListener('mouseleave', this.handleMouseLeave);
-      this.canvas.addEventListener('click', this.handleCanvasClick);
+      this.canvas.addEventListener('pointermove', this.handlePointerMove);
+      this.canvas.addEventListener('pointerleave', this.handlePointerLeave);
+      this.canvas.addEventListener('pointerup', this.handlePointerUp);
+      this.coarsePointerMediaQuery.addEventListener('change', this.handleInteractionProfileChange);
+      this.mobileViewportMediaQuery.addEventListener('change', this.handleInteractionProfileChange);
     }
 
     private removeEventListeners() {
       window.removeEventListener('resize', this.handleWindowResize);
-      this.canvas.removeEventListener('mousemove', this.handleMouseMove);
-      this.canvas.removeEventListener('mouseleave', this.handleMouseLeave);
-      this.canvas.removeEventListener('click', this.handleCanvasClick);
+      this.canvas.removeEventListener('pointermove', this.handlePointerMove);
+      this.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
+      this.canvas.removeEventListener('pointerup', this.handlePointerUp);
+      this.coarsePointerMediaQuery.removeEventListener('change', this.handleInteractionProfileChange);
+      this.mobileViewportMediaQuery.removeEventListener('change', this.handleInteractionProfileChange);
     }
 
-    private readonly handleMouseMove = (event: MouseEvent) => {
+    private isMobileInteractionProfile(): boolean {
+      return this.coarsePointerMediaQuery.matches || this.mobileViewportMediaQuery.matches;
+    }
+
+    private getEffectiveDevicePixelRatio(): number {
+      const dpr = window.devicePixelRatio || 1;
+      if (this.isMobileInteractionProfile()) {
+        return Math.min(dpr, 1.5);
+      }
+      return dpr;
+    }
+
+    private clampQualityTierForDevice(tier: QualityTier): QualityTier {
+      if (this.isMobileInteractionProfile() && tier === 'high') {
+        return 'medium';
+      }
+      return tier;
+    }
+
+    private readonly handlePointerMove = (event: PointerEvent) => {
       const rect = this.canvas.getBoundingClientRect();
       this.targetMousePos.x = event.clientX - rect.left;
       this.targetMousePos.y = event.clientY - rect.top;
 
-      const worldPos = this.screenToWorld(this.targetMousePos.x, this.targetMousePos.y);
-      this.hoveredEntity = this.findEntityAtPosition(worldPos.x, worldPos.y);
+      if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+        const worldPos = this.screenToWorld(this.targetMousePos.x, this.targetMousePos.y);
+        this.hoveredEntity = this.findEntityAtPosition(worldPos.x, worldPos.y);
+      } else {
+        this.hoveredEntity = null;
+      }
     };
 
-    private readonly handleMouseLeave = () => {
+    private readonly handlePointerLeave = () => {
       this.hoveredEntity = null;
     };
 
-    private readonly handleCanvasClick = (event: MouseEvent) => {
+    private readonly handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) {
+        return;
+      }
+
       const rect = this.canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
@@ -152,8 +186,9 @@ const {
     };
 
     private handleResize() {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = this.getEffectiveDevicePixelRatio();
       const viewport = this.getViewportSize();
+      this.qualityTier = this.clampQualityTierForDevice(this.qualityTier);
 
       this.canvas.width = viewport.width * dpr;
       this.canvas.height = viewport.height * dpr;
@@ -241,7 +276,11 @@ const {
         this.render();
 
         const frameEnd = performance.now();
-        this.qualityTier = this.qualityController.recordFrame(frameEnd - this.frameStartTime);
+        const nextQualityTier = this.clampQualityTierForDevice(this.qualityController.recordFrame(frameEnd - this.frameStartTime));
+        if (nextQualityTier !== this.qualityTier) {
+          this.qualityTier = nextQualityTier;
+          resizeBackgroundAnimationState(this.backgroundState, this.getViewportSize(), this.qualityTier);
+        }
         this.frameStartTime = frameEnd;
 
         this.animationId = requestAnimationFrame(loop);

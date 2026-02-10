@@ -17,7 +17,7 @@ const { title = 'Chaos Garden' } = Astro.props;
 <html lang="en" class="bg-garden-brown-50">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Chaos Garden: A living digital ecosystem that evolves while you watch." />
     
     <title>{title}</title>
@@ -58,7 +58,10 @@ const { title = 'Chaos Garden' } = Astro.props;
   
   <body class="overflow-hidden bg-[#0a140a] font-sans text-gray-100 antialiased selection:bg-garden-green-500/30 selection:text-white">
     <!-- Main container -->
-    <div class="relative h-screen w-screen overflow-hidden">
+    <div
+      class="relative w-screen overflow-hidden"
+      style="height: 100vh; height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);"
+    >
       <!-- Ambient Noise Overlay -->
       <div class="pointer-events-none fixed inset-0 z-[9999] opacity-[0.04] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
       

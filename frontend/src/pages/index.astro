@@ -25,13 +25,13 @@ if (!API_URL) {
     </div>
 
     <!-- UI Overlay Layer -->
-    <div id="ui-overlay" class="pointer-events-none relative z-10 flex h-full w-full flex-col justify-between p-8 transition-opacity duration-1000">
+    <div id="ui-overlay" class="pointer-events-none relative z-10 flex h-full w-full flex-col justify-between p-3 sm:p-4 md:p-8 transition-opacity duration-1000">
       
       <!-- Top Subtle Info -->
-      <div class="flex items-start justify-between">
+      <div class="flex items-start justify-between gap-4">
         <div class="group pointer-events-auto">
           <div class="flex flex-col opacity-50 transition-opacity hover:opacity-100 drop-shadow-sm">
-            <h1 class="text-lg font-light tracking-widest text-white uppercase">Chaos Garden</h1>
+            <h1 class="text-sm sm:text-base md:text-lg font-light tracking-[0.25em] sm:tracking-widest text-white uppercase">Chaos Garden</h1>
             <div id="system-status-container" class="mt-1 flex items-center space-x-2 text-[10px]">
               <div id="system-status-dot" class="h-1.5 w-1.5 rounded-full bg-white/40"></div>
               <span id="system-status-subtitle" class="font-mono text-white/60 tracking-tighter uppercase">Initializing...</span>
@@ -41,7 +41,7 @@ if (!API_URL) {
 
         <div class="group pointer-events-auto">
           <div class="flex flex-col items-end opacity-50 transition-opacity hover:opacity-100 drop-shadow-sm">
-             <div id="next-tick-countdown" class="font-mono text-2xl font-light text-white tracking-widest">
+             <div id="next-tick-countdown" class="font-mono text-lg sm:text-xl md:text-2xl font-light text-white tracking-widest">
                 --:--
              </div>
              <div class="mt-1 text-[10px] text-white/40 uppercase tracking-[0.2em]">Next Evolution</div>
@@ -50,18 +50,18 @@ if (!API_URL) {
       </div>
 
       <!-- Narrative Ticker (top center, below title) -->
-      <div class="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-xl pointer-events-none">
+      <div class="hidden sm:block absolute top-16 md:top-20 left-1/2 -translate-x-1/2 w-full max-w-xl pointer-events-none">
         <NarrativeTicker />
       </div>
 
       <!-- Center: Selection Tooltip (Floating Contextual) -->
       <div data-selection-info class="hidden pointer-events-none absolute transition-all duration-300">
-        <div class="pointer-events-auto flex translate-y-8 flex-col items-center space-y-3 rounded-2xl bg-garden-green-900/20 px-6 py-4 backdrop-blur-md border border-garden-green-500/10 shadow-2xl min-w-[180px]">
-          <div class="flex items-center space-x-4">
-             <div data-selection-icon class="text-2xl"></div>
+        <div class="pointer-events-auto flex translate-y-0 sm:translate-y-8 flex-col items-center space-y-2 sm:space-y-3 rounded-2xl bg-garden-green-900/20 px-4 sm:px-6 py-3 sm:py-4 backdrop-blur-md border border-garden-green-500/10 shadow-2xl min-w-[150px] sm:min-w-[180px]">
+          <div class="flex items-center space-x-3 sm:space-x-4">
+             <div data-selection-icon class="text-xl sm:text-2xl"></div>
              <div class="flex flex-col">
                <div data-selection-name class="text-sm font-medium text-white/90 tracking-tight"></div>
-               <div data-selection-species class="text-[9px] text-white/40 uppercase tracking-widest"></div>
+               <div data-selection-species class="text-[8px] sm:text-[9px] text-white/40 uppercase tracking-widest"></div>
              </div>
           </div>
           
@@ -89,12 +89,12 @@ if (!API_URL) {
             </div>
           </div>
 
-          <div data-selection-stats class="text-[9px] text-white/30 font-mono text-center pt-1"></div>
+          <div data-selection-stats class="text-[8px] sm:text-[9px] text-white/30 font-mono text-center pt-1"></div>
         </div>
       </div>
 
       <!-- Bottom: Environment Stats -->
-      <div class="flex items-end justify-between">
+      <div class="hidden sm:flex items-end justify-between">
         <div class="pointer-events-auto opacity-40 transition-opacity hover:opacity-100 drop-shadow-sm">
           <StatsPanel />
         </div>
@@ -149,6 +149,8 @@ if (!API_URL) {
     private healthCheckTimer: number | null = null;
     private countdownTimer: number | null = null;
     private uiTimeout: number | null = null;
+    private readonly coarsePointerMediaQuery = window.matchMedia('(pointer: coarse)');
+    private readonly mobileViewportMediaQuery = window.matchMedia('(max-width: 639px)');
     
     private state: {
       gardenState: GardenState | null;
@@ -212,6 +214,10 @@ if (!API_URL) {
       this.removeEventListener('entity-selected', this.handleEntitySelected as EventListener);
       window.removeEventListener('mousemove', this.resetUIOverlayOpacity);
       window.removeEventListener('click', this.resetUIOverlayOpacity);
+      window.removeEventListener('pointerdown', this.resetUIOverlayOpacity);
+      window.removeEventListener('resize', this.handleViewportModeChange);
+      this.coarsePointerMediaQuery.removeEventListener('change', this.handleViewportModeChange);
+      this.mobileViewportMediaQuery.removeEventListener('change', this.handleViewportModeChange);
     }
 
     private readonly handleEntitySelected = (event: Event) => {
@@ -225,16 +231,35 @@ if (!API_URL) {
       if (overlay) overlay.classList.remove('opacity-0');
       if (this.uiTimeout) {
         clearTimeout(this.uiTimeout);
+        this.uiTimeout = null;
       }
+
+      if (this.isMobileUiMode()) {
+        return;
+      }
+
       this.uiTimeout = window.setTimeout(() => {
         if (overlay && !this.state.selectedEntity) overlay.classList.add('opacity-0');
       }, 5000);
     };
 
+    private readonly handleViewportModeChange = () => {
+      this.resetUIOverlayOpacity();
+      if (this.state.selectedEntity) this.updateUI();
+    };
+
+    private isMobileUiMode(): boolean {
+      return this.coarsePointerMediaQuery.matches || this.mobileViewportMediaQuery.matches;
+    }
+
     private setupEventListeners() {
       this.addEventListener('entity-selected', this.handleEntitySelected as EventListener);
       window.addEventListener('mousemove', this.resetUIOverlayOpacity);
       window.addEventListener('click', this.resetUIOverlayOpacity);
+      window.addEventListener('pointerdown', this.resetUIOverlayOpacity);
+      window.addEventListener('resize', this.handleViewportModeChange);
+      this.coarsePointerMediaQuery.addEventListener('change', this.handleViewportModeChange);
+      this.mobileViewportMediaQuery.addEventListener('change', this.handleViewportModeChange);
       this.resetUIOverlayOpacity();
     }
 
@@ -374,6 +399,19 @@ if (!API_URL) {
 
     private positionSelectionPanel(selectionInfo: HTMLElement, pos: { x: number; y: number }) {
       const margin = 12;
+
+      if (this.isMobileUiMode()) {
+        selectionInfo.style.left = '50%';
+        selectionInfo.style.right = 'auto';
+        selectionInfo.style.top = 'auto';
+        selectionInfo.style.bottom = `calc(${margin}px + env(safe-area-inset-bottom))`;
+        selectionInfo.style.transform = 'translateX(-50%)';
+        return;
+      }
+
+      selectionInfo.style.transform = '';
+      selectionInfo.style.right = '';
+      selectionInfo.style.bottom = '';
 
       // Place near entity first to measure size
       selectionInfo.style.left = `${pos.x}px`;
