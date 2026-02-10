@@ -10,8 +10,8 @@ import GardenCanvas from '../components/GardenCanvas.astro';
 import StatsPanel from '../components/StatsPanel.astro';
 import NarrativeTicker from '../components/NarrativeTicker.astro';
 
-// API URL (will be overridden by environment variable)
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
+// API URL — must be set via PUBLIC_API_URL in .env.local (dev) or .env.production (prod)
+const API_URL = import.meta.env.PUBLIC_API_URL;
 ---
 
 <Layout title="Chaos Garden 🌿">
@@ -167,7 +167,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787';
 
     constructor() {
       super();
-      const apiUrl = this.dataset.apiUrl || 'http://localhost:8787';
+      const apiUrl = this.dataset.apiUrl;
+      if (!apiUrl) {
+        throw new Error('Missing data-api-url on <garden-app>. Set PUBLIC_API_URL in your .env file.');
+      }
       this.gardenService = GardenService.getInstance(apiUrl);
       console.log('[GardenApp] Constructor initialized');
       this.setupEventListeners();

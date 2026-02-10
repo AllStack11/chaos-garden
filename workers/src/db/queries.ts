@@ -25,6 +25,25 @@ import type { D1Database } from '../types/worker';
 import { extractTraits } from '../simulation/environment/helpers';
 
 // ==========================================
+// Safe JSON Parsing
+// ==========================================
+
+/**
+ * Safely parse a JSON string, returning a fallback value if parsing fails.
+ * Prevents corrupted database rows from crashing the entire tick or API response.
+ */
+function safeParseJson<T>(jsonString: string, fallback: T): T;
+function safeParseJson<T>(jsonString: string, fallback: T | null): T | null;
+function safeParseJson<T>(jsonString: string, fallback: T | null): T | null {
+  try {
+    return JSON.parse(jsonString) as T;
+  } catch {
+    console.error(`Failed to parse JSON: ${jsonString.slice(0, 100)}`);
+    return fallback;
+  }
+}
+
+// ==========================================
 // Garden State Queries
 // ==========================================
 
@@ -459,7 +478,7 @@ function mapRowToGardenState(row: GardenStateRow): GardenState {
     sunlight: row.sunlight,
     moisture: row.moisture,
     tick: row.tick,
-    weatherState: row.weather_state ? JSON.parse(row.weather_state) as ActiveWeatherState : null,
+    weatherState: row.weather_state ? safeParseJson<ActiveWeatherState>(row.weather_state, null) : null,
   };
 
   const populationSummary: PopulationSummary = {

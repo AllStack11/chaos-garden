@@ -22,29 +22,21 @@ const CURRENT_SCHEMA_VERSION = '1.6.0';
 const DEFAULT_SEED = 20260210;
 const DEFAULT_SEED_TIMESTAMP = '2026-01-01T00:00:00.000Z';
 
-const PLANT_CLUSTERS = [
-  { x: 200, y: 300 },
-  { x: 400, y: 300 },
-  { x: 600, y: 300 }
-];
-
-const CLUSTER_SPREAD = 120;
-const MIN_PLANT_DISTANCE = 40;
 const GARDEN_WIDTH = 800;
 const GARDEN_HEIGHT = 600;
 
 const PLANT_ARCHETYPES = [
-  { name: 'standard', count: 12, photosynthesisRate: 1.0, reproductionRate: 0.05, metabolismEfficiency: 1.0 },
-  { name: 'fast-growing', count: 10, photosynthesisRate: 1.25, reproductionRate: 0.04, metabolismEfficiency: 0.95 },
-  { name: 'prolific', count: 10, photosynthesisRate: 0.85, reproductionRate: 0.07, metabolismEfficiency: 1.0 },
-  { name: 'hardy', count: 10, photosynthesisRate: 0.95, reproductionRate: 0.05, metabolismEfficiency: 1.15 }
+  { name: 'standard', count: 7, photosynthesisRate: 1.0, reproductionRate: 0.05, metabolismEfficiency: 1.0 },
+  { name: 'fast-growing', count: 6, photosynthesisRate: 1.25, reproductionRate: 0.04, metabolismEfficiency: 0.95 },
+  { name: 'prolific', count: 6, photosynthesisRate: 0.85, reproductionRate: 0.07, metabolismEfficiency: 1.0 },
+  { name: 'hardy', count: 6, photosynthesisRate: 0.95, reproductionRate: 0.05, metabolismEfficiency: 1.15 }
 ];
 
 const HERBIVORE_ARCHETYPES = [
   { name: 'fast', count: 4, movementSpeed: 2.8, metabolismEfficiency: 0.95, reproductionRate: 0.03, perceptionRadius: 105 },
   { name: 'efficient', count: 4, movementSpeed: 1.7, metabolismEfficiency: 1.2, reproductionRate: 0.03, perceptionRadius: 95 },
   { name: 'balanced', count: 4, movementSpeed: 2.1, metabolismEfficiency: 1.0, reproductionRate: 0.03, perceptionRadius: 100 },
-  { name: 'scout', count: 2, movementSpeed: 2.4, metabolismEfficiency: 0.95, reproductionRate: 0.02, perceptionRadius: 130 }
+  { name: 'scout', count: 3, movementSpeed: 2.4, metabolismEfficiency: 0.95, reproductionRate: 0.02, perceptionRadius: 130 }
 ];
 
 const CARNIVORE_ARCHETYPES = [
@@ -55,8 +47,8 @@ const CARNIVORE_ARCHETYPES = [
 
 const FUNGUS_ARCHETYPES = [
   { name: 'standard', count: 4, decompositionRate: 1.0, reproductionRate: 0.04, metabolismEfficiency: 1.2, perceptionRadius: 55 },
-  { name: 'efficient', count: 4, decompositionRate: 1.35, reproductionRate: 0.03, metabolismEfficiency: 1.2, perceptionRadius: 50 },
-  { name: 'spreader', count: 4, decompositionRate: 0.9, reproductionRate: 0.05, metabolismEfficiency: 1.1, perceptionRadius: 60 }
+  { name: 'efficient', count: 3, decompositionRate: 1.35, reproductionRate: 0.03, metabolismEfficiency: 1.2, perceptionRadius: 50 },
+  { name: 'spreader', count: 3, decompositionRate: 0.9, reproductionRate: 0.05, metabolismEfficiency: 1.1, perceptionRadius: 60 }
 ];
 
 function createSeededRandom(seed) {
@@ -175,33 +167,10 @@ function generateRandomName(type, usedNames, random) {
   return fallbackName;
 }
 
-function generatePositionNearCluster(clusterCenter, spread, random) {
-  const angle = random() * Math.PI * 2;
-  const distance = random() * spread;
-  const x = Math.max(0, Math.min(GARDEN_WIDTH, clusterCenter.x + Math.cos(angle) * distance));
-  const y = Math.max(0, Math.min(GARDEN_HEIGHT, clusterCenter.y + Math.sin(angle) * distance));
+function generateRandomPositionInGarden(random) {
+  const x = random() * GARDEN_WIDTH;
+  const y = random() * GARDEN_HEIGHT;
   return { x, y };
-}
-
-function isPositionFarEnoughFromExisting(position, existingEntities, minDistance) {
-  for (const entity of existingEntities) {
-    const dx = position.x - entity.position_x;
-    const dy = position.y - entity.position_y;
-    if (Math.sqrt(dx * dx + dy * dy) < minDistance) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function generatePlantPositionInCluster(clusterCenter, existingPlants, random) {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const position = generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD, random);
-    if (isPositionFarEnoughFromExisting(position, existingPlants, MIN_PLANT_DISTANCE)) {
-      return position;
-    }
-  }
-  return generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD, random);
 }
 
 function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_TIMESTAMP) {
@@ -214,15 +183,9 @@ function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_
     fungus: new Set()
   };
 
-  let plantIndex = 0;
   for (const archetype of PLANT_ARCHETYPES) {
     for (let index = 0; index < archetype.count; index += 1) {
-      const cluster = PLANT_CLUSTERS[plantIndex % PLANT_CLUSTERS.length];
-      const position = generatePlantPositionInCluster(
-        cluster,
-        entities.filter((entity) => entity.type === 'plant'),
-        random
-      );
+      const position = generateRandomPositionInGarden(random);
 
       entities.push({
         id: createDeterministicUuid(random),
@@ -246,16 +209,12 @@ function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_
         created_at: timestamp,
         updated_at: timestamp
       });
-
-      plantIndex += 1;
     }
   }
 
-  let herbivoreIndex = 0;
   for (const archetype of HERBIVORE_ARCHETYPES) {
     for (let index = 0; index < archetype.count; index += 1) {
-      const cluster = PLANT_CLUSTERS[herbivoreIndex % PLANT_CLUSTERS.length];
-      const position = generatePositionNearCluster(cluster, 80, random);
+      const position = generateRandomPositionInGarden(random);
 
       entities.push({
         id: createDeterministicUuid(random),
@@ -280,23 +239,12 @@ function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_
         created_at: timestamp,
         updated_at: timestamp
       });
-
-      herbivoreIndex += 1;
     }
   }
 
-  const carnivoreSpawnPoints = [
-    { x: 760, y: 120 },
-    { x: 760, y: 480 },
-    { x: 40, y: 120 },
-    { x: 40, y: 480 }
-  ];
-
-  let carnivoreIndex = 0;
   for (const archetype of CARNIVORE_ARCHETYPES) {
     for (let index = 0; index < archetype.count; index += 1) {
-      const spawnPoint = carnivoreSpawnPoints[carnivoreIndex % carnivoreSpawnPoints.length];
-      const position = generatePositionNearCluster(spawnPoint, 35, random);
+      const position = generateRandomPositionInGarden(random);
 
       entities.push({
         id: createDeterministicUuid(random),
@@ -321,16 +269,12 @@ function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_
         created_at: timestamp,
         updated_at: timestamp
       });
-
-      carnivoreIndex += 1;
     }
   }
 
-  let fungusIndex = 0;
   for (const archetype of FUNGUS_ARCHETYPES) {
     for (let index = 0; index < archetype.count; index += 1) {
-      const cluster = PLANT_CLUSTERS[fungusIndex % PLANT_CLUSTERS.length];
-      const position = generatePositionNearCluster(cluster, 30, random);
+      const position = generateRandomPositionInGarden(random);
 
       entities.push({
         id: createDeterministicUuid(random),
@@ -355,8 +299,6 @@ function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_
         created_at: timestamp,
         updated_at: timestamp
       });
-
-      fungusIndex += 1;
     }
   }
 
