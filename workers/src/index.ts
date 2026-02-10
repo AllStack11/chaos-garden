@@ -49,7 +49,7 @@ async function ensureDatabaseReady(db: D1Database): Promise<void> {
       const isSchemaReady = versionResult?.value === CURRENT_SCHEMA_VERSION;
       if (!isSchemaReady || !tickZeroResult) {
         throw new Error(
-          `Database is not initialized for schema ${CURRENT_SCHEMA_VERSION}. Run: npm run db:init:local`
+          `Database is not initialized for schema ${CURRENT_SCHEMA_VERSION}. Run: npm run db:init:local (local) or npm run db:init:remote (production)`
         );
       }
     })();
@@ -60,6 +60,14 @@ async function ensureDatabaseReady(db: D1Database): Promise<void> {
     databaseReadyPromise = null;
     throw error;
   }
+}
+
+function hasDatabaseBinding(env: Env): boolean {
+  if (!env.DB || typeof env.DB !== 'object') {
+    return false;
+  }
+  const maybeDatabase = env.DB as unknown as { prepare?: unknown };
+  return typeof maybeDatabase.prepare === 'function';
 }
 
 // ==========================================
@@ -225,6 +233,16 @@ export default {
    */
   async fetch(request: Request, env: Env): Promise<Response> {
     const corsOrigin = env.CORS_ORIGIN ?? '*';
+    const environmentName = env.ENVIRONMENT ?? 'production';
+
+    if (!hasDatabaseBinding(env)) {
+      return createErrorResponse(
+        'Missing D1 binding `DB`. Ensure workers/wrangler.jsonc has d1_databases[].binding = "DB", then redeploy the Worker.',
+        corsOrigin,
+        500,
+        { environment: environmentName }
+      );
+    }
 
     try {
       await ensureDatabaseReady(env.DB);
@@ -325,6 +343,13 @@ export default {
    * Handle scheduled Cron triggers (every 15 minutes)
    */
   async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
+    if (!hasDatabaseBinding(env)) {
+      console.error(
+        'Skipping scheduled tick because D1 binding `DB` is missing. Redeploy the Worker with workers/wrangler.jsonc binding set to "DB".'
+      );
+      return;
+    }
+
     try {
       await ensureDatabaseReady(env.DB);
     } catch (error) {

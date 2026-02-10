@@ -12,7 +12,7 @@
   },
   "d1_databases": [
     {
-      "binding": "chaos_garden_db",
+      "binding": "DB",
       "database_name": "chaos-garden-db",
       "database_id": "d65add62-7080-4d93-b54d-e7149cef1879"
     }
@@ -34,7 +34,7 @@
       },
       "d1_databases": [
         {
-          "binding": "chaos_garden_db",
+          "binding": "DB",
           "database_name": "chaos-garden-db",
           "database_id": "d65add62-7080-4d93-b54d-e7149cef1879"
         }
