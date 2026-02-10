@@ -24,6 +24,7 @@ import {
   createTimestamp,
   countEntitiesByType
 } from './environment/helpers';
+import { applyEnvironmentalEffectsToCreature } from './environment/creature-effects';
 import { generateNarrativePopulationDeltaDescription } from '../logging/event-description-templates';
 import { updateEnvironmentForNextTick } from './environment';
 import { processPlantBehaviorDuringTick, isPlantDead, getPlantCauseOfDeath } from './creatures/plants';
@@ -191,6 +192,7 @@ export async function runSimulationTick(
     // Age all currently living entities exactly once per tick.
     for (const entity of livingEntities) {
       entity.age += 1;
+      applyEnvironmentalEffectsToCreature(entity, updatedEnvironment);
     }
     
     // 5. Process entities (plants → herbivores)
@@ -255,7 +257,7 @@ export async function runSimulationTick(
       db,
       tickNumber,
       updatedEnvironment,
-      allEntitiesAfterTick,
+      newPopulations,
       appLogger
     );
     metrics.save_state_duration = Date.now() - stateSaveStart;
@@ -526,23 +528,21 @@ function applyAllTimeDeadSummary(
  * @param db - D1 database instance
  * @param tickNumber - Current tick number
  * @param environment - Updated environment conditions
- * @param allEntities - Complete list of entities currently present after this tick
+ * @param populationSummary - Precomputed summary for this tick (including all-time counters)
  * @param appLogger - Application logger
  */
 async function createAndSaveGardenState(
   db: D1Database,
   tickNumber: number,
   environment: Environment,
-  allEntities: Entity[],
+  populationSummary: PopulationSummary,
   appLogger: ApplicationLogger
 ): Promise<GardenState> {
-  const populations = countEntitiesByType(allEntities);
-  
   const gardenState: Omit<GardenState, 'id'> = {
     tick: tickNumber,
     timestamp: createTimestamp(),
     environment,
-    populationSummary: populations
+    populationSummary
   };
   
   const stateId = await saveGardenStateToDatabase(db, gardenState as GardenState);

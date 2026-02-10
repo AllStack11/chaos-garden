@@ -138,6 +138,7 @@ export async function processFungusBehaviorDuringTick(
   if (fungus.age >= MAX_AGE) {
     fungus.isAlive = false;
     fungus.health = 0;
+    fungus.energy = 0;
   }
   
   if (fungus.energy <= 0) {

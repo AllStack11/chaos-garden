@@ -210,7 +210,7 @@ export async function getAllLivingEntitiesFromDatabase(
 
 /**
  * Load dead entities that still contain decomposable energy.
- * These are potential food sources for fungi across ticks.
+ * These remain in-garden dead matter across ticks.
  */
 export async function getAllDecomposableDeadEntitiesFromDatabase(
   db: D1Database
@@ -221,8 +221,7 @@ export async function getAllDecomposableDeadEntitiesFromDatabase(
             energy, health, age, traits, lineage, created_at, updated_at
      FROM entities
      WHERE is_alive = 0
-       AND energy > 0
-       AND type != 'fungus'`
+       AND energy > 0`
   );
 
   return rows.map(mapRowToEntity);
