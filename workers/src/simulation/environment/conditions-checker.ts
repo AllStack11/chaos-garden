@@ -30,7 +30,8 @@ export function createInitialEnvironment(): Environment {
     tick: initialTick,
     temperature: IDEAL_TEMPERATURE, // Pleasant 20°C
     sunlight: calculateSunlightForTick(initialTick),
-    moisture: IDEAL_MOISTURE_FOR_PLANTS // Moderate moisture
+    moisture: IDEAL_MOISTURE_FOR_PLANTS, // Moderate moisture
+    weatherState: null
   };
 }
 

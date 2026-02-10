@@ -23,6 +23,7 @@ import {
   calculateMovementEnergyCost
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
+import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 
 // Constants
 const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 1.1; // Carnivores have higher metabolism
@@ -105,22 +106,24 @@ export async function processCarnivoreBehaviorDuringTick(
   if (carnivore.type !== 'carnivore') return { offspring: [], consumed: [] };
   const offspring: Entity[] = [];
   const consumed: string[] = [];
-  
+  const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
+  const effectiveMovementSpeed = carnivore.movementSpeed * weatherModifiers.movementModifier;
+
   // 1. Find nearest herbivore (prey)
   const targetPrey = findNearestEntity(carnivore, allEntities, 'herbivore', carnivore.perceptionRadius);
-  
+
   // 2. Move toward prey if found
   if (targetPrey) {
     const distance = calculateDistanceBetweenEntities(carnivore, targetPrey);
-    
+
     if (distance <= HUNTING_DISTANCE) {
       // Hunt the herbivore
       const energyGained = huntHerbivore(carnivore, targetPrey);
       consumed.push(targetPrey.id);
     } else {
       // Pursue prey
-      moveEntityTowardTarget(carnivore, targetPrey.position);
-      const movedDistance = Math.min(distance, carnivore.movementSpeed);
+      moveEntityTowardTarget(carnivore, targetPrey.position, effectiveMovementSpeed);
+      const movedDistance = Math.min(distance, effectiveMovementSpeed);
       
       // Pay movement cost (higher speed = higher cost)
       const movementCost = calculateMovementEnergyCost(
@@ -140,7 +143,7 @@ export async function processCarnivoreBehaviorDuringTick(
   
   // 4. Reproduction
   if (carnivore.age <= MAX_REPRODUCTIVE_AGE && carnivore.energy >= REPRODUCTION_THRESHOLD) {
-    if (willRandomEventOccur(carnivore.reproductionRate)) {
+    if (willRandomEventOccur(carnivore.reproductionRate * weatherModifiers.reproductionModifier)) {
       const child = await attemptCarnivoreReproduction(carnivore, carnivore.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);

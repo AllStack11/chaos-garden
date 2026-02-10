@@ -24,6 +24,7 @@ import {
   calculateMovementEnergyCost
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
+import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 
 // Constants
 const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 0.9 ; // Herbivores are slightly more efficient than carnivores
@@ -106,22 +107,24 @@ export async function processHerbivoreBehaviorDuringTick(
   if (herbivore.type !== 'herbivore') return { offspring: [], consumed: [] };
   const offspring: Entity[] = [];
   const consumed: string[] = [];
-  
+  const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
+  const effectiveMovementSpeed = herbivore.movementSpeed * weatherModifiers.movementModifier;
+
   // 1. Find nearest plant
   const targetPlant = findNearestEntity(herbivore, allEntities, 'plant', herbivore.perceptionRadius);
-  
+
   // 2. Move toward plant if found
   if (targetPlant) {
     const distance = calculateDistanceBetweenEntities(herbivore, targetPlant);
-    
+
     if (distance <= EATING_DISTANCE) {
       // Eat the plant
       const energyGained = eatPlant(herbivore, targetPlant);
       consumed.push(targetPlant.id);
     } else {
       // Move toward plant
-      moveEntityTowardTarget(herbivore, targetPlant.position);
-      const movedDistance = Math.min(distance, herbivore.movementSpeed);
+      moveEntityTowardTarget(herbivore, targetPlant.position, effectiveMovementSpeed);
+      const movedDistance = Math.min(distance, effectiveMovementSpeed);
       
       // Pay movement cost
       const movementCost = calculateMovementEnergyCost(
@@ -141,7 +144,7 @@ export async function processHerbivoreBehaviorDuringTick(
   
   // 4. Reproduction
   if (herbivore.age <= MAX_REPRODUCTIVE_AGE && herbivore.energy >= REPRODUCTION_THRESHOLD) {
-    if (willRandomEventOccur(herbivore.reproductionRate)) {
+    if (willRandomEventOccur(herbivore.reproductionRate * weatherModifiers.reproductionModifier)) {
       const child = await attemptHerbivoreReproduction(herbivore, herbivore.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);

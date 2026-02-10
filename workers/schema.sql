@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS garden_state (
   total_dead INTEGER NOT NULL DEFAULT 0,     -- Total dead entities
   all_time_dead INTEGER NOT NULL DEFAULT 0,  -- Cumulative dead entities
   total INTEGER NOT NULL DEFAULT 0,          -- Total entity count
+  weather_state TEXT DEFAULT NULL,           -- Serialized weather pattern state
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -151,7 +152,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-VALUES ('schema_version', '1.5.1', datetime('now'));
+VALUES ('schema_version', '1.6.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding

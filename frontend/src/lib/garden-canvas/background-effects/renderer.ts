@@ -4,8 +4,10 @@ import type {
   BiomeCell,
   CanopyEdge,
   CanopyNode,
+  FogPatch,
   ParallaxBand,
   PointerPosition,
+  RainDropParticle,
   RootPressureCell,
   MemoryRing,
   ShadowBlob,
@@ -30,6 +32,8 @@ export interface BackgroundRenderInput {
   parallaxBands: ParallaxBand[];
   canopyNodes: CanopyNode[];
   canopyEdges: CanopyEdge[];
+  rainDrops: RainDropParticle[];
+  fogPatches: FogPatch[];
   biomeDriftX: number;
   biomeDriftY: number;
   lighting: LightingContext;
@@ -49,6 +53,7 @@ export function renderBackgroundPass(input: BackgroundRenderInput): void {
       break;
     case 'ambientAtmosphere':
       drawAtmosphere(input);
+      drawWeatherAtmosphereEffects(input);
       drawMemoryRings(input.ctx, input.memoryRings, 'ambient');
       break;
     case 'entityShadows':
@@ -57,9 +62,11 @@ export function renderBackgroundPass(input: BackgroundRenderInput): void {
     case 'foregroundParticles':
       drawSpores(input.ctx, input.spores, input.qualityTier);
       drawGlitchSparks(input.ctx, input.glitchSparks);
+      drawRainDrops(input.ctx, input.rainDrops, input.lighting);
       break;
     case 'postLightVeil':
       drawPostLightVeil(input);
+      drawWeatherPostVeilEffects(input);
       drawMemoryRings(input.ctx, input.memoryRings, 'veil');
       break;
     case 'entitiesBase':
@@ -398,6 +405,87 @@ function drawMemoryRings(
       ctx.restore();
     }
   });
+}
+
+// ==========================================
+// Weather-Specific Rendering
+// ==========================================
+
+function drawWeatherAtmosphereEffects(input: BackgroundRenderInput): void {
+  const { ctx, viewport, lighting, worldState, fogPatches } = input;
+  const weather = worldState.weatherStateName;
+
+  // Cloud shadow overlay for overcast/rain/storm
+  if (weather === 'OVERCAST' || weather === 'RAIN' || weather === 'STORM') {
+    const cloudDensity = weather === 'STORM' ? 0.18 : weather === 'RAIN' ? 0.12 : 0.06;
+    const cloudGradient = ctx.createLinearGradient(0, 0, 0, viewport.height * 0.5);
+    cloudGradient.addColorStop(0, `rgba(8, 12, 18, ${cloudDensity + lighting.fogDensity * 0.05})`);
+    cloudGradient.addColorStop(1, 'rgba(8, 12, 18, 0)');
+    ctx.fillStyle = cloudGradient;
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
+  }
+
+  // Fog patches
+  if (fogPatches.length > 0) {
+    fogPatches.forEach((patch) => {
+      const fogGradient = ctx.createRadialGradient(
+        patch.x, patch.y, 0,
+        patch.x, patch.y, patch.radius,
+      );
+      fogGradient.addColorStop(0, `rgba(180, 200, 180, ${patch.opacity})`);
+      fogGradient.addColorStop(0.6, `rgba(160, 180, 160, ${patch.opacity * 0.4})`);
+      fogGradient.addColorStop(1, 'rgba(160, 180, 160, 0)');
+      ctx.fillStyle = fogGradient;
+      ctx.fillRect(
+        patch.x - patch.radius, patch.y - patch.radius,
+        patch.radius * 2, patch.radius * 2,
+      );
+    });
+  }
+}
+
+function drawRainDrops(
+  ctx: CanvasRenderingContext2D,
+  rainDrops: RainDropParticle[],
+  lighting: LightingContext,
+): void {
+  if (rainDrops.length === 0) return;
+
+  const baseAlpha = 0.15 + lighting.ambientLevel * 0.1;
+  ctx.strokeStyle = `rgba(170, 200, 220, ${baseAlpha})`;
+  ctx.lineWidth = 1;
+  ctx.lineCap = 'round';
+
+  rainDrops.forEach((drop) => {
+    ctx.globalAlpha = drop.opacity;
+    ctx.beginPath();
+    ctx.moveTo(drop.x, drop.y);
+    ctx.lineTo(drop.x + drop.windOffset * 2, drop.y + drop.length);
+    ctx.stroke();
+  });
+
+  ctx.globalAlpha = 1;
+}
+
+function drawWeatherPostVeilEffects(input: BackgroundRenderInput): void {
+  const { ctx, viewport, worldState } = input;
+  const weather = worldState.weatherStateName;
+
+  // Drought warm tint
+  if (weather === 'DROUGHT') {
+    const heatGradient = ctx.createLinearGradient(0, 0, 0, viewport.height);
+    heatGradient.addColorStop(0, 'rgba(180, 120, 40, 0.06)');
+    heatGradient.addColorStop(0.5, 'rgba(200, 140, 50, 0.04)');
+    heatGradient.addColorStop(1, 'rgba(160, 100, 30, 0.02)');
+    ctx.fillStyle = heatGradient;
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
+  }
+
+  // Storm extra darkness
+  if (weather === 'STORM') {
+    ctx.fillStyle = 'rgba(5, 8, 15, 0.08)';
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
+  }
 }
 
 function drawCanopyGraph(

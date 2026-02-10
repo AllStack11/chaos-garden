@@ -69,6 +69,50 @@ const AMBIENT_NIGHT_TEMPLATES: readonly string[] = [
   'Deep night. {fungusCount} fungi spread their mycelium in the darkness, unbothered.',
 ];
 
+const AMBIENT_RAIN_TEMPLATES: readonly string[] = [
+  'Rain patters gently on {plantCount} upturned leaves, filling the soil with life.',
+  'Droplets cascade through the canopy. The herbivores huddle under broad fronds.',
+  'A steady rain washes the garden. Moisture climbs to {moisturePercent}%.',
+  'The rain falls and the fungi rejoice. {fungusCount} decomposers spread their mycelium.',
+  'Rainfall dulls the light to {sunlightPercent}%. The plants slow their photosynthesis.',
+  'Rain drums on the garden. {herbivoreCount} herbivores trudge through the wet, movement slowed.',
+  'The air smells of wet earth and possibility. The garden drinks deeply.',
+  'Water pools between the roots. The ecosystem adjusts to the slower rhythm of rain.',
+];
+
+const AMBIENT_STORM_TEMPLATES: readonly string[] = [
+  'Thunder rumbles across the garden. {totalLiving} creatures brace against the gale.',
+  'Lightning splits the sky. For an instant, every leaf and claw is illuminated.',
+  'The storm rages. Movement grinds to a crawl as creatures seek shelter.',
+  'Wind howls through the canopy. Sunlight drops to {sunlightPercent}%. The plants starve.',
+  'A violent storm batters the garden. Only the fungi seem unbothered.',
+  'The storm pounds relentlessly. {herbivoreCount} herbivores scatter, burning precious energy.',
+  'Lightning flashes. The temperature plunges to {temperature}°C. Survival is the only priority.',
+  'The full fury of the storm descends. The garden will remember this.',
+];
+
+const AMBIENT_FOG_TEMPLATES: readonly string[] = [
+  'A thick fog rolls in, muffling the garden in silence. Visibility drops to near zero.',
+  'The world shrinks to a few pixels in every direction. The fungi thrive in the dampness.',
+  'Fog blankets the garden at {temperature}°C. Creatures move cautiously through the murk.',
+  'Dense fog obscures the canopy. The herbivores graze blindly, guided by instinct alone.',
+  'The garden disappears into white. {totalLiving} entities navigate by scent and memory.',
+  'Fog clings to everything. Sunlight barely reaches {sunlightPercent}%.',
+  'In the fog, predator and prey move as ghosts. The garden holds its breath.',
+  'A quiet fog settles. The moisture rises to {moisturePercent}%. The mycelium network hums.',
+];
+
+const AMBIENT_DROUGHT_TEMPLATES: readonly string[] = [
+  'The sun beats mercilessly. Moisture drops to {moisturePercent}%. Plants wilt visibly.',
+  'Cracked earth and withered stems. The garden gasps for water.',
+  'Drought tightens its grip at {temperature}°C. {plantCount} plants struggle to photosynthesize.',
+  'The air shimmers with heat. Every creature feels the drought in its energy reserves.',
+  '{totalLiving} entities endure the drought. The strong survive. The weak become compost.',
+  'No rain in sight. Moisture at {moisturePercent}%. The fungi slow to a crawl.',
+  'The drought is relentless. Herbivores range farther, burning more energy for less food.',
+  'Heat and dryness press down on the garden. Only the most efficient will last.',
+];
+
 const AMBIENT_WEATHER_TEMPLATES: readonly string[] = [
   'A {temperatureAdjective} {temperature}°C breeze ripples through the canopy.',
   'The air is {moistureAdjective} today, moisture at {moisturePercent}%.',
@@ -199,11 +243,12 @@ function describeMoistureAsAdjective(moisture: number): string {
 // Template Selection Logic
 // ==========================================
 
-type NarrativeCategory = 'time' | 'weather' | 'population' | 'spotlight' | 'humor' | 'philosophy' | 'interspecies' | 'tension' | 'milestone';
+type NarrativeCategory = 'time' | 'weather' | 'weather_state' | 'population' | 'spotlight' | 'humor' | 'philosophy' | 'interspecies' | 'tension' | 'milestone';
 
 const NARRATIVE_CATEGORY_WEIGHTS: Record<NarrativeCategory, number> = {
   time: 1,
   weather: 1,
+  weather_state: 0,
   population: 1,
   spotlight: 1,
   humor: 1,
@@ -228,6 +273,14 @@ function selectNarrativeCategoryForContext(
   // Boost time-of-day during transitions
   if (timeOfDay === 'dawn' || timeOfDay === 'dusk') {
     weights.time = 3;
+  }
+
+  // Boost weather-state templates when a notable weather pattern is active
+  const activeWeather = environment.weatherState?.currentState;
+  if (activeWeather && activeWeather !== 'CLEAR' && activeWeather !== 'OVERCAST') {
+    weights.weather_state = 4;
+  } else if (activeWeather === 'OVERCAST') {
+    weights.weather_state = 1;
   }
 
   // Boost weather during extreme conditions
@@ -279,6 +332,17 @@ function selectNarrativeCategoryForContext(
 /**
  * Get the template array for a time-of-day phase.
  */
+function getWeatherStateTemplates(environment: Environment): readonly string[] {
+  const weatherState = environment.weatherState?.currentState;
+  switch (weatherState) {
+    case 'RAIN': return AMBIENT_RAIN_TEMPLATES;
+    case 'STORM': return AMBIENT_STORM_TEMPLATES;
+    case 'FOG': return AMBIENT_FOG_TEMPLATES;
+    case 'DROUGHT': return AMBIENT_DROUGHT_TEMPLATES;
+    default: return AMBIENT_WEATHER_TEMPLATES;
+  }
+}
+
 function getTimeOfDayTemplates(timeOfDay: 'night' | 'dawn' | 'day' | 'dusk'): readonly string[] {
   switch (timeOfDay) {
     case 'dawn': return AMBIENT_DAWN_TEMPLATES;
@@ -347,6 +411,10 @@ export function generateAmbientNarrativeForTick(
       break;
     case 'weather':
       templates = AMBIENT_WEATHER_TEMPLATES;
+      tags.push('weather');
+      break;
+    case 'weather_state':
+      templates = getWeatherStateTemplates(environment);
       tags.push('weather');
       break;
     case 'population':

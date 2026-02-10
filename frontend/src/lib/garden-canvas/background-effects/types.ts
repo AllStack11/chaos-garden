@@ -120,6 +120,24 @@ export interface BackgroundPassContext {
   timePhase: TimePhase;
 }
 
+export interface RainDropParticle {
+  x: number;
+  y: number;
+  velocity: number;
+  length: number;
+  opacity: number;
+  windOffset: number;
+}
+
+export interface FogPatch {
+  x: number;
+  y: number;
+  radius: number;
+  opacity: number;
+  driftSpeed: number;
+  driftAngle: number;
+}
+
 export interface BackgroundWorldState {
   tick: number;
   temperature: number;
@@ -132,4 +150,6 @@ export interface BackgroundWorldState {
   predatorPressure?: number;
   diversityIndex?: number;
   eventIntensity?: number;
+  weatherStateName?: string;
+  weatherTransitionProgress?: number;
 }

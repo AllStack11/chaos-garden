@@ -13,7 +13,7 @@
 import type { D1Database, ScheduledEvent } from './types/worker';
 import { createApplicationLogger } from './logging/application-logger';
 import { runSimulationTick } from './simulation/tick';
-import { runMigrations } from './db/migrations';
+import { CURRENT_SCHEMA_VERSION } from './db/migrations';
 import {
   getLatestGardenStateFromDatabase,
   getRecentSimulationEventsFromDatabase,
@@ -35,14 +35,28 @@ let databaseReadyPromise: Promise<void> | null = null;
 async function ensureDatabaseReady(db: D1Database): Promise<void> {
   if (!databaseReadyPromise) {
     databaseReadyPromise = (async () => {
-      const migrationSuccess = await runMigrations(db);
-      if (!migrationSuccess) {
-        throw new Error('Database migrations failed');
+      const versionResult = await db
+        .prepare("SELECT value FROM system_metadata WHERE key = 'schema_version'")
+        .first<{ value: string }>();
+
+      const tickZeroResult = await db
+        .prepare('SELECT id FROM garden_state WHERE tick = 0 LIMIT 1')
+        .first<{ id: number }>();
+
+      const isSchemaReady = versionResult?.value === CURRENT_SCHEMA_VERSION;
+      if (!isSchemaReady || !tickZeroResult) {
+        throw new Error(
+          `Database is not initialized for schema ${CURRENT_SCHEMA_VERSION}. Run: npm run db:init:local`
+        );
       }
     })();
   }
-
-  await databaseReadyPromise;
+  try {
+    await databaseReadyPromise;
+  } catch (error) {
+    databaseReadyPromise = null;
+    throw error;
+  }
 }
 
 // ==========================================
@@ -200,7 +214,15 @@ export default {
    * Handle HTTP requests
    */
   async fetch(request: Request, env: Env): Promise<Response> {
-    await ensureDatabaseReady(env.DB);
+    try {
+      await ensureDatabaseReady(env.DB);
+    } catch (error) {
+      return createErrorResponse(
+        'Database is not initialized. Run `npm run db:init:local` from the project root.',
+        500,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
 
     const url = new URL(request.url);
     const path = url.pathname;
@@ -266,7 +288,15 @@ export default {
    * Handle scheduled Cron triggers (every 15 minutes)
    */
   async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
-    await ensureDatabaseReady(env.DB);
+    try {
+      await ensureDatabaseReady(env.DB);
+    } catch (error) {
+      console.error(
+        'Skipping scheduled tick because database is not initialized. Run `npm run db:init:local`.',
+        error
+      );
+      return;
+    }
 
     const isDevelopment = env.ENVIRONMENT !== 'production';
 

@@ -3,10 +3,12 @@ import type {
   BiomeCell,
   CanopyEdge,
   CanopyNode,
+  FogPatch,
   GlitchSpark,
   MemoryRing,
   ParallaxBand,
   PointerPosition,
+  RainDropParticle,
   RootPressureCell,
   ShadowBlob,
   SporeParticle,
@@ -41,6 +43,9 @@ export interface BackgroundAnimationState {
   parallaxBands: ParallaxBand[];
   canopyNodes: CanopyNode[];
   canopyEdges: CanopyEdge[];
+  rainDrops: RainDropParticle[];
+  fogPatches: FogPatch[];
+  currentWeatherStateName: string | null;
   biomeDriftX: number;
   biomeDriftY: number;
   lastGlitchTime: number;
@@ -73,6 +78,9 @@ export function createBackgroundAnimationState(
     parallaxBands: [],
     canopyNodes: [],
     canopyEdges: [],
+    rainDrops: [],
+    fogPatches: [],
+    currentWeatherStateName: null,
     biomeDriftX: 0,
     biomeDriftY: 0,
     lastGlitchTime: 0,
@@ -203,6 +211,8 @@ export function updateBackgroundAnimationState(
   updateSporeParticles(state.spores, viewport);
   updateShadowBlobs(state.shadows, viewport);
   updateParallaxBands(state.parallaxBands);
+  if (state.rainDrops.length > 0) updateRainDropParticles(state.rainDrops, viewport);
+  if (state.fogPatches.length > 0) updateFogPatchPositions(state.fogPatches, viewport);
 
   const glitchCadenceMs = 2200 / QUALITY_MULTIPLIERS[qualityTier];
   if (now - state.lastGlitchTime > glitchCadenceMs + nextRandom(state) * 5000) {
@@ -409,6 +419,97 @@ function addGlitchSpark(state: BackgroundAnimationState, viewport: ViewportSize)
     lifetime: 180,
     color,
     shape: Math.floor(nextRandom(state) * 2),
+  });
+}
+
+// ==========================================
+// Weather Particle Management
+// ==========================================
+
+export function syncWeatherParticlesToBackgroundState(
+  state: BackgroundAnimationState,
+  weatherStateName: string | null,
+  viewport: ViewportSize,
+): void {
+  if (weatherStateName === state.currentWeatherStateName) return;
+  state.currentWeatherStateName = weatherStateName;
+
+  // Rebuild rain drops based on weather
+  if (weatherStateName === 'STORM') {
+    state.rainDrops = createRainDropParticles(state, viewport, pickCount(200, state.qualityTier));
+  } else if (weatherStateName === 'RAIN') {
+    state.rainDrops = createRainDropParticles(state, viewport, pickCount(80, state.qualityTier));
+  } else {
+    state.rainDrops = [];
+  }
+
+  // Rebuild fog patches based on weather
+  if (weatherStateName === 'FOG') {
+    state.fogPatches = createFogPatches(state, viewport, pickCount(12, state.qualityTier));
+  } else if (weatherStateName === 'STORM') {
+    state.fogPatches = createFogPatches(state, viewport, pickCount(5, state.qualityTier));
+  } else {
+    state.fogPatches = [];
+  }
+}
+
+function createRainDropParticles(
+  state: BackgroundAnimationState,
+  viewport: ViewportSize,
+  count: number,
+): RainDropParticle[] {
+  return Array.from({ length: count }, () => ({
+    x: nextRandom(state) * viewport.width,
+    y: nextRandom(state) * viewport.height,
+    velocity: 6 + nextRandom(state) * 8,
+    length: 8 + nextRandom(state) * 16,
+    opacity: 0.15 + nextRandom(state) * 0.25,
+    windOffset: (nextRandom(state) - 0.3) * 2.5,
+  }));
+}
+
+function createFogPatches(
+  state: BackgroundAnimationState,
+  viewport: ViewportSize,
+  count: number,
+): FogPatch[] {
+  return Array.from({ length: count }, () => ({
+    x: nextRandom(state) * viewport.width,
+    y: nextRandom(state) * viewport.height,
+    radius: 120 + nextRandom(state) * 250,
+    opacity: 0.04 + nextRandom(state) * 0.08,
+    driftSpeed: 0.1 + nextRandom(state) * 0.25,
+    driftAngle: nextRandom(state) * Math.PI * 2,
+  }));
+}
+
+function updateRainDropParticles(rainDrops: RainDropParticle[], viewport: ViewportSize): void {
+  rainDrops.forEach((drop) => {
+    drop.y += drop.velocity;
+    drop.x += drop.windOffset;
+
+    if (drop.y > viewport.height) {
+      drop.y = -drop.length;
+      drop.x = Math.random() * viewport.width;
+    }
+    if (drop.x < 0) drop.x = viewport.width;
+    if (drop.x > viewport.width) drop.x = 0;
+  });
+}
+
+function updateFogPatchPositions(fogPatches: FogPatch[], viewport: ViewportSize): void {
+  fogPatches.forEach((patch) => {
+    patch.x += Math.cos(patch.driftAngle) * patch.driftSpeed;
+    patch.y += Math.sin(patch.driftAngle) * patch.driftSpeed;
+
+    // Slowly rotate drift direction
+    patch.driftAngle += (Math.random() - 0.5) * 0.02;
+
+    // Wrap around viewport
+    if (patch.x < -patch.radius) patch.x = viewport.width + patch.radius;
+    if (patch.x > viewport.width + patch.radius) patch.x = -patch.radius;
+    if (patch.y < -patch.radius) patch.y = viewport.height + patch.radius;
+    if (patch.y > viewport.height + patch.radius) patch.y = -patch.radius;
   });
 }
 

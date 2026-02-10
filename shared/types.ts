@@ -109,6 +109,64 @@ export type Entity = {
 // ==========================================
 
 /**
+ * Discrete weather states that govern the garden's atmospheric conditions.
+ * Each state persists for a duration range before transitioning.
+ */
+export type WeatherStateName =
+  | 'CLEAR'
+  | 'OVERCAST'
+  | 'RAIN'
+  | 'STORM'
+  | 'DROUGHT'
+  | 'FOG';
+
+/**
+ * Per-state environmental modifiers applied each tick.
+ * These influence (not replace) the baseline environment variables.
+ */
+export interface WeatherStateModifiers {
+  temperatureOffset: number;
+  sunlightMultiplier: number;
+  moistureChangePerTick: number;
+  photosynthesisModifier: number;
+  movementModifier: number;
+  reproductionModifier: number;
+}
+
+/**
+ * Transition probability entry: target state and its weight.
+ * Weights are normalized at runtime, not required to sum to 1.
+ */
+export interface WeatherTransitionWeight {
+  targetState: WeatherStateName;
+  weight: number;
+}
+
+/**
+ * Complete definition of a weather state including duration and transitions.
+ */
+export interface WeatherStateDefinition {
+  name: WeatherStateName;
+  displayLabel: string;
+  minimumDurationTicks: number;
+  maximumDurationTicks: number;
+  modifiers: WeatherStateModifiers;
+  transitions: WeatherTransitionWeight[];
+}
+
+/**
+ * Runtime weather state persisted across ticks.
+ * Stored in the garden_state table as a JSON column.
+ */
+export interface ActiveWeatherState {
+  currentState: WeatherStateName;
+  stateEnteredAtTick: number;
+  plannedDurationTicks: number;
+  previousState: WeatherStateName | null;
+  transitionProgressTicks: number;
+}
+
+/**
  * Environmental conditions that affect all entities in the garden.
  * Like weather and climate, these create the context for life.
  */
@@ -117,6 +175,7 @@ export interface Environment {
   sunlight: number;     // 0-1 intensity (affects photosynthesis)
   moisture: number;     // 0-1 humidity/water availability (affects survival)
   tick: number;         // simulation tick counter (time's passage)
+  weatherState: ActiveWeatherState | null;
 }
 
 // ==========================================
@@ -349,6 +408,7 @@ export interface GardenStateRow {
   temperature: number;
   sunlight: number;
   moisture: number;
+  weather_state: string | null;
   plants: number;
   herbivores: number;
   carnivores: number;

@@ -25,6 +25,7 @@ import {
   calculateMovementEnergyCost
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
+import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 
 // Constants
 const BASE_METABOLISM_COST = 0.2; // Fungi have lower metabolism than plants/herbivores
@@ -138,8 +139,9 @@ export async function processFungusBehaviorDuringTick(
   fungus.energy -= BASE_METABOLISM_COST * tempMultiplier * 0.5; // Fungi have lower metabolism
   
   // 4. Reproduction
+  const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
   if (fungus.energy >= REPRODUCTION_THRESHOLD) {
-    if (willRandomEventOccur(fungus.reproductionRate)) {
+    if (willRandomEventOccur(fungus.reproductionRate * weatherModifiers.reproductionModifier)) {
       const child = await attemptFungusReproduction(fungus, fungus.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);

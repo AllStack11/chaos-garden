@@ -17,7 +17,8 @@ import type {
   EntityRow,
   SimulationEventRow,
   Environment,
-  PopulationSummary
+  PopulationSummary,
+  ActiveWeatherState
 } from '@chaos-garden/shared';
 import { queryFirst, queryAll, executeQuery, executeBatch } from './connection';
 import type { D1Database } from '../types/worker';
@@ -39,7 +40,7 @@ export async function getLatestGardenStateFromDatabase(
 ): Promise<GardenState | null> {
   const row = await queryFirst<GardenStateRow>(
     db,
-    `SELECT id, tick, timestamp, temperature, sunlight, moisture,
+    `SELECT id, tick, timestamp, temperature, sunlight, moisture, weather_state,
             plants, herbivores, carnivores, fungi,
             dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
             all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
@@ -86,7 +87,7 @@ export async function getGardenStateByTickFromDatabase(
 ): Promise<GardenState | null> {
   const row = await queryFirst<GardenStateRow>(
     db,
-    `SELECT id, tick, timestamp, temperature, sunlight, moisture,
+    `SELECT id, tick, timestamp, temperature, sunlight, moisture, weather_state,
             plants, herbivores, carnivores, fungi,
             dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
             all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
@@ -118,17 +119,18 @@ export async function saveGardenStateToDatabase(
   await executeQuery<{ id: number }>(
     db,
     `INSERT INTO garden_state (
-      tick, timestamp, temperature, sunlight, moisture,
+      tick, timestamp, temperature, sunlight, moisture, weather_state,
       plants, herbivores, carnivores, fungi,
       dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
       all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
       total_living, total_dead, all_time_dead, total
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tick) DO UPDATE SET
       timestamp = excluded.timestamp,
       temperature = excluded.temperature,
       sunlight = excluded.sunlight,
       moisture = excluded.moisture,
+      weather_state = excluded.weather_state,
       plants = excluded.plants,
       herbivores = excluded.herbivores,
       carnivores = excluded.carnivores,
@@ -151,6 +153,7 @@ export async function saveGardenStateToDatabase(
       state.environment.temperature,
       state.environment.sunlight,
       state.environment.moisture,
+      state.environment.weatherState ? JSON.stringify(state.environment.weatherState) : null,
       state.populationSummary.plants,
       state.populationSummary.herbivores,
       state.populationSummary.carnivores,
@@ -455,7 +458,8 @@ function mapRowToGardenState(row: GardenStateRow): GardenState {
     temperature: row.temperature,
     sunlight: row.sunlight,
     moisture: row.moisture,
-    tick: row.tick
+    tick: row.tick,
+    weatherState: row.weather_state ? JSON.parse(row.weather_state) as ActiveWeatherState : null,
   };
 
   const populationSummary: PopulationSummary = {

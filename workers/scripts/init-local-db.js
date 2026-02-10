@@ -1,29 +1,137 @@
 #!/usr/bin/env node
 /**
- * Chaos Garden Local Database Initialization Script
- * 
- * This script initializes the local D1 database with schema and seed data.
- * It creates the first garden state and populates it with initial entities.
- * 
- * Usage: node scripts/init-local-db.js
- * 
- * Divine Purpose: To cultivate the first life in our local garden,
- * creating a foundation from which complexity can emerge.
+ * Deterministic local D1 initializer for Chaos Garden.
+ *
+ * Usage:
+ *   node scripts/init-local-db.js
+ *   node scripts/init-local-db.js --schema-only
+ *   node scripts/init-local-db.js --seed=42
+ *   node scripts/init-local-db.js --verify-only
  */
 
-const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
 
-// Inline UUID v4 generator — matches generateEntityId() in the simulation engine
-function generateEntityId() {
+const DATABASE_NAME = 'chaos-garden-db';
+const WRANGLER_CONFIG = 'wrangler.local.jsonc';
+const PERSIST_PATH = '.wrangler/local-state';
+const WORKERS_DIR = path.resolve(__dirname, '..');
+const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
+const CURRENT_SCHEMA_VERSION = '1.6.0';
+const DEFAULT_SEED = 20260210;
+const DEFAULT_SEED_TIMESTAMP = '2026-01-01T00:00:00.000Z';
+
+const PLANT_CLUSTERS = [
+  { x: 200, y: 300 },
+  { x: 400, y: 300 },
+  { x: 600, y: 300 }
+];
+
+const CLUSTER_SPREAD = 120;
+const MIN_PLANT_DISTANCE = 40;
+const GARDEN_WIDTH = 800;
+const GARDEN_HEIGHT = 600;
+
+const PLANT_ARCHETYPES = [
+  { name: 'standard', count: 12, photosynthesisRate: 1.0, reproductionRate: 0.05, metabolismEfficiency: 1.0 },
+  { name: 'fast-growing', count: 10, photosynthesisRate: 1.25, reproductionRate: 0.04, metabolismEfficiency: 0.95 },
+  { name: 'prolific', count: 10, photosynthesisRate: 0.85, reproductionRate: 0.07, metabolismEfficiency: 1.0 },
+  { name: 'hardy', count: 10, photosynthesisRate: 0.95, reproductionRate: 0.05, metabolismEfficiency: 1.15 }
+];
+
+const HERBIVORE_ARCHETYPES = [
+  { name: 'fast', count: 4, movementSpeed: 2.8, metabolismEfficiency: 0.95, reproductionRate: 0.03, perceptionRadius: 105 },
+  { name: 'efficient', count: 4, movementSpeed: 1.7, metabolismEfficiency: 1.2, reproductionRate: 0.03, perceptionRadius: 95 },
+  { name: 'balanced', count: 4, movementSpeed: 2.1, metabolismEfficiency: 1.0, reproductionRate: 0.03, perceptionRadius: 100 },
+  { name: 'scout', count: 2, movementSpeed: 2.4, metabolismEfficiency: 0.95, reproductionRate: 0.02, perceptionRadius: 130 }
+];
+
+const CARNIVORE_ARCHETYPES = [
+  { name: 'sprinter', count: 2, movementSpeed: 3.8, metabolismEfficiency: 1.0, reproductionRate: 0.02, perceptionRadius: 155 },
+  { name: 'hunter', count: 1, movementSpeed: 3.4, metabolismEfficiency: 1.15, reproductionRate: 0.02, perceptionRadius: 175 },
+  { name: 'patient', count: 1, movementSpeed: 3.0, metabolismEfficiency: 1.2, reproductionRate: 0.02, perceptionRadius: 165 }
+];
+
+const FUNGUS_ARCHETYPES = [
+  { name: 'standard', count: 4, decompositionRate: 1.0, reproductionRate: 0.04, metabolismEfficiency: 1.2, perceptionRadius: 55 },
+  { name: 'efficient', count: 4, decompositionRate: 1.35, reproductionRate: 0.03, metabolismEfficiency: 1.2, perceptionRadius: 50 },
+  { name: 'spreader', count: 4, decompositionRate: 0.9, reproductionRate: 0.05, metabolismEfficiency: 1.1, perceptionRadius: 60 }
+];
+
+function createSeededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function randomInt(random, max) {
+  return Math.floor(random() * max);
+}
+
+function createDeterministicUuid(random) {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const random = Math.random() * 16 | 0;
-    const value = char === 'x' ? random : (random & 0x3 | 0x8);
-    return value.toString(16);
+    const n = randomInt(random, 16);
+    const v = char === 'x' ? n : ((n & 0x3) | 0x8);
+    return v.toString(16);
   });
 }
 
-// Naming utility with high variety and uniqueness guarantees for seed data.
-function generateRandomName(type, usedNames = new Set()) {
+function escapeSqlString(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+function parseCliArgs(argv) {
+  const parsedArgs = {
+    schemaOnly: false,
+    verifyOnly: false,
+    seed: DEFAULT_SEED
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+
+    if (token === '--schema-only') {
+      parsedArgs.schemaOnly = true;
+      continue;
+    }
+
+    if (token === '--verify-only') {
+      parsedArgs.verifyOnly = true;
+      continue;
+    }
+
+    if (token.startsWith('--seed=')) {
+      const seedValue = Number(token.slice('--seed='.length));
+      if (!Number.isInteger(seedValue)) {
+        throw new Error(`Invalid --seed value: ${token.slice('--seed='.length)}`);
+      }
+      parsedArgs.seed = seedValue;
+      continue;
+    }
+
+    if (token === '--seed') {
+      const nextToken = argv[index + 1];
+      const seedValue = Number(nextToken);
+      if (!nextToken || !Number.isInteger(seedValue)) {
+        throw new Error('Invalid --seed value. Expected integer.');
+      }
+      parsedArgs.seed = seedValue;
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${token}`);
+  }
+
+  return parsedArgs;
+}
+
+function generateRandomName(type, usedNames, random) {
   const prefixes = {
     plant: ['Fern', 'Flower', 'Grass', 'Vine', 'Succulent', 'Lily', 'Moss', 'Cactus', 'Bush', 'Herb', 'Bloom', 'Root', 'Petal', 'Sprig', 'Ivy', 'Thistle', 'Daisy', 'Willow', 'Briar', 'Aloe'],
     herbivore: ['Butterfly', 'Beetle', 'Rabbit', 'Snail', 'Cricket', 'Ladybug', 'Grasshopper', 'Ant', 'Bee', 'Moth', 'Hare', 'Weevil', 'Pika', 'Locust', 'Wren', 'Mole', 'Mouse', 'Lark', 'Finch', 'Dormouse'],
@@ -49,11 +157,11 @@ function generateRandomName(type, usedNames = new Set()) {
   const categoryModifiers = modifiers[type];
   const categorySuffixes = suffixes[type];
 
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const prefix = categoryPrefixes[Math.floor(Math.random() * categoryPrefixes.length)];
-    const suffix = categorySuffixes[Math.floor(Math.random() * categorySuffixes.length)];
-    const shouldUseModifier = Math.random() > 0.4;
-    const modifier = categoryModifiers[Math.floor(Math.random() * categoryModifiers.length)];
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const prefix = categoryPrefixes[randomInt(random, categoryPrefixes.length)];
+    const suffix = categorySuffixes[randomInt(random, categorySuffixes.length)];
+    const shouldUseModifier = random() > 0.4;
+    const modifier = categoryModifiers[randomInt(random, categoryModifiers.length)];
     const name = shouldUseModifier ? `${prefix}-${modifier}-${suffix}` : `${prefix}-${suffix}`;
 
     if (!usedNames.has(name)) {
@@ -67,33 +175,9 @@ function generateRandomName(type, usedNames = new Set()) {
   return fallbackName;
 }
 
-// Configuration
-const DATABASE_NAME = 'chaos-garden-db'; // Unified with wrangler.toml
-const SCHEMA_FILE = 'schema.sql';
-const path = require('path');
-const WORKERS_DIR = path.resolve(__dirname, '..');
-
-console.log('🌿 Chaos Garden Local Database Initialization');
-console.log('===========================================\n');
-
-// ==========================================
-// Positioning Utilities
-// ==========================================
-
-// Three plant cluster centers — creates natural foraging grounds
-const PLANT_CLUSTERS = [
-  { x: 200, y: 300 },  // left-center
-  { x: 400, y: 300 },  // center
-  { x: 600, y: 300 },  // right-center
-];
-const CLUSTER_SPREAD = 120; // max distance from cluster center
-const MIN_PLANT_DISTANCE = 40; // minimum distance between plants (matches simulation)
-const GARDEN_WIDTH = 800;
-const GARDEN_HEIGHT = 600;
-
-function generatePositionNearCluster(clusterCenter, spread) {
-  const angle = Math.random() * Math.PI * 2;
-  const distance = Math.random() * spread;
+function generatePositionNearCluster(clusterCenter, spread, random) {
+  const angle = random() * Math.PI * 2;
+  const distance = random() * spread;
   const x = Math.max(0, Math.min(GARDEN_WIDTH, clusterCenter.x + Math.cos(angle) * distance));
   const y = Math.max(0, Math.min(GARDEN_HEIGHT, clusterCenter.y + Math.sin(angle) * distance));
   return { x, y };
@@ -103,59 +187,26 @@ function isPositionFarEnoughFromExisting(position, existingEntities, minDistance
   for (const entity of existingEntities) {
     const dx = position.x - entity.position_x;
     const dy = position.y - entity.position_y;
-    if (Math.sqrt(dx * dx + dy * dy) < minDistance) return false;
+    if (Math.sqrt(dx * dx + dy * dy) < minDistance) {
+      return false;
+    }
   }
   return true;
 }
 
-function generatePlantPositionInCluster(clusterCenter, existingPlants) {
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const position = generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD);
+function generatePlantPositionInCluster(clusterCenter, existingPlants, random) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const position = generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD, random);
     if (isPositionFarEnoughFromExisting(position, existingPlants, MIN_PLANT_DISTANCE)) {
       return position;
     }
   }
-  // Fallback: accept any position in the cluster
-  return generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD);
+  return generatePositionNearCluster(clusterCenter, CLUSTER_SPREAD, random);
 }
 
-// ==========================================
-// Seed Entity Generation
-// ==========================================
-
-// Plant trait archetypes for natural selection
-const PLANT_ARCHETYPES = [
-  { name: 'standard',     count: 12, photosynthesisRate: 1.0, reproductionRate: 0.05, metabolismEfficiency: 1.0 },
-  { name: 'fast-growing', count: 10, photosynthesisRate: 1.25, reproductionRate: 0.04, metabolismEfficiency: 0.95 },
-  { name: 'prolific',     count: 10, photosynthesisRate: 0.85, reproductionRate: 0.07, metabolismEfficiency: 1.0 },
-  { name: 'hardy',        count: 10, photosynthesisRate: 0.95, reproductionRate: 0.05, metabolismEfficiency: 1.15 },
-];
-
-// Herbivore trait archetypes
-const HERBIVORE_ARCHETYPES = [
-  { name: 'fast',      count: 4, movementSpeed: 2.8, metabolismEfficiency: 0.95, reproductionRate: 0.03, perceptionRadius: 105 },
-  { name: 'efficient', count: 4, movementSpeed: 1.7, metabolismEfficiency: 1.2, reproductionRate: 0.03, perceptionRadius: 95 },
-  { name: 'balanced',  count: 4, movementSpeed: 2.1, metabolismEfficiency: 1.0, reproductionRate: 0.03, perceptionRadius: 100 },
-  { name: 'scout',     count: 2, movementSpeed: 2.4, metabolismEfficiency: 0.95, reproductionRate: 0.02, perceptionRadius: 130 },
-];
-
-// Carnivore trait archetypes
-const CARNIVORE_ARCHETYPES = [
-  { name: 'sprinter', count: 2, movementSpeed: 3.8, metabolismEfficiency: 1.0, reproductionRate: 0.02, perceptionRadius: 155 },
-  { name: 'hunter',   count: 1, movementSpeed: 3.4, metabolismEfficiency: 1.15, reproductionRate: 0.02, perceptionRadius: 175 },
-  { name: 'patient',  count: 1, movementSpeed: 3.0, metabolismEfficiency: 1.2, reproductionRate: 0.02, perceptionRadius: 165 },
-];
-
-// Fungus trait archetypes
-const FUNGUS_ARCHETYPES = [
-  { name: 'standard',   count: 4, decompositionRate: 1.0, reproductionRate: 0.04, metabolismEfficiency: 1.2, perceptionRadius: 55 },
-  { name: 'efficient',  count: 4, decompositionRate: 1.35, reproductionRate: 0.03, metabolismEfficiency: 1.2, perceptionRadius: 50 },
-  { name: 'spreader',   count: 4, decompositionRate: 0.9, reproductionRate: 0.05, metabolismEfficiency: 1.1, perceptionRadius: 60 },
-];
-
-function generateSeedEntities(gardenStateId) {
+function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_TIMESTAMP) {
+  const random = createSeededRandom(seed);
   const entities = [];
-  const now = new Date().toISOString();
   const usedNamesByType = {
     plant: new Set(),
     herbivore: new Set(),
@@ -163,25 +214,27 @@ function generateSeedEntities(gardenStateId) {
     fungus: new Set()
   };
 
-  // --- Plants ---
-  // Distributed across three clusters with trait variety
   let plantIndex = 0;
   for (const archetype of PLANT_ARCHETYPES) {
-    for (let i = 0; i < archetype.count; i++) {
+    for (let index = 0; index < archetype.count; index += 1) {
       const cluster = PLANT_CLUSTERS[plantIndex % PLANT_CLUSTERS.length];
-      const position = generatePlantPositionInCluster(cluster, entities.filter(e => e.type === 'plant'));
+      const position = generatePlantPositionInCluster(
+        cluster,
+        entities.filter((entity) => entity.type === 'plant'),
+        random
+      );
 
       entities.push({
-        id: generateEntityId(),
+        id: createDeterministicUuid(random),
         garden_state_id: gardenStateId,
         born_at_tick: 0,
         is_alive: 1,
         type: 'plant',
-        name: generateRandomName('plant', usedNamesByType.plant),
+        name: generateRandomName('plant', usedNamesByType.plant, random),
         species: 'Flora',
         position_x: position.x,
         position_y: position.y,
-        energy: 50,   // simulation default
+        energy: 50,
         health: 100,
         age: 0,
         traits: {
@@ -190,32 +243,31 @@ function generateSeedEntities(gardenStateId) {
           photosynthesisRate: archetype.photosynthesisRate
         },
         lineage: 'origin',
-        created_at: now,
-        updated_at: now
+        created_at: timestamp,
+        updated_at: timestamp
       });
-      plantIndex++;
+
+      plantIndex += 1;
     }
   }
 
-  // --- Herbivores ---
-  // Spawned near plant clusters so they find food immediately
   let herbivoreIndex = 0;
   for (const archetype of HERBIVORE_ARCHETYPES) {
-    for (let i = 0; i < archetype.count; i++) {
+    for (let index = 0; index < archetype.count; index += 1) {
       const cluster = PLANT_CLUSTERS[herbivoreIndex % PLANT_CLUSTERS.length];
-      const position = generatePositionNearCluster(cluster, 80);
+      const position = generatePositionNearCluster(cluster, 80, random);
 
       entities.push({
-        id: generateEntityId(),
+        id: createDeterministicUuid(random),
         garden_state_id: gardenStateId,
         born_at_tick: 0,
         is_alive: 1,
         type: 'herbivore',
-        name: generateRandomName('herbivore', usedNamesByType.herbivore),
+        name: generateRandomName('herbivore', usedNamesByType.herbivore, random),
         species: 'Grazers',
         position_x: position.x,
         position_y: position.y,
-        energy: 60,   // simulation default
+        energy: 60,
         health: 100,
         age: 0,
         traits: {
@@ -225,38 +277,38 @@ function generateSeedEntities(gardenStateId) {
           perceptionRadius: archetype.perceptionRadius
         },
         lineage: 'origin',
-        created_at: now,
-        updated_at: now
+        created_at: timestamp,
+        updated_at: timestamp
       });
-      herbivoreIndex++;
+
+      herbivoreIndex += 1;
     }
   }
 
-  // --- Carnivores ---
-  // Spawn at edges so prey has early breathing room and tests cover hunting behavior.
   const carnivoreSpawnPoints = [
     { x: 760, y: 120 },
     { x: 760, y: 480 },
     { x: 40, y: 120 },
     { x: 40, y: 480 }
   ];
+
   let carnivoreIndex = 0;
   for (const archetype of CARNIVORE_ARCHETYPES) {
-    for (let i = 0; i < archetype.count; i++) {
+    for (let index = 0; index < archetype.count; index += 1) {
       const spawnPoint = carnivoreSpawnPoints[carnivoreIndex % carnivoreSpawnPoints.length];
-      const position = generatePositionNearCluster(spawnPoint, 35);
+      const position = generatePositionNearCluster(spawnPoint, 35, random);
 
       entities.push({
-        id: generateEntityId(),
+        id: createDeterministicUuid(random),
         garden_state_id: gardenStateId,
         born_at_tick: 0,
         is_alive: 1,
         type: 'carnivore',
-        name: generateRandomName('carnivore', usedNamesByType.carnivore),
+        name: generateRandomName('carnivore', usedNamesByType.carnivore, random),
         species: 'Stalkers',
         position_x: position.x,
         position_y: position.y,
-        energy: 50,   // simulation default
+        energy: 50,
         health: 100,
         age: 0,
         traits: {
@@ -266,33 +318,31 @@ function generateSeedEntities(gardenStateId) {
           perceptionRadius: archetype.perceptionRadius
         },
         lineage: 'origin',
-        created_at: now,
-        updated_at: now
+        created_at: timestamp,
+        updated_at: timestamp
       });
-      carnivoreIndex++;
+
+      carnivoreIndex += 1;
     }
   }
 
-  // --- Fungi ---
-  // Placed near plant clusters where herbivore-plant deaths are most likely
   let fungusIndex = 0;
   for (const archetype of FUNGUS_ARCHETYPES) {
-    for (let i = 0; i < archetype.count; i++) {
+    for (let index = 0; index < archetype.count; index += 1) {
       const cluster = PLANT_CLUSTERS[fungusIndex % PLANT_CLUSTERS.length];
-      // Place fungi very close to cluster centers (within 30px)
-      const position = generatePositionNearCluster(cluster, 30);
+      const position = generatePositionNearCluster(cluster, 30, random);
 
       entities.push({
-        id: generateEntityId(),
+        id: createDeterministicUuid(random),
         garden_state_id: gardenStateId,
         born_at_tick: 0,
         is_alive: 1,
         type: 'fungus',
-        name: generateRandomName('fungus', usedNamesByType.fungus),
+        name: generateRandomName('fungus', usedNamesByType.fungus, random),
         species: 'Mycelium',
         position_x: position.x,
         position_y: position.y,
-        energy: 40,   // simulation default
+        energy: 40,
         health: 100,
         age: 0,
         traits: {
@@ -302,254 +352,316 @@ function generateSeedEntities(gardenStateId) {
           perceptionRadius: archetype.perceptionRadius
         },
         lineage: 'origin',
-        created_at: now,
-        updated_at: now
+        created_at: timestamp,
+        updated_at: timestamp
       });
-      fungusIndex++;
+
+      fungusIndex += 1;
     }
   }
 
   return entities;
 }
 
-// Generate SQL insert statements for entities
-function generateEntityInsertSQL(entities) {
-  if (entities.length === 0) return '';
-
-  const escapeSqlString = (value) => String(value).replace(/'/g, "''");
-  
-  const inserts = entities.map(entity => `
-    INSERT INTO entities (
-      id, garden_state_id, born_at_tick, is_alive, type, name, species, position_x, position_y,
-      energy, health, age, traits, lineage, created_at, updated_at
-    ) VALUES (
-      '${escapeSqlString(entity.id)}', ${entity.garden_state_id}, ${entity.born_at_tick}, ${entity.is_alive}, '${escapeSqlString(entity.type)}', '${escapeSqlString(entity.name)}', '${escapeSqlString(entity.species)}',
-      ${entity.position_x}, ${entity.position_y},
-      ${entity.energy}, ${entity.health}, ${entity.age},
-      '${escapeSqlString(JSON.stringify(entity.traits))}', '${escapeSqlString(entity.lineage)}',
-      '${escapeSqlString(entity.created_at)}', '${escapeSqlString(entity.updated_at)}'
-    );
-  `).join('\n');
-  
-  return inserts;
-}
-
-// Generate seed data SQL
-function generateSeedDataSQL(gardenStateId) {
-  const entities = generateSeedEntities(gardenStateId);
-  const now = new Date().toISOString();
-  
-  // Update garden state with population counts
-  const plantCount = entities.filter(e => e.type === 'plant').length;
-  const herbivoreCount = entities.filter(e => e.type === 'herbivore').length;
-  const carnivoreCount = entities.filter(e => e.type === 'carnivore').length;
-  const fungusCount = entities.filter(e => e.type === 'fungus').length;
-  const totalCount = entities.length;
-
-  const updateGardenStateSQL = `
-    UPDATE garden_state
-    SET
-      plants = ${plantCount},
-      herbivores = ${herbivoreCount},
-      carnivores = ${carnivoreCount},
-      fungi = ${fungusCount},
-      dead_plants = 0,
-      dead_herbivores = 0,
-      dead_carnivores = 0,
-      dead_fungi = 0,
-      total_living = ${totalCount},
-      total_dead = 0,
-      total = ${totalCount},
-      timestamp = '${now}'
-    WHERE id = ${gardenStateId};
-  `;
-  
-  // Create simulation events
-  const createEventsSQL = `
-    INSERT INTO simulation_events (
-      garden_state_id, tick, timestamp, event_type, description,
-      entities_affected, tags, severity, metadata
-    ) VALUES
-      (${gardenStateId}, 0, '${now}', 'BIRTH', 'The Chaos Garden was created', '[]', '["genesis", "birth"]', 'LOW', '{"source": "initialization"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '${plantCount} plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": ${plantCount}, "type": "plants"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '${herbivoreCount} herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": ${herbivoreCount}, "type": "herbivores"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '${fungusCount} fungi established their networks', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": ${fungusCount}, "type": "fungi"}'),
-      (${gardenStateId}, 0, '${now}', 'BIRTH', '${carnivoreCount} carnivores claimed their territories', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${carnivoreCount}, "type": "carnivores"}');
-  `;
-  
-  return `
-    -- ==========================================
-    -- Seed Data for Chaos Garden
-    -- Generated: ${now}
-    -- ==========================================
-    
-    ${generateEntityInsertSQL(entities)}
-    
-    ${updateGardenStateSQL}
-    
-    ${createEventsSQL}
-  `;
-}
-
-function getPlannedSeedCounts() {
+function getExpectedSeedCounts() {
   const plantCount = PLANT_ARCHETYPES.reduce((sum, archetype) => sum + archetype.count, 0);
   const herbivoreCount = HERBIVORE_ARCHETYPES.reduce((sum, archetype) => sum + archetype.count, 0);
   const carnivoreCount = CARNIVORE_ARCHETYPES.reduce((sum, archetype) => sum + archetype.count, 0);
   const fungusCount = FUNGUS_ARCHETYPES.reduce((sum, archetype) => sum + archetype.count, 0);
 
-  return { plantCount, herbivoreCount, carnivoreCount, fungusCount };
+  return {
+    plantCount,
+    herbivoreCount,
+    carnivoreCount,
+    fungusCount,
+    totalLivingCount: plantCount + herbivoreCount + carnivoreCount + fungusCount,
+    eventCount: 5
+  };
 }
 
-// Execute a SQL command using wrangler
-function executeSQLCommand(command, description) {
-  console.log(`📝 ${description}...`);
-  
-  try {
-    // Write command to temporary file
-    const fs = require('fs');
-    const path = require('path');
-    // Use a local temp file instead of /tmp to avoid permission/pathing issues
-    const tempFile = path.resolve(WORKERS_DIR, '.tmp-init.sql');
-    fs.writeFileSync(tempFile, command);
-    
-    // Execute using wrangler
-    // We use --local to target the local D1 storage
-    // We must specify the config file if it's not wrangler.jsonc/toml
-    const configFlag = require('fs').existsSync(path.resolve(WORKERS_DIR, 'wrangler.local.jsonc')) 
-      ? '--config wrangler.local.jsonc' 
+function generateEntityInsertSql(entities) {
+  return entities
+    .map((entity) => {
+      return `
+INSERT INTO entities (
+  id, garden_state_id, born_at_tick, is_alive, type, name, species, position_x, position_y,
+  energy, health, age, traits, lineage, created_at, updated_at
+) VALUES (
+  '${escapeSqlString(entity.id)}', ${entity.garden_state_id}, ${entity.born_at_tick}, ${entity.is_alive}, '${escapeSqlString(entity.type)}', '${escapeSqlString(entity.name)}', '${escapeSqlString(entity.species)}',
+  ${entity.position_x}, ${entity.position_y},
+  ${entity.energy}, ${entity.health}, ${entity.age},
+  '${escapeSqlString(JSON.stringify(entity.traits))}', '${escapeSqlString(entity.lineage)}',
+  '${escapeSqlString(entity.created_at)}', '${escapeSqlString(entity.updated_at)}'
+);`;
+    })
+    .join('\n');
+}
+
+function createSeedSql(seed) {
+  const counts = getExpectedSeedCounts();
+  const entities = generateSeedEntities(seed, 1, DEFAULT_SEED_TIMESTAMP);
+
+  return `
+${generateEntityInsertSql(entities)}
+
+UPDATE garden_state
+SET
+  timestamp = '${DEFAULT_SEED_TIMESTAMP}',
+  sunlight = 0.0,
+  plants = ${counts.plantCount},
+  herbivores = ${counts.herbivoreCount},
+  carnivores = ${counts.carnivoreCount},
+  fungi = ${counts.fungusCount},
+  dead_plants = 0,
+  dead_herbivores = 0,
+  dead_carnivores = 0,
+  dead_fungi = 0,
+  all_time_dead_plants = 0,
+  all_time_dead_herbivores = 0,
+  all_time_dead_carnivores = 0,
+  all_time_dead_fungi = 0,
+  total_living = ${counts.totalLivingCount},
+  total_dead = 0,
+  all_time_dead = 0,
+  total = ${counts.totalLivingCount},
+  weather_state = NULL
+WHERE tick = 0;
+
+INSERT INTO simulation_events (
+  garden_state_id, tick, timestamp, event_type, description,
+  entities_affected, tags, severity, metadata
+) VALUES
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', 'The Chaos Garden was created', '[]', '["genesis", "birth"]', 'LOW', '{"source": "initialization", "seed": ${seed}}'),
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.plantCount} plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": ${counts.plantCount}, "type": "plants"}'),
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.herbivoreCount} herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": ${counts.herbivoreCount}, "type": "herbivores"}'),
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.fungusCount} fungi established their networks', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": ${counts.fungusCount}, "type": "fungi"}'),
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.carnivoreCount} carnivores claimed their territories', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${counts.carnivoreCount}, "type": "carnivores"}');
+`;
+}
+
+function runWranglerExecute(extraArgs, description) {
+  const baseArgs = [
+    'wrangler',
+    'd1',
+    'execute',
+    DATABASE_NAME,
+    '--local',
+    '--config',
+    WRANGLER_CONFIG,
+    '--persist-to',
+    PERSIST_PATH
+  ];
+
+  const commandArgs = [...baseArgs, ...extraArgs];
+  const result = spawnSync('npx', commandArgs, {
+    cwd: WORKERS_DIR,
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  if (result.status !== 0) {
+    const combinedOutput = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
+    const lockHint = /database is locked|SQLITE_BUSY/i.test(combinedOutput)
+      ? '\nHint: local D1 is locked. Stop `npm run backend` / `wrangler dev` and rerun `npm run db:init:local`.'
       : '';
-    
-    const result = execSync(
-      `npx wrangler d1 execute ${DATABASE_NAME} --local --file="${tempFile}" ${configFlag} --persist-to .wrangler/local-state`,
-      { 
-        cwd: WORKERS_DIR,
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'pipe'] 
-      }
+
+    throw new Error(
+      `${description} failed.\nCommand: npx ${commandArgs.join(' ')}\n${combinedOutput}${lockHint}`
     );
-    
-    console.log(`✅ ${description} completed`);
-    
-    // Clean up temp file
-    if (fs.existsSync(tempFile)) {
-      fs.unlinkSync(tempFile);
+  }
+
+  return result.stdout || '';
+}
+
+function executeSqlPhase(sql, phaseName) {
+  const tempFileName = `.tmp-init-${phaseName.replace(/\s+/g, '-').toLowerCase()}.sql`;
+  const tempFilePath = path.resolve(WORKERS_DIR, tempFileName);
+
+  fs.writeFileSync(tempFilePath, sql, 'utf-8');
+
+  try {
+    console.log(`🧩 ${phaseName}...`);
+    runWranglerExecute([`--file=${tempFileName}`], phaseName);
+    console.log(`✅ ${phaseName} complete`);
+  } finally {
+    if (fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
     }
-    
-    return result;
-  } catch (error) {
-    console.error(`❌ ${description} failed:`);
-    if (error.stdout) console.error('STDOUT:', error.stdout.toString());
-    if (error.stderr) console.error('STDERR:', error.stderr.toString());
-    throw error;
   }
 }
 
-// Main initialization function
-async function initializeDatabase() {
+function executeSqlCommandJson(command, description) {
+  const output = runWranglerExecute([`--command=${command}`, '--json'], description);
+  const parsedOutput = JSON.parse(output);
+  const [firstResult] = Array.isArray(parsedOutput) ? parsedOutput : [];
+  const [firstRow] = firstResult?.results || [];
+  return firstRow || null;
+}
+
+function assertVerification(checkName, isValid, details) {
+  if (!isValid) {
+    throw new Error(`Verification failed: ${checkName}. ${details}`);
+  }
+}
+
+function runVerification(schemaOnly) {
+  console.log('🔍 Verifying local database invariants...');
+
+  const expectedCounts = getExpectedSeedCounts();
+  const tableCheck = executeSqlCommandJson(
+    `SELECT COUNT(*) AS table_count
+     FROM sqlite_master
+     WHERE type = 'table'
+       AND name IN ('garden_state', 'entities', 'simulation_events', 'simulation_control', 'system_metadata')`,
+    'Verifying required tables'
+  );
+  assertVerification(
+    'required tables',
+    tableCheck?.table_count === 5,
+    `Expected 5, got ${tableCheck?.table_count ?? 'null'}.`
+  );
+
+  const weatherColumnCheck = executeSqlCommandJson(
+    `SELECT COUNT(*) AS weather_column_count
+     FROM pragma_table_info('garden_state')
+     WHERE name = 'weather_state'`,
+    'Verifying weather_state column'
+  );
+  assertVerification(
+    'weather_state column',
+    weatherColumnCheck?.weather_column_count === 1,
+    `Expected 1, got ${weatherColumnCheck?.weather_column_count ?? 'null'}.`
+  );
+
+  const versionCheck = executeSqlCommandJson(
+    `SELECT value AS schema_version
+     FROM system_metadata
+     WHERE key = 'schema_version'
+     LIMIT 1`,
+    'Verifying schema version'
+  );
+  assertVerification(
+    'schema version',
+    versionCheck?.schema_version === CURRENT_SCHEMA_VERSION,
+    `Expected ${CURRENT_SCHEMA_VERSION}, got ${versionCheck?.schema_version ?? 'null'}.`
+  );
+
+  const tickZeroCheck = executeSqlCommandJson(
+    'SELECT COUNT(*) AS tick_zero_count FROM garden_state WHERE tick = 0',
+    'Verifying tick zero baseline'
+  );
+  assertVerification(
+    'tick zero baseline',
+    tickZeroCheck?.tick_zero_count === 1,
+    `Expected 1, got ${tickZeroCheck?.tick_zero_count ?? 'null'}.`
+  );
+
+  const entityCountCheck = executeSqlCommandJson(
+    'SELECT COUNT(*) AS entity_count FROM entities',
+    'Verifying entity count'
+  );
+
+  const eventCountCheck = executeSqlCommandJson(
+    'SELECT COUNT(*) AS event_count FROM simulation_events',
+    'Verifying event count'
+  );
+
+  if (schemaOnly) {
+    assertVerification(
+      'schema-only entity count',
+      entityCountCheck?.entity_count === 0,
+      `Expected 0, got ${entityCountCheck?.entity_count ?? 'null'}.`
+    );
+    assertVerification(
+      'schema-only event count',
+      eventCountCheck?.event_count === 0,
+      `Expected 0, got ${eventCountCheck?.event_count ?? 'null'}.`
+    );
+  } else {
+    assertVerification(
+      'seeded entity count',
+      entityCountCheck?.entity_count === expectedCounts.totalLivingCount,
+      `Expected ${expectedCounts.totalLivingCount}, got ${entityCountCheck?.entity_count ?? 'null'}.`
+    );
+    assertVerification(
+      'seeded event count',
+      eventCountCheck?.event_count === expectedCounts.eventCount,
+      `Expected ${expectedCounts.eventCount}, got ${eventCountCheck?.event_count ?? 'null'}.`
+    );
+  }
+
+  console.log('✅ Verification passed');
+}
+
+function createCleanupSql() {
+  return `
+PRAGMA foreign_keys = OFF;
+DROP TABLE IF EXISTS simulation_events;
+DROP TABLE IF EXISTS entities;
+DROP TABLE IF EXISTS garden_state;
+DROP TABLE IF EXISTS simulation_control;
+DROP TABLE IF EXISTS system_metadata;
+DROP TABLE IF EXISTS application_logs;
+DROP INDEX IF EXISTS idx_application_logs_timestamp;
+DROP INDEX IF EXISTS idx_application_logs_level;
+DROP INDEX IF EXISTS idx_application_logs_component;
+DROP INDEX IF EXISTS idx_application_logs_tick;
+DROP INDEX IF EXISTS idx_application_logs_entity;
+PRAGMA foreign_keys = ON;
+`;
+}
+
+function createSchemaVersionNormalizationSql() {
+  return `
+INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+VALUES ('schema_version', '${CURRENT_SCHEMA_VERSION}', datetime('now'));
+`;
+}
+
+function initializeDatabase(options) {
+  const { seed, schemaOnly, verifyOnly } = options;
+
+  console.log('🌿 Chaos Garden Local Database Initialization');
+  console.log('===========================================');
+  console.log(`Mode: ${verifyOnly ? 'verify-only' : schemaOnly ? 'schema-only' : 'full reset + deterministic seed'}`);
+  console.log(`Seed: ${seed}`);
+
+  if (verifyOnly) {
+    runVerification(schemaOnly);
+    return;
+  }
+
+  executeSqlPhase(createCleanupSql(), 'Dropping existing schema artifacts');
+  executeSqlPhase(fs.readFileSync(SCHEMA_PATH, 'utf-8'), 'Applying schema.sql');
+  executeSqlPhase(createSchemaVersionNormalizationSql(), 'Normalizing schema version');
+
+  if (!schemaOnly) {
+    executeSqlPhase(createSeedSql(seed), 'Applying deterministic seed data');
+  }
+
+  runVerification(schemaOnly);
+
+  console.log('🎉 Local D1 initialization completed successfully');
+}
+
+if (require.main === module) {
   try {
-    console.log('🚀 Starting local database initialization...\n');
-    
-    // Step 1: Check if wrangler is available
-    console.log('🔍 Checking wrangler availability...');
-    try {
-      execSync(`cd "${WORKERS_DIR}" && npx wrangler --version`, { stdio: 'pipe' });
-      console.log('✅ Wrangler is available\n');
-    } catch {
-      console.log('⚠️ Wrangler may not be properly installed. Trying to continue...\n');
-    }
-    
-    // Step 2: Create the database if it doesn't exist
-    console.log('🗄️  Setting up local D1 database...');
-    const localConfigPath = path.resolve(WORKERS_DIR, 'wrangler.local.jsonc');
-    const configFlag = require('fs').existsSync(localConfigPath) 
-      ? '--config wrangler.local.jsonc' 
-      : '';
-      
-    try {
-      // Step 2: Create the database if it doesn't exist
-      // In local mode, this mainly ensures the wrangler state is ready
-      execSync(`npx wrangler d1 create ${DATABASE_NAME} ${configFlag}`, { 
-        cwd: WORKERS_DIR,
-        stdio: 'pipe' 
-      });
-      console.log('✅ Local database created\n');
-    } catch (error) {
-      // Database might already exist
-      if (!error.message.includes('already exists')) {
-        console.log('⚠️ Database may already exist or encountered error:', error.message);
-      }
-      console.log('✅ Database is ready\n');
-    }
-    
-    // Step 2.5: Clean start - remove existing data if any
-    console.log('🧹 Preparing a clean garden...');
-    try {
-      executeSQLCommand(
-        'PRAGMA foreign_keys = OFF; DROP TABLE IF EXISTS garden_state; DROP TABLE IF EXISTS entities; DROP TABLE IF EXISTS simulation_events; DROP TABLE IF EXISTS system_metadata; PRAGMA foreign_keys = ON;',
-        'Clearing existing tables'
-      );
-    } catch (error) {
-      console.log('⚠️ Could not clear existing tables, continuing anyway...');
-    }
-    
-    // Step 3: Apply schema
-    const schemaPath = `${WORKERS_DIR}/${SCHEMA_FILE}`;
-    const schemaResult = executeSQLCommand(
-      require('fs').readFileSync(schemaPath, 'utf-8'),
-      'Applying database schema'
-    );
-    
-    // Step 4: Get the garden state ID (should be 1 after schema creation)
-    const gardenStateId = 1;
-    
-    // Step 5: Generate and apply seed data
-    const seedDataSQL = generateSeedDataSQL(gardenStateId);
-    const seedResult = executeSQLCommand(seedDataSQL, 'Creating seed data');
-    
-    // Step 6: Verify the database
-    console.log('🔍 Verifying database setup...');
-    const verifySQL = `
-      SELECT 
-        (SELECT COUNT(*) FROM garden_state) as garden_state_count,
-        (SELECT COUNT(*) FROM entities) as entity_count,
-        (SELECT COUNT(*) FROM simulation_events) as event_count;
-    `;
-    
-    const verifyResult = execSync(
-      `npx wrangler d1 execute ${DATABASE_NAME} --local --command="${verifySQL.replace(/\n/g, ' ')}" ${configFlag} --persist-to .wrangler/local-state`,
-      { 
-        cwd: WORKERS_DIR,
-        encoding: 'utf-8' 
-      }
-    );
-    
-    console.log('\n📊 Database Verification Results:');
-    console.log(verifyResult);
-    
-    console.log('\n🎉 Chaos Garden Local Database Initialization Complete!');
-    console.log('===================================================');
-    console.log('✅ Schema applied');
-    const counts = getPlannedSeedCounts();
-    console.log(`✅ Seed data created: ${counts.plantCount} plants, ${counts.herbivoreCount} herbivores, ${counts.carnivoreCount} carnivores, ${counts.fungusCount} fungi`);
-    console.log('✅ Garden state initialized at tick 0');
-    console.log('✅ Events created');
-    console.log('\n🌱 Your local garden is ready to grow!');
-    console.log('\nNext steps:');
-    console.log('1. Start the backend: cd workers && npm run dev');
-    console.log('2. Start the frontend: cd frontend && npm run dev');
-    console.log('3. Visit http://localhost:4321 to see your garden');
-    console.log('4. Use POST /api/tick to simulate time passing');
-    
+    const options = parseCliArgs(process.argv.slice(2));
+    initializeDatabase(options);
   } catch (error) {
-    console.error('\n❌ Database initialization failed:');
-    console.error(error.message);
+    console.error('❌ Local D1 initialization failed');
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
 
-// Run initialization if this script is executed directly
-if (require.main === module) {
-  initializeDatabase();
-}
-
-module.exports = { initializeDatabase, generateSeedEntities, generateSeedDataSQL };
+module.exports = {
+  DEFAULT_SEED,
+  DEFAULT_SEED_TIMESTAMP,
+  parseCliArgs,
+  createSeededRandom,
+  generateSeedEntities,
+  getExpectedSeedCounts,
+  createSeedSql,
+  initializeDatabase
+};

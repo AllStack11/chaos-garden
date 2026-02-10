@@ -17,6 +17,10 @@ export * from './helpers';
 // Sunlight and day/night cycles
 export * from './sunlight-calculator';
 
+// Weather state definitions and state machine
+export * from './weather-state-definitions';
+export * from './weather-state-machine';
+
 // Weather simulation and updates
 export * from './weather-updater';
 

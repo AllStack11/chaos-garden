@@ -28,6 +28,7 @@ const {
     createBackgroundAnimationState,
     resizeBackgroundAnimationState,
     syncBackgroundEventEffects,
+    syncWeatherParticlesToBackgroundState,
     updateBackgroundAnimationState,
     type BackgroundAnimationState,
   } from '../lib/garden-canvas/background-effects/state.ts';
@@ -267,7 +268,10 @@ const {
       const diversityIndex = activeCategories / 4;
       const eventIntensity = Math.min(1, (this.recentEvents?.length ?? 0) / 8);
 
-      this.lighting = createLightingContext(sunlight, tick);
+      const weatherStateName = this.gardenState?.environment.weatherState?.currentState;
+      const weatherTransitionProgress = this.gardenState?.environment.weatherState?.transitionProgressTicks ?? 0;
+
+      this.lighting = createLightingContext(sunlight, tick, weatherStateName);
       this.timePhase = getTimePhaseFromSunlight(sunlight);
       this.worldState = {
         tick,
@@ -281,7 +285,15 @@ const {
         predatorPressure,
         diversityIndex,
         eventIntensity,
+        weatherStateName,
+        weatherTransitionProgress,
       };
+
+      syncWeatherParticlesToBackgroundState(
+        this.backgroundState,
+        weatherStateName ?? null,
+        viewport,
+      );
 
       updateBackgroundAnimationState(
         this.backgroundState,
@@ -344,6 +356,8 @@ const {
           parallaxBands: this.backgroundState.parallaxBands,
           canopyNodes: this.backgroundState.canopyNodes,
           canopyEdges: this.backgroundState.canopyEdges,
+          rainDrops: this.backgroundState.rainDrops,
+          fogPatches: this.backgroundState.fogPatches,
           biomeDriftX: this.backgroundState.biomeDriftX,
           biomeDriftY: this.backgroundState.biomeDriftY,
           lighting: this.lighting,

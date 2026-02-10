@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.5.1';
+export const CURRENT_SCHEMA_VERSION = '1.6.0';
 
 /**
  * Check if the database schema is up to date.
@@ -83,26 +83,34 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
+      await migrateToV1_6_0(db);
     } else if (currentVersion === '1.0.0') {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
+      await migrateToV1_6_0(db);
     } else if (currentVersion === '1.1.0') {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
+      await migrateToV1_6_0(db);
     } else if (currentVersion === '1.3.0') {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
+      await migrateToV1_6_0(db);
     } else if (currentVersion === '1.4.0') {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
+      await migrateToV1_6_0(db);
     } else if (currentVersion === '1.5.0') {
       await migrateToV1_5_1(db);
+      await migrateToV1_6_0(db);
+    } else if (currentVersion === '1.5.1') {
+      await migrateToV1_6_0(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
@@ -356,6 +364,33 @@ async function migrateToV1_5_1(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 1.6.0.
+ * Adds weather_state JSON column to garden_state for persistent weather patterns.
+ */
+async function migrateToV1_6_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.6.0...');
+
+  const addColumnResult = await executeRaw(
+    db,
+    'ALTER TABLE garden_state ADD COLUMN weather_state TEXT DEFAULT NULL'
+  );
+  if (!addColumnResult.success && !addColumnResult.error?.includes('duplicate column name')) {
+    throw new Error(`Failed to add weather_state column: ${addColumnResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '1.6.0', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.6.0 complete');
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  * 
@@ -385,7 +420,8 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_4_0(db);
     await migrateToV1_5_0(db);
     await migrateToV1_5_1(db);
-    
+    await migrateToV1_6_0(db);
+
     console.log('Database initialization complete');
     return true;
   } catch (error) {

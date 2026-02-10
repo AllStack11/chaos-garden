@@ -19,6 +19,7 @@ import {
   clampValueToRange
 } from '../environment/helpers';
 import { calculateMoistureGrowthMultiplier } from '../environment/creature-effects';
+import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
 
 // Constants
 const BASE_PHOTOSYNTHESIS_RATE = DEFAULT_SIMULATION_CONFIG.basePhotosynthesisRate;
@@ -185,7 +186,8 @@ export function calculatePlantEnergyGainFromPhotosynthesis(
   const plantEfficiency = plant.photosynthesisRate;
   const moistureMultiplier = calculateMoistureGrowthMultiplier(environment.moisture);
   
-  return BASE_PHOTOSYNTHESIS_RATE * sunlight * plantEfficiency * moistureMultiplier;
+  const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
+  return BASE_PHOTOSYNTHESIS_RATE * sunlight * plantEfficiency * moistureMultiplier * weatherModifiers.photosynthesisModifier;
 }
 
 /**
