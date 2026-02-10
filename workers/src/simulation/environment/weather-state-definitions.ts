@@ -95,8 +95,8 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
   STORM: {
     name: 'STORM',
     displayLabel: 'Storm',
-    minimumDurationTicks: 4,
-    maximumDurationTicks: 12,
+    minimumDurationTicks: 3,
+    maximumDurationTicks: 8,
     modifiers: {
       temperatureOffset: -4.0,
       sunlightMultiplier: 0.15,
@@ -115,8 +115,8 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
   DROUGHT: {
     name: 'DROUGHT',
     displayLabel: 'Drought',
-    minimumDurationTicks: 24,
-    maximumDurationTicks: 96,
+    minimumDurationTicks: 12,
+    maximumDurationTicks: 48,
     modifiers: {
       temperatureOffset: 3.0,
       sunlightMultiplier: 1.1,
