@@ -11,6 +11,8 @@
     "deploy": "wrangler deploy",
     "db:init:local": "node scripts/init-local-db.js",
     "db:init:local:verify": "node scripts/init-local-db.js --verify-only",
+    "db:init:remote": "node scripts/init-remote-db-prod.js",
+    "db:init:remote:verify": "node scripts/init-remote-db-prod.js --verify-only",
     "test": "vitest run tests/unit",
     "test:watch": "vitest tests/unit",
     "test:integration": "vitest run tests/integration",

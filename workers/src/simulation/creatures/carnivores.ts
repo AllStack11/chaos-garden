@@ -44,7 +44,7 @@ import {
 } from './creatureHelpers';
 
 // Constants
-const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 1.1; // Carnivores have higher metabolism
+const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick); 
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.carnivoreReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 50;

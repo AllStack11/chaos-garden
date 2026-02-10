@@ -10,7 +10,7 @@
     "frontend": "npm run dev",
     "build": "astro build",
     "preview": "astro preview",
-    "deploy": "astro build && wrangler pages deploy dist",
+    "deploy": "astro build && wrangler pages deploy dist --project-name ${CLOUDFLARE_PAGES_PROJECT_NAME:-chaos-garden-frontend}",
     "clean": "rm -rf dist .astro",
     "type-check": "astro check",
     "db:init:local": "echo '🎨 Frontend: No database to initialize - this script is handled by the workers workspace' && exit 0"

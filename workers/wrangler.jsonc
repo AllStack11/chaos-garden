@@ -12,10 +12,9 @@
   },
   "d1_databases": [
     {
-      "binding": "DB",
+      "binding": "chaos_garden_db",
       "database_name": "chaos-garden-db",
-      "database_id": "", // Fill in after creating database with: wrangler d1 create chaos-garden-db
-      "preview_database_id": "DB" // Required for Pages local development
+      "database_id": "d65add62-7080-4d93-b54d-e7149cef1879"
     }
   ],
   "triggers": {
@@ -35,10 +34,9 @@
       },
       "d1_databases": [
         {
-          "binding": "DB",
+          "binding": "chaos_garden_db",
           "database_name": "chaos-garden-db",
-          "database_id": "",
-          "preview_database_id": "DB"
+          "database_id": "d65add62-7080-4d93-b54d-e7149cef1879"
         }
       ]
     }
