@@ -23,7 +23,7 @@
     ]
   },
   "vars": {
-    "CORS_ORIGIN": "*",
+    "CORS_ORIGIN": "https://chaos-garden-api.saadmankabir95.workers.dev",
     "ENVIRONMENT": "production"
   },
   "env": {
