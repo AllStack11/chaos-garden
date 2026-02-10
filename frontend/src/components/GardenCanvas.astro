@@ -84,6 +84,10 @@ const {
       totalLiving: 0,
       totalEntities: 0,
     };
+    private viewport: ViewportSize = { width: 800, height: 600 };
+    private worldScale = 1;
+    private worldOffsetX = 0;
+    private worldOffsetY = 0;
     private frameStartTime = performance.now();
     private readonly coarsePointerMediaQuery = window.matchMedia('(pointer: coarse)');
     private readonly mobileViewportMediaQuery = window.matchMedia('(max-width: 767px)');
@@ -188,6 +192,8 @@ const {
     private handleResize() {
       const dpr = this.getEffectiveDevicePixelRatio();
       const viewport = this.getViewportSize();
+      this.viewport = viewport;
+      this.recalculateWorldTransform();
       this.qualityTier = this.clampQualityTierForDevice(this.qualityTier);
 
       this.canvas.width = viewport.width * dpr;
@@ -209,27 +215,18 @@ const {
     }
 
     private worldToScreen(x: number, y: number) {
-      const width = this.canvas.clientWidth || 800;
-      const height = this.canvas.clientHeight || 600;
-      const scale = Math.min(width / this.simWidth, height / this.simHeight) * 0.9;
-      const offsetX = (width - this.simWidth * scale) / 2;
-      const offsetY = (height - this.simHeight * scale) / 2;
       return {
-        x: x * scale + offsetX,
-        y: y * scale + offsetY,
-        scale,
+        x: x * this.worldScale + this.worldOffsetX,
+        y: y * this.worldScale + this.worldOffsetY,
+        scale: this.worldScale,
       };
     }
 
     private screenToWorld(x: number, y: number) {
-      const width = this.canvas.clientWidth || 800;
-      const height = this.canvas.clientHeight || 600;
-      const scale = Math.min(width / this.simWidth, height / this.simHeight) * 0.9;
-      const offsetX = (width - this.simWidth * scale) / 2;
-      const offsetY = (height - this.simHeight * scale) / 2;
+      const scale = Math.max(this.worldScale, 0.0001);
       return {
-        x: (x - offsetX) / scale,
-        y: (y - offsetY) / scale,
+        x: (x - this.worldOffsetX) / scale,
+        y: (y - this.worldOffsetY) / scale,
       };
     }
 
@@ -262,7 +259,7 @@ const {
       this.recentEvents = recentEvents ?? this.recentEvents;
 
       if (this.recentEvents.length > 0) {
-        syncBackgroundEventEffects(this.backgroundState, this.recentEvents, this.getViewportSize());
+        syncBackgroundEventEffects(this.backgroundState, this.recentEvents, this.viewport);
       }
     }
 
@@ -289,7 +286,7 @@ const {
     }
 
     private update() {
-      const viewport = this.getViewportSize();
+      const viewport = this.viewport;
       const sunlight = this.gardenState?.environment.sunlight ?? 0.5;
       const tick = this.gardenState?.tick ?? 0;
       const temperature = this.gardenState?.environment.temperature ?? 20;
@@ -347,8 +344,8 @@ const {
     private render() {
       if (!this.ctx) return;
 
-      const width = this.canvas.clientWidth || 800;
-      const height = this.canvas.clientHeight || 600;
+      const width = this.viewport.width;
+      const height = this.viewport.height;
       const frameTimestampMs = performance.now();
       this.ctx.clearRect(0, 0, width, height);
 
@@ -405,6 +402,12 @@ const {
           worldState: this.worldState,
         });
       });
+    }
+
+    private recalculateWorldTransform() {
+      this.worldScale = Math.min(this.viewport.width / this.simWidth, this.viewport.height / this.simHeight) * 0.9;
+      this.worldOffsetX = (this.viewport.width - this.simWidth * this.worldScale) / 2;
+      this.worldOffsetY = (this.viewport.height - this.simHeight * this.worldScale) / 2;
     }
   }
 

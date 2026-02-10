@@ -49,11 +49,6 @@ if (!API_URL) {
         </div>
       </div>
 
-      <!-- Narrative Ticker (top center, below title) -->
-      <div class="hidden sm:block absolute top-16 md:top-20 left-1/2 -translate-x-1/2 w-full max-w-xl pointer-events-none">
-        <NarrativeTicker />
-      </div>
-
       <!-- Center: Selection Tooltip (Floating Contextual) -->
       <div data-selection-info class="hidden pointer-events-none absolute transition-all duration-300">
         <div class="pointer-events-auto flex translate-y-0 sm:translate-y-8 flex-col items-center space-y-2 sm:space-y-3 rounded-2xl bg-garden-green-900/20 px-4 sm:px-6 py-3 sm:py-4 backdrop-blur-md border border-garden-green-500/10 shadow-2xl min-w-[150px] sm:min-w-[180px]">
@@ -127,6 +122,9 @@ if (!API_URL) {
       </div>
     </div>
 
+    <!-- Narrative overlays remain visible even when UI overlay fades -->
+    <NarrativeTicker />
+
     <!-- Loading State (Minimal Ambient) -->
     <div data-loading class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-1000">
       <div class="flex flex-col items-center space-y-4">
@@ -160,6 +158,7 @@ if (!API_URL) {
       isLoading: boolean;
       health: HealthStatus | null;
       lastTickTime: Date | null;
+      hasLoadedOnce: boolean;
     } = {
       gardenState: null,
       entities: [],
@@ -167,7 +166,8 @@ if (!API_URL) {
       recentEvents: [],
       isLoading: true,
       health: null,
-      lastTickTime: null
+      lastTickTime: null,
+      hasLoadedOnce: false,
     };
 
     constructor() {
@@ -266,8 +266,10 @@ if (!API_URL) {
     private async loadGardenData() {
       console.log('[GardenApp] loadGardenData starting');
       try {
-        this.state.isLoading = true;
-        this.updateUI();
+        if (!this.state.hasLoadedOnce) {
+          this.state.isLoading = true;
+          this.updateUI();
+        }
 
         const data = await this.gardenService.fetchGardenData();
 
@@ -287,6 +289,7 @@ if (!API_URL) {
               this.state.lastTickTime = newTickTime;
             }
           }
+          this.state.hasLoadedOnce = true;
         } else {
           console.warn('[GardenApp] No data returned from service');
         }
@@ -295,8 +298,7 @@ if (!API_URL) {
         this.showNotification('Failed to load garden data. Please try again.', 'error');
       } finally {
         this.state.isLoading = false;
-        // Delay UI update to ensure Custom Elements are fully defined and connected
-        setTimeout(() => this.updateUI(), 0);
+        this.updateUI();
         console.log('[GardenApp] loadGardenData finished');
       }
     }
