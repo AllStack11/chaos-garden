@@ -348,10 +348,10 @@ export interface SimulationConfig {
   
   // Metabolism costs
   baseEnergyCostPerTick: number;          // 1
-  movementEnergyCostPerPixel: number;     // 0.1
+  movementEnergyCostPerPixel: number;     // 0.08
   
   // Photosynthesis
-  basePhotosynthesisRate: number;         // 2
+  basePhotosynthesisRate: number;         // 2.3
   
   // Mutation
   mutationProbability: number;            // 0.1 (10% chance)
@@ -377,8 +377,8 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   herbivoreReproductionThreshold: 90,
   carnivoreReproductionThreshold: 95,
   baseEnergyCostPerTick: 1,
-  movementEnergyCostPerPixel: 0.1,
-  basePhotosynthesisRate: 2,
+  movementEnergyCostPerPixel: 0.08,
+  basePhotosynthesisRate: 2.3,
   mutationProbability: 0.1,
   mutationRange: 0.2,
   initialPlants: 20,

@@ -22,7 +22,7 @@ describe('simulation/environment/helpers', () => {
   });
 
   it('calculates movement energy cost using distance and efficiency', () => {
-    expect(calculateMovementEnergyCost(10, 2)).toBeCloseTo(0.5, 5);
+    expect(calculateMovementEnergyCost(10, 2)).toBeCloseTo(0.4, 5);
   });
 
   it('returns nearest entity without maxDistance', () => {

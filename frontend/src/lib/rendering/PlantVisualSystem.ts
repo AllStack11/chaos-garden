@@ -129,6 +129,19 @@ function generateVisualSeed(entity: Entity): number {
 /**
  * Get plant type based on species name characteristics
  */
+const PLANT_COLOR_OFFSET_SCHEMES: Record<PlantType, CreatureOffsetScheme> = {
+  fern: { hueOffset: [-16, 8], saturationOffset: [-8, 18], lightnessOffset: [-8, 10] },
+  flower: { hueOffset: [-30, 36], saturationOffset: [-12, 28], lightnessOffset: [-10, 14] },
+  grass: { hueOffset: [-12, 14], saturationOffset: [-8, 16], lightnessOffset: [-8, 10] },
+  vine: { hueOffset: [-18, 16], saturationOffset: [-10, 20], lightnessOffset: [-8, 10] },
+  succulent: { hueOffset: [8, 52], saturationOffset: [-14, 18], lightnessOffset: [-10, 12] },
+  lily: { hueOffset: [-22, 28], saturationOffset: [-10, 22], lightnessOffset: [-10, 14] },
+  moss: { hueOffset: [-20, 6], saturationOffset: [-14, 10], lightnessOffset: [-10, 8] },
+  cactus: { hueOffset: [4, 32], saturationOffset: [-18, 10], lightnessOffset: [-10, 8] },
+  bush: { hueOffset: [-15, 12], saturationOffset: [-10, 16], lightnessOffset: [-8, 10] },
+  herb: { hueOffset: [-10, 18], saturationOffset: [-6, 18], lightnessOffset: [-8, 12] },
+};
+
 function determinePlantType(name: string, species: string): PlantType {
   const tokens = createWordTokenSet(name, species);
 
@@ -201,6 +214,7 @@ export function generatePlantVisual(entity: Entity): PlantVisual {
   
   const config = typeConfigs[plantType];
   const traitInfluence = traits.photosynthesisRate;
+  const colorOffsets = pickCreatureColorOffsets(rng, PLANT_COLOR_OFFSET_SCHEMES[plantType]);
   
   return {
     plantType,
@@ -219,9 +233,9 @@ export function generatePlantVisual(entity: Entity): PlantVisual {
     bloomSize: rng.range(0.7, 1.5) * traitInfluence,
     
     // Color
-    baseHue: rng.range(-20, 20),
-    saturation: rng.range(-15, 15),
-    colorPattern: ['solid', 'spotted', 'veined', 'gradient'][rng.int(0, 3)] as PatternType,
+    baseHue: colorOffsets.hueOffset,
+    saturation: colorOffsets.saturationOffset,
+    colorPattern: ['solid', 'spotted', 'striped', 'veined', 'gradient'][rng.int(0, 4)] as PatternType,
     
     // Structural
     stemThickness: rng.range(config.stemThickness[0], config.stemThickness[1]),
@@ -284,3 +298,4 @@ export function clearVisualCache(): void {
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
 import { createWordTokenSet, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';
+import { pickCreatureColorOffsets, type CreatureOffsetScheme } from './utils/creatureColorSchemes.ts';

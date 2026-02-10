@@ -25,6 +25,12 @@ import {
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
+import {
+  createInitialPopulationWithRandomPositions,
+  logTraitMutationsForOffspring,
+  isEntityDead,
+  getEntityCauseOfDeath
+} from './creatureHelpers';
 
 // Constants
 const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 0.9 ; // Herbivores are slightly more efficient than carnivores
@@ -81,17 +87,7 @@ export function createInitialHerbivorePopulation(
   count: number,
   gardenStateId: number
 ): Entity[] {
-  const herbivores: Entity[] = [];
-  
-  for (let i = 0; i < count; i++) {
-    const position = {
-      x: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenWidth,
-      y: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenHeight
-    };
-    herbivores.push(createNewHerbivoreEntity(position, gardenStateId));
-  }
-  
-  return herbivores;
+  return createInitialPopulationWithRandomPositions(count, gardenStateId, createNewHerbivoreEntity);
 }
 
 /**
@@ -197,51 +193,31 @@ async function attemptHerbivoreReproduction(
   const child = createNewHerbivoreEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   await eventLogger.logBirth(child, parent.id, parent.name);
-  await checkAndLogMutations(parent, child, eventLogger);
+  await logTraitMutationsForOffspring(
+    parent,
+    child,
+    ['reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius'],
+    eventLogger
+  );
   
   return child;
-}
-
-/**
- * Check for and log trait mutations.
- */
-async function checkAndLogMutations(
-  parent: Entity,
-  child: Entity,
-  eventLogger: EventLogger
-): Promise<void> {
-  if (parent.type !== 'herbivore' || child.type !== 'herbivore') return;
-
-  const traits = [
-    'reproductionRate',
-    'movementSpeed',
-    'metabolismEfficiency',
-    'perceptionRadius'
-  ] as const;
-  
-  for (const trait of traits) {
-    const oldValue = parent[trait];
-    const newValue = child[trait];
-    
-    if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      await eventLogger.logMutation(child, trait, oldValue, newValue);
-    }
-  }
 }
 
 /**
  * Check if a herbivore has died.
  */
 export function isHerbivoreDead(herbivore: Entity): boolean {
-  return !herbivore.isAlive || herbivore.health <= 0 || herbivore.energy <= 0;
+  return isEntityDead(herbivore);
 }
 
 /**
  * Get the cause of death for a herbivore.
  */
 export function getHerbivoreCauseOfDeath(herbivore: Entity): string {
-  if (herbivore.age >= MAX_AGE) return 'died of old age';
-  if (herbivore.energy <= 0) return 'starved (no plants found)';
-  if (herbivore.health <= 0) return 'wasted away';
-  return 'unknown cause';
+  return getEntityCauseOfDeath(
+    herbivore,
+    MAX_AGE,
+    'starved (no plants found)',
+    'wasted away'
+  );
 }

@@ -179,68 +179,30 @@ function determineHerbivoreType(name: string, species: string): HerbivoreType {
   return pickDeterministicType(fallbackOrder, species, name);
 }
 
-/**
- * Base color palettes for different herbivore types
- */
-function getBaseColorForType(type: HerbivoreType, rng: SeededRandom): { base: string; pattern: string; accent: string } {
-  const palettes: Record<HerbivoreType, { base: string[]; pattern: string[]; accent: string[] }> = {
-    butterfly: {
-      base: ['#e8d5b7', '#f5e6d3', '#fff8e7', '#ffe4c4'],
-      pattern: ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181'],
-      accent: ['#aa96da', '#fcbad3', '#a8d8ea']
-    },
-    beetle: {
-      base: ['#2d3436', '#636e72', '#1a1a2e', '#16213e'],
-      pattern: ['#d4af37', '#c0a040', '#8b7355', '#708090'],
-      accent: ['#e74c3c', '#3498db', '#9b59b6']
-    },
-    rabbit: {
-      base: ['#d4c4a8', '#c9b896', '#e8dcc8', '#f0e6d2', '#8b7355'],
-      pattern: ['#ffffff', '#f5f5f5', '#ffe4c4'],
-      accent: ['#ffb6c1', '#ffc0cb']
-    },
-    snail: {
-      base: ['#8b7355', '#a0826d', '#9c8869', '#b8a082'],
-      pattern: ['#6b5344', '#5a4636'],
-      accent: ['#98d8c8', '#7fcdbb']
-    },
-    cricket: {
-      base: ['#4a5568', '#2d3748', '#3d4852', '#5a6978'],
-      pattern: ['#68d391', '#9ae6b4', '#c6f6d5'],
-      accent: ['#f6e05e', '#ecc94b']
-    },
-    ladybug: {
-      base: ['#e53e3e', '#c53030', '#fc8181', '#feb2b2'],
-      pattern: ['#1a202c', '#2d3748', '#171923'],
-      accent: ['#1a202c']
-    },
-    grasshopper: {
-      base: ['#68d391', '#48bb78', '#38a169', '#9ae6b4'],
-      pattern: ['#f6e05e', '#d69e2e', '#b7791f'],
-      accent: ['#ed8936', '#dd6b20']
-    },
-    ant: {
-      base: ['#1a202c', '#2d3748', '#171923', '#0d1117'],
-      pattern: ['#4a5568', '#718096'],
-      accent: ['#e53e3e', '#dd6b20']
-    },
-    bee: {
-      base: ['#f6e05e', '#ecc94b', '#faf089', '#f6e05e'],
-      pattern: ['#1a202c', '#2d3748', '#171923'],
-      accent: ['#f6ad55', '#ed8936']
-    },
-    moth: {
-      base: ['#a0aec0', '#cbd5e0', '#e2e8f0', '#f7fafc'],
-      pattern: ['#718096', '#4a5568', '#2d3748'],
-      accent: ['#9f7aea', '#805ad5', '#b794f4']
-    }
-  };
-  
-  const palette = palettes[type];
+function getChaoticHslColor(
+  rng: SeededRandom,
+  minimumSaturation: number,
+  maximumSaturation: number,
+  minimumLightness: number,
+  maximumLightness: number,
+): string {
+  const hue = Math.floor(rng.range(0, 360));
+  const saturation = Math.floor(rng.range(minimumSaturation, maximumSaturation));
+  const lightness = Math.floor(rng.range(minimumLightness, maximumLightness));
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+function getChaoticHerbivoreColors(rng: SeededRandom): {
+  base: string;
+  pattern: string;
+  accent: string;
+  detail: string;
+} {
   return {
-    base: rng.choice(palette.base),
-    pattern: rng.choice(palette.pattern),
-    accent: rng.choice(palette.accent)
+    base: getChaoticHslColor(rng, 18, 100, 18, 86),
+    pattern: getChaoticHslColor(rng, 24, 100, 12, 88),
+    accent: getChaoticHslColor(rng, 20, 100, 16, 92),
+    detail: getChaoticHslColor(rng, 30, 100, 8, 94),
   };
 }
 
@@ -252,7 +214,7 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
   const rng = new SeededRandom(seed);
   const traits = entity.traits as HerbivoreTraits;
   const creatureType = determineHerbivoreType(entity.name, entity.species);
-  const colors = getBaseColorForType(creatureType, rng);
+  const colors = getChaoticHerbivoreColors(rng);
   const genome = getVisualGenome({
     id: entity.id,
     species: entity.species,
@@ -447,7 +409,7 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
     bodyShape: rng.choice(config.bodyShape),
     bodySize: rng.range(0.7, 1.3) * (0.8 + speedInfluence * 0.4),
     bodyColor: colors.base,
-    bodyPattern: ['solid', 'striped', 'spotted', 'banded'][rng.int(0, 3)] as CreaturePattern,
+    bodyPattern: ['solid', 'striped', 'spotted', 'banded', 'gradient'][rng.int(0, 4)] as CreaturePattern,
     patternColor: colors.pattern,
     
     // Appendages
@@ -462,13 +424,13 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
     
     // Special features
     hasShell: config.hasShell,
-    shellColor: colors.accent[0],
-    shellPattern: rng.next() > 0.5 ? 'striped' : 'solid',
+    shellColor: colors.accent,
+    shellPattern: ['solid', 'striped', 'spotted', 'banded'][rng.int(0, 3)],
     hasSpots: config.hasSpots,
-    spotCount: rng.int(2, 7),
-    spotColor: rng.choice(['#1a202c', '#2d3748', '#171923']),
+    spotCount: rng.int(1, 12),
+    spotColor: colors.detail,
     hasStripes: config.hasStripes,
-    stripeCount: rng.int(3, 6),
+    stripeCount: rng.int(1, 10),
     
     // Fluff/fur
     hasFur: config.hasFur,
@@ -476,8 +438,8 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
     hasFluffyEdges: rng.next() > 0.5,
     
     // Visual effects
-    glowIntensity: config.glowIntensity * rng.range(0.5, 1.5),
-    shimmerIntensity: rng.range(0, 0.3)
+    glowIntensity: config.glowIntensity * rng.range(0.2, 2.2),
+    shimmerIntensity: rng.range(0, 0.8)
   };
 }
 

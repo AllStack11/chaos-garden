@@ -25,6 +25,12 @@ import {
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
+import {
+  createInitialPopulationWithRandomPositions,
+  logTraitMutationsForOffspring,
+  isEntityDead,
+  getEntityCauseOfDeath
+} from './creatureHelpers';
 
 // Constants
 const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 1.1; // Carnivores have higher metabolism
@@ -37,6 +43,8 @@ const MAX_REPRODUCTIVE_AGE = 150; // older carnivores can no longer reproduce
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
+const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
+const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.85;
 
 /**
  * Create a new carnivore entity.
@@ -67,9 +75,9 @@ export function createNewCarnivoreEntity(
     health: 100,
     age: 0,
     reproductionRate: traits?.reproductionRate ?? 0.02, // Lower reproduction than herbivores
-    movementSpeed: traits?.movementSpeed ?? 3.5, // Faster than herbivores
+    movementSpeed: traits?.movementSpeed ?? 4.6, // Carnivores should move the most
     metabolismEfficiency: traits?.metabolismEfficiency ?? 1.1, // Higher metabolism cost
-    perceptionRadius: traits?.perceptionRadius ?? 150, // Better vision for hunting
+    perceptionRadius: traits?.perceptionRadius ?? 175, // Better vision for hunting
     lineage: parentId,
     createdAt: now,
     updatedAt: now
@@ -83,17 +91,7 @@ export function createInitialCarnivorePopulation(
   count: number,
   gardenStateId: number
 ): Entity[] {
-  const carnivores: Entity[] = [];
-  
-  for (let i = 0; i < count; i++) {
-    const position = {
-      x: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenWidth,
-      y: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenHeight
-    };
-    carnivores.push(createNewCarnivoreEntity(position, gardenStateId));
-  }
-  
-  return carnivores;
+  return createInitialPopulationWithRandomPositions(count, gardenStateId, createNewCarnivoreEntity);
 }
 
 /**
@@ -112,32 +110,42 @@ export async function processCarnivoreBehaviorDuringTick(
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
   const effectiveMovementSpeed = carnivore.movementSpeed * weatherModifiers.movementModifier;
 
-  // 1. Find nearest herbivore (prey)
-  const targetPrey = findNearestEntity(carnivore, allEntities, 'herbivore', carnivore.perceptionRadius);
+  // 1. Find nearest prey in perception range.
+  const targetPreyInPerception = findNearestEntity(
+    carnivore,
+    allEntities,
+    'herbivore',
+    carnivore.perceptionRadius
+  );
 
-  // 2. Move toward prey if found
-  if (targetPrey) {
-    const distance = calculateDistanceBetweenEntities(carnivore, targetPrey);
+  // 2. If prey is in range, engage hunt behavior.
+  if (targetPreyInPerception) {
+    const distance = calculateDistanceBetweenEntities(carnivore, targetPreyInPerception);
 
     if (distance <= HUNTING_DISTANCE) {
-      // Hunt the herbivore
-      const energyGained = huntHerbivore(carnivore, targetPrey);
-      consumed.push(targetPrey.id);
+      const energyGained = huntHerbivore(carnivore, targetPreyInPerception);
+      consumed.push(targetPreyInPerception.id);
     } else {
-      // Pursue prey
-      moveEntityTowardTarget(carnivore, targetPrey.position, effectiveMovementSpeed);
+      moveEntityTowardTarget(carnivore, targetPreyInPerception.position, effectiveMovementSpeed);
       const movedDistance = Math.min(distance, effectiveMovementSpeed);
-      
-      // Pay movement cost (higher speed = higher cost)
-      const movementCost = calculateMovementEnergyCost(
-        movedDistance,
-        carnivore.metabolismEfficiency
-      );
+      const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
       carnivore.energy -= movementCost * 1.2; // Hunting is exhausting
     }
   } else {
-    // No prey found - wander slowly to conserve energy
-    carnivore.energy -= BASE_METABOLISM_COST * 0.5;
+    // 3. Otherwise, move toward globally nearest prey to prevent edge starvation.
+    const targetPreyAnywhere = findNearestEntity(carnivore, allEntities, 'herbivore');
+    if (targetPreyAnywhere) {
+      const searchSpeed = effectiveMovementSpeed * SEARCH_MOVEMENT_SPEED_MULTIPLIER;
+      const distance = calculateDistanceBetweenEntities(carnivore, targetPreyAnywhere);
+
+      moveEntityTowardTarget(carnivore, targetPreyAnywhere.position, searchSpeed);
+      const movedDistance = Math.min(distance, searchSpeed);
+      const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
+      carnivore.energy -= movementCost * SEARCH_MOVEMENT_COST_MULTIPLIER;
+    } else {
+      // No prey exists at all.
+      carnivore.energy -= BASE_METABOLISM_COST * 0.25;
+    }
   }
   
   // 3. Base metabolism
@@ -203,51 +211,31 @@ async function attemptCarnivoreReproduction(
   const child = createNewCarnivoreEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   await eventLogger.logBirth(child, parent.id, parent.name);
-  await checkAndLogMutations(parent, child, eventLogger);
+  await logTraitMutationsForOffspring(
+    parent,
+    child,
+    ['reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius'],
+    eventLogger
+  );
   
   return child;
-}
-
-/**
- * Check for and log trait mutations.
- */
-async function checkAndLogMutations(
-  parent: Entity,
-  child: Entity,
-  eventLogger: EventLogger
-): Promise<void> {
-  if (parent.type !== 'carnivore' || child.type !== 'carnivore') return;
-
-  const traits = [
-    'reproductionRate',
-    'movementSpeed',
-    'metabolismEfficiency',
-    'perceptionRadius'
-  ] as const;
-  
-  for (const trait of traits) {
-    const oldValue = parent[trait];
-    const newValue = child[trait];
-    
-    if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      await eventLogger.logMutation(child, trait, oldValue, newValue);
-    }
-  }
 }
 
 /**
  * Check if a carnivore has died.
  */
 export function isCarnivoreDead(carnivore: Entity): boolean {
-  return !carnivore.isAlive || carnivore.health <= 0 || carnivore.energy <= 0;
+  return isEntityDead(carnivore);
 }
 
 /**
  * Get the cause of death for a carnivore.
  */
 export function getCarnivoreCauseOfDeath(carnivore: Entity): string {
-  if (carnivore.age >= MAX_AGE) return 'died of old age';
-  if (carnivore.energy <= 0) return 'starved (prey escaped)';
-  if (carnivore.health <= 0) return 'wasted away';
-  return 'unknown cause';
+  return getEntityCauseOfDeath(
+    carnivore,
+    MAX_AGE,
+    'starved (prey escaped)',
+    'wasted away'
+  );
 }

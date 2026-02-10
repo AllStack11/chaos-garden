@@ -15,7 +15,7 @@ describe('simulation/creatures/plants', () => {
 
     const energyGain = calculatePlantEnergyGainFromPhotosynthesis(plant, environment);
 
-    expect(energyGain).toBeCloseTo(3, 5);
+    expect(energyGain).toBeCloseTo(3.45, 5);
   });
 
   it('checks reproduction threshold correctly', () => {

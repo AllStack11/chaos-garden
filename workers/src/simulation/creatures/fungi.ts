@@ -27,6 +27,12 @@ import {
 } from '../environment/helpers';
 import { calculateTemperatureMetabolismMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
+import {
+  createInitialPopulationWithRandomPositions,
+  logTraitMutationsForOffspring,
+  isEntityDead,
+  getEntityCauseOfDeath
+} from './creatureHelpers';
 
 // Constants
 const BASE_METABOLISM_COST = 0.2; // Fungi have lower metabolism than plants/herbivores
@@ -85,17 +91,7 @@ export function createInitialFungusPopulation(
   count: number,
   gardenStateId: number
 ): Entity[] {
-  const fungi: Entity[] = [];
-  
-  for (let i = 0; i < count; i++) {
-    const position = {
-      x: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenWidth,
-      y: Math.random() * DEFAULT_SIMULATION_CONFIG.gardenHeight
-    };
-    fungi.push(createNewFungusEntity(position, gardenStateId));
-  }
-  
-  return fungi;
+  return createInitialPopulationWithRandomPositions(count, gardenStateId, createNewFungusEntity);
 }
 
 /**
@@ -209,36 +205,14 @@ async function attemptFungusReproduction(
   const child = createNewFungusEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   await eventLogger.logBirth(child, parent.id, parent.name);
-  await checkAndLogMutations(parent, child, eventLogger);
+  await logTraitMutationsForOffspring(
+    parent,
+    child,
+    ['reproductionRate', 'metabolismEfficiency', 'decompositionRate', 'perceptionRadius'],
+    eventLogger
+  );
   
   return child;
-}
-
-/**
- * Check for and log trait mutations.
- */
-async function checkAndLogMutations(
-  parent: Entity,
-  child: Entity,
-  eventLogger: EventLogger
-): Promise<void> {
-  if (parent.type !== 'fungus' || child.type !== 'fungus') return;
-
-  const traits = [
-    'reproductionRate',
-    'metabolismEfficiency',
-    'decompositionRate',
-    'perceptionRadius'
-  ] as const;
-  
-  for (const trait of traits) {
-    const oldValue = parent[trait];
-    const newValue = child[trait];
-    
-    if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      await eventLogger.logMutation(child, trait, oldValue, newValue);
-    }
-  }
 }
 
 /**
@@ -283,17 +257,19 @@ function findNearestDeadEntity(
  * Check if a fungus has died.
  */
 export function isFungusDead(fungus: Entity): boolean {
-  return !fungus.isAlive || fungus.health <= 0 || fungus.energy <= 0;
+  return isEntityDead(fungus);
 }
 
 /**
  * Get the cause of death for a fungus.
  */
 export function getFungusCauseOfDeath(fungus: Entity): string {
-  if (fungus.age >= MAX_AGE) return 'died of old age';
-  if (fungus.energy <= 0) return 'starved (no dead matter found)';
-  if (fungus.health <= 0) return 'withered away';
-  return 'unknown cause';
+  return getEntityCauseOfDeath(
+    fungus,
+    MAX_AGE,
+    'starved (no dead matter found)',
+    'withered away'
+  );
 }
 
 /**

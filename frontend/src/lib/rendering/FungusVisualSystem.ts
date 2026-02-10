@@ -91,6 +91,13 @@ function generateVisualSeed(entity: Entity): number {
   return Math.abs(hash);
 }
 
+const FUNGUS_COLOR_OFFSET_SCHEMES: Record<FungusType, CreatureOffsetScheme> = {
+  toadstool: { hueOffset: [-34, 26], saturationOffset: [-20, 20], lightnessOffset: [-12, 16] },
+  shelf: { hueOffset: [-24, 12], saturationOffset: [-26, 8], lightnessOffset: [-18, 10] },
+  puffball: { hueOffset: [-18, 16], saturationOffset: [-24, 6], lightnessOffset: [-10, 20] },
+  cluster: { hueOffset: [-46, 36], saturationOffset: [-24, 18], lightnessOffset: [-16, 18] },
+};
+
 function determineFungusType(name: string, species: string): FungusType {
   const tokens = createWordTokenSet(name, species);
   const normalizedName = name.toLowerCase();
@@ -220,6 +227,7 @@ export function generateFungusVisual(entity: Entity): FungusVisual {
   };
 
   const config = typeConfigs[fungusType];
+  const colorOffsets = pickCreatureColorOffsets(random, FUNGUS_COLOR_OFFSET_SCHEMES[fungusType]);
   const healthFactor = entity.health / 100;
   const energyFactor = entity.energy / 100;
 
@@ -253,9 +261,9 @@ export function generateFungusVisual(entity: Entity): FungusVisual {
     capShape: random.choice(config.capShape),
     capLayers: random.int(config.capLayers[0], config.capLayers[1]),
 
-    baseHueOffset: random.range(-20, 22),
-    saturationOffset: random.range(-18, 12),
-    lightnessOffset: random.range(-12, 16),
+    baseHueOffset: colorOffsets.hueOffset,
+    saturationOffset: colorOffsets.saturationOffset,
+    lightnessOffset: colorOffsets.lightnessOffset,
 
     hasSpots,
     spotDensity: hasSpots ? random.range(0.2, 1.0) : 0,
@@ -291,3 +299,4 @@ export function clearFungusVisualCache(): void {
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
 import { createWordTokenSet, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';
+import { pickCreatureColorOffsets, type CreatureOffsetScheme } from './utils/creatureColorSchemes.ts';

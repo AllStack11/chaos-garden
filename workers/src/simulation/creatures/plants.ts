@@ -20,13 +20,18 @@ import {
 } from '../environment/helpers';
 import { calculateMoistureGrowthMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
+import {
+  logTraitMutationsForOffspring,
+  isEntityDead,
+  getEntityCauseOfDeath
+} from './creatureHelpers';
 
 // Constants
 const BASE_PHOTOSYNTHESIS_RATE = DEFAULT_SIMULATION_CONFIG.basePhotosynthesisRate;
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.plantReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 30;
-const BASE_METABOLISM_COST = 0.3;
+const BASE_METABOLISM_COST = 0.2;
 const MAX_AGE = 200;
 const SEED_SPREAD_RADIUS = 50; // Increased from 30 for more spread out offspring
 
@@ -214,50 +219,26 @@ export async function attemptPlantReproduction(
   const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
   
   await eventLogger.logBirth(child, parent.id, parent.name);
-  await checkAndLogMutations(parent, child, eventLogger);
+  await logTraitMutationsForOffspring(
+    parent,
+    child,
+    ['reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
+    eventLogger
+  );
   
   return child;
-}
-
-/**
- * Check for and log trait mutations.
- */
-async function checkAndLogMutations(
-  parent: Entity,
-  child: Entity,
-  eventLogger: EventLogger
-): Promise<void> {
-  if (parent.type !== 'plant' || child.type !== 'plant') return;
-
-  const traits = [
-    'reproductionRate',
-    'metabolismEfficiency',
-    'photosynthesisRate'
-  ] as const;
-  
-  for (const trait of traits) {
-    const oldValue = parent[trait];
-    const newValue = child[trait];
-    
-    if (Math.abs(newValue - oldValue) / oldValue > 0.01) {
-      await eventLogger.logMutation(child, trait, oldValue, newValue);
-    }
-  }
 }
 
 /**
  * Check if a plant has died.
  */
 export function isPlantDead(plant: Entity): boolean {
-  return !plant.isAlive || plant.health <= 0 || plant.energy <= 0;
+  return isEntityDead(plant);
 }
 
 /**
  * Get the cause of death for a plant.
  */
 export function getPlantCauseOfDeath(plant: Entity): string {
-  if (plant.age >= MAX_AGE) return 'died of old age';
-  if (plant.energy <= 0) return 'starved';
-  if (plant.health <= 0) return 'withered away';
-  return 'unknown cause';
+  return getEntityCauseOfDeath(plant, MAX_AGE, 'starved', 'withered away');
 }

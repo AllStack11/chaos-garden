@@ -8,6 +8,13 @@
 import type { Entity } from '../../../env.d.ts';
 import type { PlantVisual } from '../PlantVisualSystem.ts';
 
+const BLUE_PLANT_BASE_HUE = 210;
+const BROWN_PLANT_BASE_HUE = 28;
+
+function clampToRange(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 /**
  * Deterministic seeded random
  */
@@ -118,6 +125,30 @@ export class PlantRenderer {
   private calculateSize(energy: number, visual: PlantVisual): number {
     return (8 + energy / 15) * visual.height * visual.leafSize;
   }
+
+  private getBluePlantColor(
+    visual: PlantVisual,
+    hueOffset: number,
+    saturationBase: number,
+    lightnessBase: number
+  ): string {
+    const hue = (BLUE_PLANT_BASE_HUE + visual.baseHue + hueOffset + 360) % 360;
+    const saturation = clampToRange(saturationBase + visual.saturation, 18, 88);
+    const lightness = clampToRange(lightnessBase + visual.baseHue * 0.18, 20, 86);
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }
+
+  private getBrownPlantColor(
+    visual: PlantVisual,
+    hueOffset: number,
+    saturationBase: number,
+    lightnessBase: number
+  ): string {
+    const hue = (BROWN_PLANT_BASE_HUE + visual.baseHue * 0.22 + hueOffset + 360) % 360;
+    const saturation = clampToRange(saturationBase + visual.saturation * 0.2, 14, 62);
+    const lightness = clampToRange(lightnessBase + visual.baseHue * 0.12, 16, 74);
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }
   
   // ==========================================
   // FERN - Ancient, feathery fronds
@@ -135,10 +166,10 @@ export class PlantRenderer {
     
     const tiers = Math.floor(3 + visual.leafCount / 4);
     const stemHeight = size * 1.5;
-    const baseColor = `hsl(${100 + visual.baseHue}, ${60 + visual.saturation}%, ${50 + visual.saturation / 2}%)`;
+    const baseColor = this.getBluePlantColor(visual, -8, 54, 48);
     
     // Central stem
-    this.ctx.strokeStyle = '#4a8c2a';
+    this.ctx.strokeStyle = this.getBrownPlantColor(visual, 2, 40, 34);
     this.ctx.lineWidth = 3 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -201,7 +232,7 @@ export class PlantRenderer {
     const petalCount = Math.max(5, visual.petalCount);
     
     // Stem
-    this.ctx.strokeStyle = '#2d9b4e';
+    this.ctx.strokeStyle = this.getBrownPlantColor(visual, -4, 42, 36);
     this.ctx.lineWidth = 4 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -209,7 +240,7 @@ export class PlantRenderer {
     this.ctx.stroke();
     
     // Stem leaves
-    this.ctx.fillStyle = `hsl(${100 + visual.baseHue}, ${60}%, ${45 + visual.baseHue / 3}%)`;
+    this.ctx.fillStyle = this.getBluePlantColor(visual, -4, 52, 44);
     this.ctx.beginPath();
     this.ctx.ellipse(x + sway * 0.3, y - stemHeight * 0.4, size * 0.3, size * 0.15, -0.5, 0, Math.PI * 2);
     this.ctx.fill();
@@ -232,7 +263,7 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx) return;
     
-    const baseHue = 340 + visual.baseHue;
+    const baseHue = 220 + visual.baseHue;
     const petalStretch = 1 + visual.genome.plant.petalDeformation * 0.25;
     
     // Outer petals
@@ -262,13 +293,13 @@ export class PlantRenderer {
     }
 
     // Center
-    this.ctx.fillStyle = `hsl(${50 + visual.baseHue}, ${80}%, ${55 + visual.baseHue / 3}%)`;
+    this.ctx.fillStyle = this.getBrownPlantColor(visual, 8, 52, 48);
     this.ctx.beginPath();
     this.ctx.arc(x, y, size * 0.18, 0, Math.PI * 2);
     this.ctx.fill();
 
     // Stamens
-    this.ctx.fillStyle = '#ffff00';
+    this.ctx.fillStyle = '#d8b57a';
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2 + time * 0.2;
       this.ctx.beginPath();
@@ -307,7 +338,7 @@ export class PlantRenderer {
     if (!this.ctx || !this.rng) return;
     
     const bladeCount = Math.max(4, visual.leafCount);
-    const grassColor = `hsl(${90 + visual.baseHue}, ${50 + visual.saturation}%, ${48 + visual.baseHue / 2}%)`;
+    const grassColor = this.getBluePlantColor(visual, -12, 42, 42);
     
     for (let i = 0; i < bladeCount; i++) {
       const length = size * 1.5 * (0.7 + this.rng!.range(0, 0.6));
@@ -343,8 +374,8 @@ export class PlantRenderer {
     if (!this.ctx || !this.rng) return;
     
     const stemHeight = size * 2;
-    const vineColor = '#4a8f3d';
-    const leafColor = `hsl(${100 + visual.baseHue}, ${55 + visual.saturation}%, ${48 + visual.baseHue / 3}%)`;
+    const vineColor = this.getBrownPlantColor(visual, -6, 38, 30);
+    const leafColor = this.getBluePlantColor(visual, 0, 50, 46);
     
     // Curved vine stem
     this.ctx.strokeStyle = vineColor;
@@ -387,8 +418,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const succColor = `hsl(${140 + visual.baseHue}, ${40 + visual.saturation}%, ${52 + visual.baseHue / 2}%)`;
-    const accentColor = `hsl(${140 + visual.baseHue}, ${50 + visual.saturation}%, ${60 + visual.baseHue / 2}%)`;
+    const succColor = this.getBluePlantColor(visual, 10, 36, 50);
+    const accentColor = this.getBluePlantColor(visual, 20, 46, 58);
     
     // Main succulent body (rounded shape)
     this.ctx.fillStyle = succColor;
@@ -436,7 +467,7 @@ export class PlantRenderer {
     const bloomSize = size * visual.bloomSize;
     
     // Tall elegant stem
-    this.ctx.strokeStyle = '#2d7d2d';
+    this.ctx.strokeStyle = this.getBrownPlantColor(visual, -8, 36, 30);
     this.ctx.lineWidth = 3 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -444,7 +475,7 @@ export class PlantRenderer {
     this.ctx.stroke();
     
     // Lily pad (floating leaf)
-    this.ctx.fillStyle = `hsl(${100 + visual.baseHue}, ${45}%, ${50 + visual.baseHue / 3}%)`;
+    this.ctx.fillStyle = this.getBluePlantColor(visual, -16, 34, 44);
     this.ctx.beginPath();
     this.ctx.ellipse(x - size * 0.8, y + size * 0.3, size * 0.6, size * 0.3, -0.3, 0, Math.PI * 2);
     this.ctx.fill();
@@ -485,7 +516,7 @@ export class PlantRenderer {
     this.ctx.fill();
     
     // Center (stigma)
-    this.ctx.fillStyle = `hsl(${50 + visual.baseHue}, ${70}%, ${60}%)`;
+    this.ctx.fillStyle = this.getBrownPlantColor(visual, 6, 46, 56);
     this.ctx.beginPath();
     this.ctx.arc(x, y, size * 0.15, 0, Math.PI * 2);
     this.ctx.fill();
@@ -505,8 +536,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const mossColor = `hsl(${100 + visual.baseHue}, ${45 + visual.saturation}%, ${42 + visual.baseHue / 2}%)`;
-    const highlightColor = `hsl(${100 + visual.baseHue}, ${50 + visual.saturation}%, ${55 + visual.baseHue / 2}%)`;
+    const mossColor = this.getBluePlantColor(visual, -10, 34, 38);
+    const highlightColor = this.getBluePlantColor(visual, 0, 40, 50);
     
     const patchRadius = size * 1.2;
     this.ctx.fillStyle = mossColor;
@@ -534,7 +565,7 @@ export class PlantRenderer {
         const stalkX = x + this.rng!.range(-patchRadius * 0.5, patchRadius * 0.5);
         const stalkHeight = size * 0.4 * (0.5 + this.rng!.range(0, 0.5));
         
-        this.ctx.strokeStyle = '#5a8040';
+        this.ctx.strokeStyle = this.getBrownPlantColor(visual, -2, 34, 30);
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
         this.ctx.moveTo(stalkX, y - patchRadius * 0.3);
@@ -542,7 +573,7 @@ export class PlantRenderer {
         this.ctx.stroke();
         
         // Spore head
-        this.ctx.fillStyle = `hsl(${60 + visual.baseHue}, ${60}%, ${50}%)`;
+        this.ctx.fillStyle = this.getBrownPlantColor(visual, 10, 46, 46);
         this.ctx.beginPath();
         this.ctx.arc(stalkX, y - patchRadius * 0.3 - stalkHeight, 3, 0, Math.PI * 2);
         this.ctx.fill();
@@ -564,8 +595,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const cactusColor = `hsl(${130 + visual.baseHue}, ${35 + visual.saturation}%, ${45 + visual.baseHue / 2}%)`;
-    const darkCactusColor = `hsl(${130 + visual.baseHue}, ${40}%, ${32}%)`;
+    const cactusColor = this.getBluePlantColor(visual, -6, 30, 40);
+    const darkCactusColor = this.getBluePlantColor(visual, -14, 28, 30);
     
     const cactusHeight = size * 2.5;
     const armCount = Math.floor(visual.leafCount / 3);
@@ -615,7 +646,7 @@ export class PlantRenderer {
     
     // Top cephalium
     if (visual.hasBloom) {
-      this.ctx.fillStyle = `hsl(${340 + visual.baseHue}, ${70}%, ${50}%)`;
+      this.ctx.fillStyle = this.getBrownPlantColor(visual, 14, 54, 50);
       this.ctx.beginPath();
       this.ctx.arc(x, y - cactusHeight, size * 0.15, 0, Math.PI * 2);
       this.ctx.fill();
@@ -636,8 +667,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const bushColor = `hsl(${95 + visual.baseHue}, ${50 + visual.saturation}%, ${44 + visual.baseHue / 2}%)`;
-    const lightBushColor = `hsl(${95 + visual.baseHue}, ${55 + visual.saturation}%, ${52 + visual.baseHue / 2}%)`;
+    const bushColor = this.getBluePlantColor(visual, -8, 40, 40);
+    const lightBushColor = this.getBluePlantColor(visual, 2, 44, 48);
     
     const clusterCount = Math.floor(4 + visual.leafCount / 2);
     
@@ -665,8 +696,8 @@ export class PlantRenderer {
         const berryY = y - this.rng!.range(size * 0.2, size * 0.8);
         
         this.ctx.fillStyle = visual.hasBloom
-          ? `hsl(${340 + visual.baseHue}, ${70}%, ${50 + visual.baseHue / 2}%)`
-          : `hsl(${40 + visual.baseHue}, ${70}%, ${50}%)`;
+          ? this.getBrownPlantColor(visual, 12, 52, 50)
+          : this.getBrownPlantColor(visual, 2, 44, 44);
         this.ctx.beginPath();
         this.ctx.arc(berryX, berryY, 4, 0, Math.PI * 2);
         this.ctx.fill();
@@ -688,8 +719,8 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const herbColor = `hsl(${85 + visual.baseHue}, ${55 + visual.saturation}%, ${48 + visual.baseHue / 2}%)`;
-    const stemColor = '#5a9e3d';
+    const herbColor = this.getBluePlantColor(visual, -6, 46, 44);
+    const stemColor = this.getBrownPlantColor(visual, -6, 34, 30);
     
     const stalkCount = Math.max(3, Math.floor(visual.leafCount / 2));
     
@@ -728,14 +759,14 @@ export class PlantRenderer {
       const bloomX = x + (bloomStalk - stalkCount / 2) * size * 0.4 + sway;
       const bloomY = y - size * 1.2;
       
-      this.ctx.fillStyle = `hsl(${50 + visual.baseHue}, ${60}%, ${70 + visual.baseHue / 2}%)`;
+      this.ctx.fillStyle = this.getBluePlantColor(visual, 16, 36, 68);
       for (let i = 0; i < 5; i++) {
         const angle = (i / 5) * Math.PI * 2;
         this.ctx.beginPath();
         this.ctx.arc(bloomX + Math.cos(angle) * size * 0.1, bloomY + Math.sin(angle) * size * 0.1, 3, 0, Math.PI * 2);
         this.ctx.fill();
       }
-      this.ctx.fillStyle = '#ffff88';
+      this.ctx.fillStyle = '#e0c894';
       this.ctx.beginPath();
       this.ctx.arc(bloomX, bloomY, 4, 0, Math.PI * 2);
       this.ctx.fill();
@@ -754,8 +785,8 @@ export class PlantRenderer {
     if (!this.ctx) return;
     
     const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, `hsla(${visual.baseHue + 100}, ${80}%, ${70}%, 0.11)`);
-    gradient.addColorStop(0.5, `hsla(${visual.baseHue + 100}, ${70}%, ${60}%, 0.03)`);
+    gradient.addColorStop(0, `hsla(${visual.baseHue + BLUE_PLANT_BASE_HUE}, 72%, 66%, 0.11)`);
+    gradient.addColorStop(0.5, `hsla(${visual.baseHue + BLUE_PLANT_BASE_HUE}, 64%, 56%, 0.03)`);
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     
     this.ctx.fillStyle = gradient;

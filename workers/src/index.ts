@@ -29,6 +29,7 @@ import type { HealthStatus } from '@chaos-garden/shared';
 export interface Env {
   DB: D1Database;
   ENVIRONMENT?: string;
+  CORS_ORIGIN?: string;
 }
 
 let databaseReadyPromise: Promise<void> | null = null;
@@ -64,19 +65,21 @@ async function ensureDatabaseReady(db: D1Database): Promise<void> {
 // CORS Headers
 // ==========================================
 
-/** Headers to enable cross-origin requests */
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+/** Build CORS headers from the configured origin */
+function getCorsHeaders(origin: string): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
 
 // ==========================================
 // Response Helpers
 // ==========================================
 
 /** Create a successful JSON response */
-function createSuccessResponse(data: unknown, status = 200): Response {
+function createSuccessResponse(data: unknown, corsOrigin: string, status = 200): Response {
   return new Response(JSON.stringify({
     success: true,
     data,
@@ -85,13 +88,13 @@ function createSuccessResponse(data: unknown, status = 200): Response {
     status,
     headers: {
       'Content-Type': 'application/json',
-      ...CORS_HEADERS
+      ...getCorsHeaders(corsOrigin)
     }
   });
 }
 
 /** Create an error response */
-function createErrorResponse(message: string, status = 500, details?: unknown): Response {
+function createErrorResponse(message: string, corsOrigin: string, status = 500, details?: unknown): Response {
   return new Response(JSON.stringify({
     success: false,
     error: message,
@@ -101,14 +104,14 @@ function createErrorResponse(message: string, status = 500, details?: unknown): 
     status,
     headers: {
       'Content-Type': 'application/json',
-      ...CORS_HEADERS
+      ...getCorsHeaders(corsOrigin)
     }
   });
 }
 
 /** Create a not found response */
-function createNotFoundResponse(message = 'Resource not found'): Response {
-  return createErrorResponse(message, 404);
+function createNotFoundResponse(corsOrigin: string, message = 'Resource not found'): Response {
+  return createErrorResponse(message, corsOrigin, 404);
 }
 
 // ==========================================
@@ -119,27 +122,27 @@ function createNotFoundResponse(message = 'Resource not found'): Response {
  * Handle GET /api/garden
  * Returns current garden state with all entities and recent events.
  */
-async function handleGetGarden(env: Env): Promise<Response> {
+async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
   const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
-  
+
   try {
     await logger.info('api_get_garden', 'Fetching current garden state');
-    
+
     // Get latest garden state
     const gardenState = await getLatestGardenStateFromDatabase(env.DB);
     if (!gardenState) {
-      return createNotFoundResponse('No garden state found - garden may not be initialized');
+      return createNotFoundResponse(corsOrigin, 'No garden state found - garden may not be initialized');
     }
-    
+
     // Get all entities currently visible in the garden (living + decomposable dead matter)
     const livingEntities = await getAllLivingEntitiesFromDatabase(env.DB);
     const decomposableDeadEntities = await getAllDecomposableDeadEntitiesFromDatabase(env.DB);
     const entities = [...livingEntities, ...decomposableDeadEntities];
-    
+
     // Get recent events
     const events = await getRecentSimulationEventsFromDatabase(env.DB, 20);
-    
+
     await logger.debug('api_get_garden_success', 'Garden state retrieved', {
       tick: gardenState.tick,
       entityCount: entities.length,
@@ -147,22 +150,23 @@ async function handleGetGarden(env: Env): Promise<Response> {
       deadEntityCount: decomposableDeadEntities.length,
       eventCount: events.length
     });
-    
+
     return createSuccessResponse({
       gardenState,
       entities,
       events,
       timestamp: new Date().toISOString()
-    });
-    
+    }, corsOrigin);
+
   } catch (error) {
     const logger = createApplicationLogger(env.DB, 'API');
     await logger.error('api_get_garden_failed', 'Failed to fetch garden state', {
       error: error instanceof Error ? error.message : String(error)
     });
-    
+
     return createErrorResponse(
       'Failed to fetch garden state',
+      corsOrigin,
       500,
       error instanceof Error ? error.message : String(error)
     );
@@ -173,14 +177,14 @@ async function handleGetGarden(env: Env): Promise<Response> {
  * Handle GET /api/health
  * Returns system health status.
  */
-async function handleGetHealth(env: Env): Promise<Response> {
+async function handleGetHealth(env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
   const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
-  
+
   try {
     // Get latest state to check if system is operational
     const gardenState = await getLatestGardenStateFromDatabase(env.DB);
-    
+
     const health: HealthStatus = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -192,18 +196,18 @@ async function handleGetHealth(env: Env): Promise<Response> {
         tickIntervalMinutes: 15 // Current standard
       }
     };
-    
-    await logger.debug('api_health', 'Health check performed', health as any);
-    
-    return createSuccessResponse(health);
-    
+
+    await logger.debug('api_health', 'Health check performed', { status: health.status, tick: health.gardenState?.tick });
+
+    return createSuccessResponse(health, corsOrigin);
+
   } catch (error) {
     const logger = createApplicationLogger(env.DB, 'API');
     await logger.error('api_health_failed', 'Health check failed', {
       error: error instanceof Error ? error.message : String(error)
     });
-    
-    return createErrorResponse('System unhealthy', 503, {
+
+    return createErrorResponse('System unhealthy', corsOrigin, 503, {
       error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString()
     });
@@ -219,11 +223,14 @@ export default {
    * Handle HTTP requests
    */
   async fetch(request: Request, env: Env): Promise<Response> {
+    const corsOrigin = env.CORS_ORIGIN ?? '*';
+
     try {
       await ensureDatabaseReady(env.DB);
     } catch (error) {
       return createErrorResponse(
         'Database is not initialized. Run `npm run db:init:local` from the project root.',
+        corsOrigin,
         500,
         error instanceof Error ? error.message : String(error)
       );
@@ -231,42 +238,43 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
-    
+
     // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
       return new Response(null, {
-        headers: CORS_HEADERS
+        headers: getCorsHeaders(corsOrigin)
       });
     }
-    
+
     // Route requests
     if (path === '/api/garden' && request.method === 'GET') {
-      return handleGetGarden(env);
+      return handleGetGarden(env, corsOrigin);
     }
-    
+
     if (path === '/api/health' && request.method === 'GET') {
-      return handleGetHealth(env);
+      return handleGetHealth(env, corsOrigin);
     }
 
     // Handle manual tick trigger (Development only)
     if (path === '/api/tick' && request.method === 'POST') {
       const isDevelopment = env.ENVIRONMENT !== 'production';
       const logger = createApplicationLogger(env.DB, 'SIMULATION', undefined, isDevelopment);
-      
+
       try {
         await logger.info('api_tick_triggered', 'Manual simulation tick starting');
         const result = await runSimulationTick(env.DB, logger, isDevelopment);
         await logger.info('api_tick_complete', 'Manual simulation tick completed', result as unknown as Record<string, unknown>);
-        return createSuccessResponse(result);
+        return createSuccessResponse(result, corsOrigin);
       } catch (error) {
         return createErrorResponse(
           'Manual tick failed',
+          corsOrigin,
           500,
           error instanceof Error ? error.message : String(error)
         );
       }
     }
-    
+
     // Handle root path
     if (path === '/' || path === '/api') {
       return new Response(JSON.stringify({
@@ -280,13 +288,13 @@ export default {
       }), {
         headers: {
           'Content-Type': 'application/json',
-          ...CORS_HEADERS
+          ...getCorsHeaders(corsOrigin)
         }
       });
     }
-    
+
     // Not found
-    return createNotFoundResponse(`No route found for ${request.method} ${path}`);
+    return createNotFoundResponse(corsOrigin, `No route found for ${request.method} ${path}`);
   },
   
   /**

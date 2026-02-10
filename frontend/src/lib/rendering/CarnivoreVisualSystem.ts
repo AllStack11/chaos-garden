@@ -115,34 +115,37 @@ function determineCarnivoreType(entity: Entity): CarnivoreType {
   return pickDeterministicType(fallbackOrder, entity.species, entity.name);
 }
 
+const CARNIVORE_COLOR_SCHEMES: Record<CarnivoreType, CreatureColorScheme> = {
+  wolf: {
+    base: { hue: [208, 226], saturation: [10, 24], lightness: [30, 46] },
+    accent: { hue: [28, 40], saturation: [32, 52], lightness: [66, 82] },
+    pattern: { hue: [214, 236], saturation: [8, 20], lightness: [8, 20] },
+    detail: { hue: [200, 225], saturation: [8, 20], lightness: [12, 26] },
+  },
+  fox: {
+    base: { hue: [14, 26], saturation: [58, 80], lightness: [46, 62] },
+    accent: { hue: [26, 38], saturation: [40, 66], lightness: [82, 94] },
+    pattern: { hue: [14, 22], saturation: [44, 64], lightness: [16, 30] },
+    detail: { hue: [16, 30], saturation: [44, 66], lightness: [22, 38] },
+  },
+  bigCat: {
+    base: { hue: [34, 48], saturation: [44, 68], lightness: [46, 62] },
+    accent: { hue: [40, 54], saturation: [56, 80], lightness: [74, 88] },
+    pattern: { hue: [22, 36], saturation: [34, 56], lightness: [10, 24] },
+    detail: { hue: [28, 44], saturation: [34, 54], lightness: [20, 34] },
+  },
+};
+
 function getPalette(type: CarnivoreType, random: SeededRandom): {
   baseColor: string;
   accentColor: string;
   patternColor: string;
 } {
-  const palettes: Record<CarnivoreType, { base: string[]; accent: string[]; pattern: string[] }> = {
-    wolf: {
-      base: ['#5f6368', '#7b8289', '#4c5159'],
-      accent: ['#c9b08b', '#d8c2a0', '#e2d2bb'],
-      pattern: ['#2a2d31', '#1f2328'],
-    },
-    fox: {
-      base: ['#d56a3a', '#c95b2f', '#e37a42'],
-      accent: ['#f4e7d5', '#ead7c0', '#fff3e6'],
-      pattern: ['#5b2a1a', '#4a1f14'],
-    },
-    bigCat: {
-      base: ['#c59b53', '#b78a47', '#d2a860'],
-      accent: ['#f5dba3', '#f1cf85', '#fff0c8'],
-      pattern: ['#3b291a', '#24180f'],
-    },
-  };
-
-  const palette = palettes[type];
+  const palette = pickCreaturePalette(random, CARNIVORE_COLOR_SCHEMES[type]);
   return {
-    baseColor: random.choice(palette.base),
-    accentColor: random.choice(palette.accent),
-    patternColor: random.choice(palette.pattern),
+    baseColor: palette.baseColor,
+    accentColor: palette.accentColor,
+    patternColor: palette.patternColor,
   };
 }
 
@@ -259,3 +262,4 @@ export function clearCarnivoreVisualCache(): void {
 import type { VisualGenome } from './types.ts';
 import { getVisualGenome } from './VisualGenome.ts';
 import { createWordTokenSet, hasAnyToken, pickDeterministicType } from './visualTypeClassifier.ts';
+import { pickCreaturePalette, type CreatureColorScheme } from './utils/creatureColorSchemes.ts';
