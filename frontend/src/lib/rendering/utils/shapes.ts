@@ -166,7 +166,7 @@ export function drawMushroomCap(
   x: number,
   y: number,
   capWidth: number,
-  capHeight: number,
+  _capHeight: number,
   stemHeight: number,
   stemWidth: number,
   options: ShapeOptions = {}
@@ -524,7 +524,6 @@ export function drawStem(
   const {
     fill = '#166534',
     stroke = '#14532d',
-    lineWidth = 1,
     opacity = 1
   } = options;
   

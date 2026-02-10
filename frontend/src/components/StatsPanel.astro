@@ -12,7 +12,6 @@ export interface Props {
   gardenState?: GardenState;
 }
 
-const { gardenState } = Astro.props;
 ---
 
 <stats-panel class="block">
@@ -80,13 +79,6 @@ const { gardenState } = Astro.props;
       if (el) el.textContent = value;
     }
 
-    private updateBar(id: string, value: number, max: number) {
-      const el = this.querySelector(`#${id}`) as HTMLElement;
-      if (el) {
-        const percent = Math.round((value / (max || 1)) * 100);
-        el.style.width = `${Math.min(100, percent)}%`;
-      }
-    }
   }
 
   if (!customElements.get('stats-panel')) {

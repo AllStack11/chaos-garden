@@ -195,7 +195,7 @@ export function happyWiggleAnimation(
  * Fear/shiver animation
  */
 export function shiverAnimation(
-  time: number,
+  _time: number,
   intensity: number = 1
 ): number {
   return (Math.random() - 0.5) * 2 * 0.5 * intensity;
@@ -371,7 +371,7 @@ export function smoothNoise(
   const noise11 = simpleNoise(x1, y1);
   
   const ix0 = lerp(noise00, noise10, nx0);
-  const ix1 = lerp(noise01, noise11, nx0);
+  const ix1 = lerp(noise01, noise11, nx1);
   
   return lerp(ix0, ix1, easeInOutSmooth(sy));
 }

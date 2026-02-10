@@ -470,7 +470,7 @@ export function clearHerbivoreVisualCache(): void {
 /**
  * Get HSL color adjusted by herbivore visual properties
  */
-export function getHerbivoreColor(baseColor: string, visual: HerbivoreVisual): string {
+export function getHerbivoreColor(baseColor: string, _visual: HerbivoreVisual): string {
   // For simple color strings, just return them as-is
   // This is a placeholder for more complex color manipulation if needed
   return baseColor;

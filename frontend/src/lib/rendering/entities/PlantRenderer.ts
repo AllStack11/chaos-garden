@@ -159,8 +159,8 @@ export class PlantRenderer {
     size: number,
     sway: number,
     visual: PlantVisual,
-    healthFactor: number,
-    time: number
+    _healthFactor: number,
+    _time: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -186,7 +186,7 @@ export class PlantRenderer {
       for (let i = -frondsOnSide; i <= frondsOnSide; i++) {
         const angle = (i / Math.max(1, frondsOnSide)) * 0.8 - 0.4;
         const frondLength = tierSize * (1 - Math.abs(i) / (frondsOnSide + 1));
-        this.renderFernFrond(x + tierSway * 0.5, tierY, frondLength, angle, baseColor, healthFactor, visual.droopFactor);
+        this.renderFernFrond(x + tierSway * 0.5, tierY, frondLength, angle, baseColor, _healthFactor, visual.droopFactor);
       }
     }
   }
@@ -197,7 +197,7 @@ export class PlantRenderer {
     length: number,
     angle: number,
     color: string,
-    healthFactor: number,
+    _healthFactor: number,
     droopFactor: number
   ): void {
     if (!this.ctx) return;
@@ -223,7 +223,7 @@ export class PlantRenderer {
     size: number,
     sway: number,
     visual: PlantVisual,
-    healthFactor: number,
+    _healthFactor: number,
     time: number
   ): void {
     if (!this.ctx || !this.rng) return;
@@ -249,7 +249,7 @@ export class PlantRenderer {
     this.ctx.fill();
     
     // Bloom
-    this.renderBloom(x + sway, y - stemHeight, size * visual.bloomSize, petalCount, visual, healthFactor, time);
+    this.renderBloom(x + sway, y - stemHeight, size * visual.bloomSize, petalCount, visual, _healthFactor, time);
   }
   
   private renderBloom(
@@ -258,7 +258,7 @@ export class PlantRenderer {
     size: number,
     petalCount: number,
     visual: PlantVisual,
-    healthFactor: number,
+    _healthFactor: number,
     time: number
   ): void {
     if (!this.ctx) return;
@@ -307,22 +307,6 @@ export class PlantRenderer {
       this.ctx.fill();
     }
   }
-  
-  private renderLeaf(
-    x: number,
-    y: number,
-    size: number,
-    angle: number,
-    color: string,
-    healthFactor: number
-  ): void {
-    if (!this.ctx) return;
-    this.ctx.fillStyle = color;
-    this.ctx.beginPath();
-    this.ctx.ellipse(x, y, size, size * 0.4, angle, 0, Math.PI * 2);
-    this.ctx.fill();
-  }
-  
   // ==========================================
   // GRASS - Simple blade clusters
   // ==========================================
@@ -332,7 +316,7 @@ export class PlantRenderer {
     size: number,
     sway: number,
     visual: PlantVisual,
-    healthFactor: number,
+    _healthFactor: number,
     time: number
   ): void {
     if (!this.ctx || !this.rng) return;
@@ -368,7 +352,7 @@ export class PlantRenderer {
     size: number,
     sway: number,
     visual: PlantVisual,
-    healthFactor: number,
+    _healthFactor: number,
     time: number
   ): void {
     if (!this.ctx || !this.rng) return;
@@ -411,9 +395,9 @@ export class PlantRenderer {
     x: number,
     y: number,
     size: number,
-    sway: number,
+    _sway: number,
     visual: PlantVisual,
-    healthFactor: number,
+    _healthFactor: number,
     time: number
   ): void {
     if (!this.ctx || !this.rng) return;
@@ -458,7 +442,7 @@ export class PlantRenderer {
     size: number,
     sway: number,
     visual: PlantVisual,
-    healthFactor: number,
+    _healthFactor: number,
     time: number
   ): void {
     if (!this.ctx) return;
@@ -481,7 +465,7 @@ export class PlantRenderer {
     this.ctx.fill();
     
     // Trumpet bloom
-    this.renderLilyBloom(x + sway * 0.5, y - stemHeight, bloomSize, visual, healthFactor, time);
+    this.renderLilyBloom(x + sway * 0.5, y - stemHeight, bloomSize, visual, _healthFactor, time);
   }
   
   private renderLilyBloom(
@@ -489,8 +473,8 @@ export class PlantRenderer {
     y: number,
     size: number,
     visual: PlantVisual,
-    healthFactor: number,
-    time: number
+    _healthFactor: number,
+    _time: number
   ): void {
     if (!this.ctx) return;
     
@@ -529,10 +513,10 @@ export class PlantRenderer {
     x: number,
     y: number,
     size: number,
-    sway: number,
+    _sway: number,
     visual: PlantVisual,
-    healthFactor: number,
-    time: number
+    _healthFactor: number,
+    _time: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -588,10 +572,10 @@ export class PlantRenderer {
     x: number,
     y: number,
     size: number,
-    sway: number,
+    _sway: number,
     visual: PlantVisual,
-    healthFactor: number,
-    time: number
+    _healthFactor: number,
+    _time: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -660,10 +644,10 @@ export class PlantRenderer {
     x: number,
     y: number,
     size: number,
-    sway: number,
+    _sway: number,
     visual: PlantVisual,
-    healthFactor: number,
-    time: number
+    _healthFactor: number,
+    _time: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -714,8 +698,8 @@ export class PlantRenderer {
     size: number,
     sway: number,
     visual: PlantVisual,
-    healthFactor: number,
-    time: number
+    _healthFactor: number,
+    _time: number
   ): void {
     if (!this.ctx || !this.rng) return;
     

@@ -3,15 +3,10 @@ import type { HealthStatus } from '@chaos-garden/shared';
 import { ApiClient } from './api-client';
 import { GardenService, type GardenData } from './garden-service';
 
-type GardenServiceClassWithMutableInstance = typeof GardenService & {
-  instance?: GardenService;
-};
-
 describe('services/GardenService', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    const mutableClass = GardenService as GardenServiceClassWithMutableInstance;
-    mutableClass.instance = undefined;
+    Reflect.set(GardenService, 'instance', undefined);
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 

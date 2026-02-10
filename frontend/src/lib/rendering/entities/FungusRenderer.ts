@@ -72,7 +72,7 @@ export class FungusRenderer {
     size: number,
     visual: FungusVisual,
     healthFactor: number,
-    time: number,
+    _time: number,
   ): void {
     if (!this.ctx) return;
 
@@ -108,7 +108,7 @@ export class FungusRenderer {
     size: number,
     visual: FungusVisual,
     healthFactor: number,
-    time: number,
+    _time: number,
   ): void {
     if (!this.ctx || !this.random) return;
 
@@ -151,7 +151,7 @@ export class FungusRenderer {
     size: number,
     visual: FungusVisual,
     healthFactor: number,
-    time: number,
+    _time: number,
   ): void {
     if (!this.ctx || !this.random) return;
 
@@ -193,7 +193,7 @@ export class FungusRenderer {
     size: number,
     visual: FungusVisual,
     healthFactor: number,
-    time: number,
+    _time: number,
   ): void {
     if (!this.ctx || !this.random) return;
 

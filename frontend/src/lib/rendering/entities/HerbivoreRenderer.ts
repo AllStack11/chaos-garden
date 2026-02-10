@@ -120,7 +120,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -188,7 +188,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -255,7 +255,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx) return;
     
@@ -323,11 +323,9 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx) return;
-    
-    const trailOffset = (time * 0.5) % (size * 0.3);
     
     // Shell (spiral)
     const shellColor = visual.bodyColor;
@@ -385,7 +383,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -407,7 +405,6 @@ export class HerbivoreRenderer {
     this.ctx.fill();
     
     // Antenna (long!)
-    const antennaWiggle = Math.sin(time * 2) * 0.1;
     this.ctx.strokeStyle = visual.patternColor;
     this.ctx.lineWidth = 1;
     
@@ -438,8 +435,8 @@ export class HerbivoreRenderer {
     y: number,
     size: number,
     visual: HerbivoreVisual,
-    time: number,
-    healthFactor: number
+    _time: number,
+    _healthFactor: number
   ): void {
     if (!this.ctx) return;
     
@@ -485,8 +482,8 @@ export class HerbivoreRenderer {
     y: number,
     size: number,
     visual: HerbivoreVisual,
-    time: number,
-    healthFactor: number
+    _time: number,
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -507,7 +504,6 @@ export class HerbivoreRenderer {
     this.ctx.fill();
     
     // Antenna
-    const antennaWiggle = Math.sin(time * 2) * 0.1;
     this.ctx.strokeStyle = visual.patternColor;
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
@@ -546,7 +542,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -571,7 +567,6 @@ export class HerbivoreRenderer {
     this.ctx.fill();
     
     // Antenna
-    const antennaWiggle = Math.sin(time * 3) * 0.1;
     this.ctx.strokeStyle = visual.patternColor;
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
@@ -607,7 +602,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
@@ -675,7 +670,7 @@ export class HerbivoreRenderer {
     size: number,
     visual: HerbivoreVisual,
     time: number,
-    healthFactor: number
+    _healthFactor: number
   ): void {
     if (!this.ctx || !this.rng) return;
     
