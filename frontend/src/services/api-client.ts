@@ -17,15 +17,20 @@ export class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
     console.log(`[ApiClient] Initialized with base URL: ${this.baseUrl}`);
+  }
+
+  private buildUrl(path: string): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${this.baseUrl}${normalizedPath}`;
   }
 
   async get<T>(path: string): Promise<ApiResponse<T>> {
     const startTime = performance.now();
     try {
       console.log(`[ApiClient] GET ${path} starting...`);
-      const response = await fetch(`${this.baseUrl}${path}`);
+      const response = await fetch(this.buildUrl(path));
       const data = await response.json();
       const duration = (performance.now() - startTime).toFixed(2);
       console.log(`[ApiClient] GET ${path} completed in ${duration}ms`);
@@ -45,7 +50,7 @@ export class ApiClient {
     const startTime = performance.now();
     try {
       console.log(`[ApiClient] POST ${path} starting...`, body);
-      const response = await fetch(`${this.baseUrl}${path}`, {
+      const response = await fetch(this.buildUrl(path), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
