@@ -12,6 +12,7 @@ export class GardenApp extends HTMLElement {
   private healthCheckTimer: number | null = null;
   private countdownTimer: number | null = null;
   private uiTimeout: number | null = null;
+  private gardenRequestInFlight = false;
   private readonly coarsePointerMediaQuery = window.matchMedia('(pointer: coarse)');
   private readonly mobileViewportMediaQuery = window.matchMedia('(max-width: 639px)');
 
@@ -119,6 +120,8 @@ export class GardenApp extends HTMLElement {
     window.addEventListener('click', this.resetUIOverlayOpacity);
     window.addEventListener('pointerdown', this.resetUIOverlayOpacity);
     window.addEventListener('resize', this.handleViewportModeChange);
+    window.addEventListener('visibilitychange', this.handleVisibilityChange);
+    window.addEventListener('online', this.handleOnline);
     this.coarsePointerMediaQuery.addEventListener('change', this.handleViewportModeChange);
     this.mobileViewportMediaQuery.addEventListener('change', this.handleViewportModeChange);
     this.resetUIOverlayOpacity();
@@ -136,9 +139,23 @@ export class GardenApp extends HTMLElement {
     window.removeEventListener('click', this.resetUIOverlayOpacity);
     window.removeEventListener('pointerdown', this.resetUIOverlayOpacity);
     window.removeEventListener('resize', this.handleViewportModeChange);
+    window.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    window.removeEventListener('online', this.handleOnline);
     this.coarsePointerMediaQuery.removeEventListener('change', this.handleViewportModeChange);
     this.mobileViewportMediaQuery.removeEventListener('change', this.handleViewportModeChange);
   }
+
+  private readonly handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      this.loadGardenData();
+      this.checkHealth();
+    }
+  };
+
+  private readonly handleOnline = () => {
+    this.loadGardenData();
+    this.checkHealth();
+  };
 
   private readonly handleStatsOverlayOpen = () => {
     const overlay = this.querySelector('stats-overlay') as HTMLElement & { openOverlay?: () => void };
@@ -179,7 +196,12 @@ export class GardenApp extends HTMLElement {
   };
 
   private async loadGardenData() {
+    if (this.gardenRequestInFlight) {
+      return;
+    }
+
     try {
+      this.gardenRequestInFlight = true;
       if (!this.state.hasLoadedOnce) {
         this.state.isLoading = true;
         this.updateUI();
@@ -208,6 +230,7 @@ export class GardenApp extends HTMLElement {
       console.error('[GardenApp] Failed to load garden:', error);
       showNotification('Failed to load garden data. Please try again.', 'error');
     } finally {
+      this.gardenRequestInFlight = false;
       this.state.isLoading = false;
       this.updateUI();
     }

@@ -91,6 +91,7 @@ const { apiUrl } = Astro.props;
 <script>
   import type { GardenStatsResponse } from '../env.d.ts';
   import { GardenService } from '../services/garden-service';
+  import { STATS_AUTO_REFRESH_MS } from '../constants/ui';
   import {
     renderKpisMarkup,
     renderPopulationLinesMarkup,
@@ -126,11 +127,10 @@ const { apiUrl } = Astro.props;
   class DetailedStatsPanel extends HTMLElement {
     private gardenService: GardenService;
     private selectedWindowTicks = 120;
-    private autoRefreshIntervalMs = 15 * 60 * 1000;
+    private autoRefreshIntervalMs = STATS_AUTO_REFRESH_MS;
     private refreshTimer: number | null = null;
     private countdownTimer: number | null = null;
     private nextRefreshAtMs: number | null = null;
-    private hasFetchedOnce = false;
     private isActive = false;
 
     private refs: PanelElementRefs = {
@@ -190,9 +190,7 @@ const { apiUrl } = Astro.props;
 
     public activatePanel() {
       this.isActive = true;
-      if (!this.hasFetchedOnce) {
-        this.loadStatsData();
-      }
+      this.loadStatsData();
       this.startAutoRefreshLoop();
     }
 
@@ -234,14 +232,16 @@ const { apiUrl } = Astro.props;
 
     private startAutoRefreshLoop() {
       this.stopAutoRefreshLoop();
-      this.nextRefreshAtMs = Date.now() + this.autoRefreshIntervalMs;
+      const jitterFactor = 0.9 + Math.random() * 0.2;
+      const intervalWithJitter = Math.round(this.autoRefreshIntervalMs * jitterFactor);
+      this.nextRefreshAtMs = Date.now() + intervalWithJitter;
       this.updateAutoRefreshLabel();
 
       this.refreshTimer = window.setInterval(() => {
         if (this.isActive) {
           this.loadStatsData();
         }
-      }, this.autoRefreshIntervalMs);
+      }, intervalWithJitter);
 
       this.countdownTimer = window.setInterval(() => {
         this.updateAutoRefreshLabel();
@@ -280,7 +280,6 @@ const { apiUrl } = Astro.props;
         if (!stats) {
           throw new Error('No data returned from /api/garden/stats');
         }
-        this.hasFetchedOnce = true;
         this.nextRefreshAtMs = Date.now() + this.autoRefreshIntervalMs;
         this.renderStats(stats);
       } catch (error) {
