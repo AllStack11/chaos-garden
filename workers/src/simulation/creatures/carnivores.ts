@@ -54,6 +54,7 @@ const MAX_AGE = 200; // ticks (carnivores live longer but are fewer)
 const MAX_REPRODUCTIVE_AGE = 150; // older carnivores can no longer reproduce
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
 const HEALTH_RECOVERY_FROM_FEED = 5;
+const MIN_MOVEMENT_SPEED = 0.4; // ensure movement never stalls from bad mutations
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
@@ -119,7 +120,7 @@ export async function processCarnivoreBehaviorDuringTick(
   const offspring: Entity[] = [];
   const consumed: string[] = [];
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
-  const effectiveMovementSpeed = carnivore.movementSpeed * weatherModifiers.movementModifier;
+  const effectiveMovementSpeed = calculateEffectiveCarnivoreSpeed(carnivore, weatherModifiers.movementModifier);
 
   // Initialize or get hunting state for this carnivore
   if (!carnivoreHuntingState.has(carnivore.id)) {
@@ -133,10 +134,9 @@ export async function processCarnivoreBehaviorDuringTick(
   // 1. Check if high energy and should rest (conserve energy)
   if (carnivore.energy >= RESTING_ENERGY_THRESHOLD) {
     // Check for immediate prey within ambush range
-    const immediatePreyInAmbushRange = findNearestEntity(
+    const immediatePreyInAmbushRange = findNearestHuntableHerbivore(
       carnivore,
       allEntities,
-      'herbivore',
       AMBUSH_RADIUS
     );
 
@@ -202,6 +202,18 @@ export async function processCarnivoreBehaviorDuringTick(
 }
 
 /**
+ * Guarantee a minimum movement speed so carnivores do not stall when mutations or weather reduce speed.
+ */
+function calculateEffectiveCarnivoreSpeed(
+  carnivore: Entity,
+  movementModifier: number
+): number {
+  if (carnivore.type !== 'carnivore') return MIN_MOVEMENT_SPEED;
+  const modified = carnivore.movementSpeed * movementModifier;
+  return Math.max(MIN_MOVEMENT_SPEED, modified);
+}
+
+/**
  * Perform hunting behavior with ambush tactics and pack coordination.
  * Extracted to separate function for clarity.
  */
@@ -215,10 +227,9 @@ function performHuntingBehavior(
   if (carnivore.type !== 'carnivore') return;
 
   // Find prey in perception range
-  const targetPreyInPerception = findNearestEntity(
+  const targetPreyInPerception = findNearestHuntableHerbivore(
     carnivore,
     allEntities,
-    'herbivore',
     carnivore.perceptionRadius
   );
 
@@ -242,7 +253,6 @@ function performHuntingBehavior(
         e.id !== targetPreyInPerception.id &&
         e.isAlive &&
         e.health > 0 &&
-        e.energy > 0 &&
         calculateDistanceBetweenEntities(carnivore, e) <= carnivore.perceptionRadius
       );
 
@@ -302,6 +312,45 @@ function performHuntingBehavior(
     const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
     carnivore.energy -= movementCost * SEARCH_MOVEMENT_COST_MULTIPLIER;
   }
+}
+
+/**
+ * Locate the nearest herbivore that is still alive.
+ * Carnivores should hunt starving prey too, so we ignore prey energy.
+ */
+function findNearestHuntableHerbivore(
+  carnivore: Entity,
+  allEntities: Entity[],
+  maxDistance?: number
+): Entity | null {
+  const preyCandidates = allEntities.filter(entity =>
+    entity.type === 'herbivore' &&
+    entity.isAlive &&
+    entity.health > 0
+  );
+
+  const preyInRange = typeof maxDistance === 'number'
+    ? preyCandidates.filter(prey =>
+      calculateDistanceBetweenEntities(carnivore, prey) <= maxDistance
+    )
+    : preyCandidates;
+
+  if (preyInRange.length === 0) {
+    return null;
+  }
+
+  let nearest = preyInRange[0];
+  let minDistance = calculateDistanceBetweenEntities(carnivore, nearest);
+
+  for (let i = 1; i < preyInRange.length; i++) {
+    const distance = calculateDistanceBetweenEntities(carnivore, preyInRange[i]);
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearest = preyInRange[i];
+    }
+  }
+
+  return nearest;
 }
 
 /**

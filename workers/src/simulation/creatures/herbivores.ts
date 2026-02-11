@@ -53,6 +53,7 @@ const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 40;
 const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
+const MIN_MOVEMENT_SPEED = 0.35; // ensure movement never fully stalls
 const MAX_REPRODUCTIVE_AGE = 110; // older herbivores can no longer reproduce
 const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
 const HEALTH_RECOVERY_FROM_FEED = 5;
@@ -121,7 +122,7 @@ export async function processHerbivoreBehaviorDuringTick(
   const offspring: Entity[] = [];
   const consumed: string[] = [];
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
-  const effectiveMovementSpeed = herbivore.movementSpeed * weatherModifiers.movementModifier;
+  const effectiveMovementSpeed = calculateEffectiveHerbivoreSpeed(herbivore, weatherModifiers.movementModifier);
 
   // Initialize or get fleeing state for this herbivore
   if (!herbivoreFleeingState.has(herbivore.id)) {
@@ -225,6 +226,18 @@ export async function processHerbivoreBehaviorDuringTick(
 
   herbivore.updatedAt = createTimestamp();
   return { offspring, consumed };
+}
+
+/**
+ * Guarantee a minimum movement speed so herbivores do not freeze from extreme mutations or weather penalties.
+ */
+function calculateEffectiveHerbivoreSpeed(
+  herbivore: Entity,
+  movementModifier: number
+): number {
+  if (herbivore.type !== 'herbivore') return MIN_MOVEMENT_SPEED;
+  const modified = herbivore.movementSpeed * movementModifier;
+  return Math.max(MIN_MOVEMENT_SPEED, modified);
 }
 
 /**
