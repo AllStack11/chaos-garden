@@ -2,15 +2,15 @@
 /**
  * Production D1 initializer for Chaos Garden.
  *
- * Uses a seeded generator to create a fair population ratio of:
- * - mostly plants
- * - fewer herbivores
- * - fewest carnivores
+ * Seed strategy:
+ * - minimal sustainable baseline for a 120-tick horizon
+ * - 1-2 fungi at tick 0
+ * - deterministic natural habitat placement with minimum spacing constraints
+ * - high diversity in names/species/traits
  *
  * Usage:
  *   node scripts/init-remote-db-prod.js
  *   node scripts/init-remote-db-prod.js --seed=12345
- *   node scripts/init-remote-db-prod.js --total=22
  *   node scripts/init-remote-db-prod.js --verify-only
  *   node scripts/init-remote-db-prod.js --database=chaos-garden-db
  *   node scripts/init-remote-db-prod.js --config=wrangler.jsonc
@@ -24,36 +24,111 @@ const DEFAULT_DATABASE_NAME = 'chaos-garden-db';
 const DEFAULT_WRANGLER_CONFIG = 'wrangler.jsonc';
 const WORKERS_DIR = path.resolve(__dirname, '..');
 const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
+
 const GARDEN_WIDTH = 800;
 const GARDEN_HEIGHT = 600;
-const DEFAULT_TOTAL_ENTITIES = 22;
-const MIN_TOTAL_ENTITIES = 11;
+
+const SUSTAINABILITY_TICK_WINDOW = 120;
+const SUSTAINABILITY_MINIMUMS = {
+  plants: 1,
+  herbivores: 1,
+  carnivores: 1,
+  fungi: 1,
+  totalLiving: 6
+};
+
+const CANDIDATE_COUNT_BOUNDS = {
+  minPlants: 8,
+  minHerbivores: 3,
+  minCarnivores: 1,
+  minFungi: 1,
+  maxPlants: 11,
+  maxHerbivores: 5,
+  maxCarnivores: 2,
+  maxFungi: 2
+};
+
+const DEFAULT_COUNT_HEURISTIC_LIMIT = 16;
+
+const TYPE_ORDER = ['plant', 'herbivore', 'carnivore', 'fungus'];
+
+const MIN_SPACING_BY_TYPE = {
+  plant: 18,
+  herbivore: 26,
+  carnivore: 34,
+  fungus: 28
+};
 
 const NAME_GENERATION_CONFIG = {
   plant: {
-    classifierKeywords: ['fern', 'flower', 'grass', 'vine', 'succulent', 'lily', 'moss', 'cactus', 'bush', 'herb'],
-    descriptors: ['sun', 'mist', 'river', 'stone', 'verdant', 'wild', 'silver', 'amber', 'meadow', 'dawn'],
-    suffixes: ['sprout', 'canopy', 'bloom', 'frond', 'petal', 'branch', 'grove', 'bud', 'thicket', 'stem'],
-    speciesFamilies: ['flora', 'canopy', 'grove', 'rootline']
+    classifierKeywords: ['fern', 'flower', 'grass', 'vine', 'succulent', 'lily', 'moss', 'cactus', 'bush', 'herb', 'briar', 'aloe', 'reed', 'daisy', 'thistle', 'willow'],
+    descriptors: ['sun', 'mist', 'river', 'stone', 'verdant', 'wild', 'silver', 'amber', 'meadow', 'dawn', 'brook', 'shade', 'marsh', 'hollow', 'valley', 'bloom'],
+    suffixes: ['sprout', 'canopy', 'bloom', 'frond', 'petal', 'branch', 'grove', 'bud', 'thicket', 'stem', 'crown', 'crest', 'leaf', 'root', 'vine', 'spire'],
+    speciesFamilies: ['flora', 'canopy', 'grove', 'rootline', 'meadow', 'hedge', 'thicket', 'bloomkin']
   },
   herbivore: {
-    classifierKeywords: ['butterfly', 'beetle', 'rabbit', 'snail', 'cricket', 'ladybug', 'grasshopper', 'ant', 'bee', 'moth'],
-    descriptors: ['swift', 'quiet', 'field', 'wind', 'fleet', 'bright', 'nimble', 'dapple', 'hollow', 'reed'],
-    suffixes: ['stride', 'dash', 'bound', 'graze', 'hop', 'skitter', 'forage', 'trail', 'flutter', 'rush'],
-    speciesFamilies: ['kin', 'folk', 'colony', 'wanderers']
+    classifierKeywords: ['butterfly', 'beetle', 'rabbit', 'snail', 'cricket', 'ladybug', 'grasshopper', 'ant', 'bee', 'moth', 'hare', 'finch', 'mouse', 'wren', 'lark', 'weevil'],
+    descriptors: ['swift', 'quiet', 'field', 'wind', 'fleet', 'bright', 'nimble', 'dapple', 'hollow', 'reed', 'coast', 'drift', 'rush', 'light', 'grain', 'trail'],
+    suffixes: ['stride', 'dash', 'bound', 'graze', 'hop', 'skitter', 'forage', 'trail', 'flutter', 'rush', 'glide', 'prance', 'drift', 'scurry', 'stride', 'song'],
+    speciesFamilies: ['kin', 'folk', 'colony', 'wanderers', 'runners', 'foragers', 'meadowkin', 'trailers']
   },
   carnivore: {
-    classifierKeywords: ['wolf', 'fox', 'tiger', 'panther', 'shadow', 'hunt', 'claw', 'fang', 'night', 'stalk'],
-    descriptors: ['grim', 'ashen', 'frost', 'ember', 'void', 'scar', 'iron', 'silent', 'storm', 'thorn'],
-    suffixes: ['strike', 'pounce', 'prowl', 'snare', 'hunter', 'rake', 'lunge', 'ambush', 'howl', 'raid'],
-    speciesFamilies: ['pack', 'pride', 'stalkers', 'hunters']
+    classifierKeywords: ['wolf', 'fox', 'tiger', 'panther', 'shadow', 'hunt', 'claw', 'fang', 'night', 'stalk', 'viper', 'lynx', 'talon', 'pike', 'storm', 'dire'],
+    descriptors: ['grim', 'ashen', 'frost', 'ember', 'void', 'scar', 'iron', 'silent', 'storm', 'thorn', 'onyx', 'shade', 'flint', 'razor', 'gloom', 'night'],
+    suffixes: ['strike', 'pounce', 'prowl', 'snare', 'hunter', 'rake', 'lunge', 'ambush', 'howl', 'raid', 'stalker', 'slash', 'snarl', 'maw', 'chase', 'rend'],
+    speciesFamilies: ['pack', 'pride', 'stalkers', 'hunters', 'raiders', 'prowlers', 'talons', 'fangline']
+  },
+  fungus: {
+    classifierKeywords: ['spore', 'cap', 'mycel', 'mold', 'glow', 'damp', 'shroom', 'puff', 'web', 'rot', 'gill', 'hypha', 'lichen', 'mire', 'veil', 'frill'],
+    descriptors: ['deep', 'wet', 'moss', 'coal', 'murk', 'umbra', 'dusk', 'root', 'quiet', 'bog', 'haze', 'silt', 'peat', 'shade', 'drift', 'loam'],
+    suffixes: ['pulse', 'spread', 'bloom', 'rot', 'puff', 'creep', 'glow', 'web', 'drift', 'spore', 'patch', 'ring', 'veil', 'mat', 'cluster', 'frill'],
+    speciesFamilies: ['mycelium', 'hyphae', 'sporeline', 'decomposers', 'veilkin', 'rotfolk', 'gillset', 'patchwork']
   }
 };
 
 const TRAIT_SAMPLING_KEYS = {
   plant: ['energy', 'reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
   herbivore: ['energy', 'reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius', 'threatDetectionRadius'],
-  carnivore: ['energy', 'reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius']
+  carnivore: ['energy', 'reproductionRate', 'movementSpeed', 'metabolismEfficiency', 'perceptionRadius'],
+  fungus: ['energy', 'reproductionRate', 'metabolismEfficiency', 'decompositionRate', 'perceptionRadius']
+};
+
+const TRAIT_RANGES = {
+  plant: {
+    energy: [46, 63],
+    reproductionRate: [0.038, 0.078],
+    metabolismEfficiency: [0.9, 1.22],
+    photosynthesisRate: [0.9, 1.35]
+  },
+  herbivore: {
+    energy: [54, 74],
+    reproductionRate: [0.022, 0.042],
+    movementSpeed: [1.6, 3.0],
+    metabolismEfficiency: [0.86, 1.25],
+    perceptionRadius: [88, 145],
+    threatDetectionRadius: [110, 180]
+  },
+  carnivore: {
+    energy: [52, 72],
+    reproductionRate: [0.014, 0.031],
+    movementSpeed: [3.0, 4.35],
+    metabolismEfficiency: [0.9, 1.26],
+    perceptionRadius: [138, 198]
+  },
+  fungus: {
+    energy: [42, 58],
+    reproductionRate: [0.03, 0.05],
+    metabolismEfficiency: [1.02, 1.3],
+    decompositionRate: [0.92, 1.36],
+    perceptionRadius: [42, 82]
+  }
+};
+
+const DIVERSITY_MINIMUMS = {
+  plant: { minUniqueSpecies: 5 },
+  herbivore: { minUniqueSpecies: 3 },
+  carnivore: { minUniqueSpecies: 1 },
+  fungus: { minUniqueSpecies: 1 }
 };
 
 function parseCliArgs(argv) {
@@ -61,8 +136,7 @@ function parseCliArgs(argv) {
     verifyOnly: false,
     databaseName: DEFAULT_DATABASE_NAME,
     wranglerConfig: DEFAULT_WRANGLER_CONFIG,
-    seed: null,
-    totalEntities: DEFAULT_TOTAL_ENTITIES
+    seed: null
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -89,26 +163,6 @@ function parseCliArgs(argv) {
         throw new Error('Invalid --seed value. Expected integer.');
       }
       parsedArgs.seed = seedValue;
-      index += 1;
-      continue;
-    }
-
-    if (token.startsWith('--total=')) {
-      const totalValue = Number(token.slice('--total='.length));
-      if (!Number.isInteger(totalValue) || totalValue < MIN_TOTAL_ENTITIES) {
-        throw new Error(`Invalid --total value. Expected integer >= ${MIN_TOTAL_ENTITIES}.`);
-      }
-      parsedArgs.totalEntities = totalValue;
-      continue;
-    }
-
-    if (token === '--total') {
-      const nextToken = argv[index + 1];
-      const totalValue = Number(nextToken);
-      if (!nextToken || !Number.isInteger(totalValue) || totalValue < MIN_TOTAL_ENTITIES) {
-        throw new Error(`Invalid --total value. Expected integer >= ${MIN_TOTAL_ENTITIES}.`);
-      }
-      parsedArgs.totalEntities = totalValue;
       index += 1;
       continue;
     }
@@ -179,6 +233,10 @@ function randomFloatInRange(random, min, max) {
   return min + random() * (max - min);
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function shuffleArrayDeterministically(random, values) {
   const shuffledValues = [...values];
   for (let index = shuffledValues.length - 1; index > 0; index -= 1) {
@@ -228,7 +286,8 @@ function createNameSamplingPlan(random, type, count) {
   return {
     keywords: createCycledOrder(random, config.classifierKeywords, count),
     descriptors: createCycledOrder(random, config.descriptors, count),
-    suffixes: createCycledOrder(random, config.suffixes, count)
+    suffixes: createCycledOrder(random, config.suffixes, count),
+    families: createCycledOrder(random, config.speciesFamilies, count)
   };
 }
 
@@ -244,51 +303,92 @@ function escapeSqlString(value) {
   return String(value).replace(/'/g, "''");
 }
 
-function generatePopulationCounts(random, totalEntities) {
-  const plantWeight = randomFloatInRange(random, 5.4, 6.6);
-  const herbivoreWeight = randomFloatInRange(random, 2.8, 3.8);
-  const carnivoreWeight = randomFloatInRange(random, 0.9, 1.4);
-  const totalWeight = plantWeight + herbivoreWeight + carnivoreWeight;
-
-  let plantCount = Math.round((plantWeight / totalWeight) * totalEntities);
-  let herbivoreCount = Math.round((herbivoreWeight / totalWeight) * totalEntities);
-  let carnivoreCount = totalEntities - plantCount - herbivoreCount;
-
-  if (plantCount < 6) {
-    const deficit = 6 - plantCount;
-    plantCount = 6;
-    herbivoreCount = Math.max(3, herbivoreCount - deficit);
-  }
-
-  if (herbivoreCount < 3) {
-    const deficit = 3 - herbivoreCount;
-    herbivoreCount = 3;
-    plantCount = Math.max(6, plantCount - deficit);
-  }
-
-  if (carnivoreCount < 1) {
-    const deficit = 1 - carnivoreCount;
-    carnivoreCount = 1;
-    plantCount = Math.max(6, plantCount - deficit);
-  }
-
-  const correctedTotal = plantCount + herbivoreCount + carnivoreCount;
-  if (correctedTotal !== totalEntities) {
-    plantCount += totalEntities - correctedTotal;
-  }
-
-  return { plantCount, herbivoreCount, carnivoreCount };
-}
-
-function titleCase(value) {
+function toTitleCase(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function createEntityIdentity(type, index, random, usedNames, nameSamplingPlan) {
-  const config = NAME_GENERATION_CONFIG[type];
+function determineCandidatePopulationCounts(seed) {
+  const random = createSeededRandom(seed ^ 0x1f123bb5);
+  const candidateCounts = [];
+
+  for (let plantCount = CANDIDATE_COUNT_BOUNDS.minPlants; plantCount <= CANDIDATE_COUNT_BOUNDS.maxPlants; plantCount += 1) {
+    for (let herbivoreCount = CANDIDATE_COUNT_BOUNDS.minHerbivores; herbivoreCount <= CANDIDATE_COUNT_BOUNDS.maxHerbivores; herbivoreCount += 1) {
+      for (let carnivoreCount = CANDIDATE_COUNT_BOUNDS.minCarnivores; carnivoreCount <= CANDIDATE_COUNT_BOUNDS.maxCarnivores; carnivoreCount += 1) {
+        for (let fungusCount = CANDIDATE_COUNT_BOUNDS.minFungi; fungusCount <= CANDIDATE_COUNT_BOUNDS.maxFungi; fungusCount += 1) {
+          candidateCounts.push({
+            plantCount,
+            herbivoreCount,
+            carnivoreCount,
+            fungusCount,
+            totalLiving: plantCount + herbivoreCount + carnivoreCount + fungusCount
+          });
+        }
+      }
+    }
+  }
+
+  candidateCounts.sort((left, right) => {
+    if (left.totalLiving !== right.totalLiving) {
+      return left.totalLiving - right.totalLiving;
+    }
+
+    const leftFungusPenalty = left.fungusCount === 1 ? 0 : 1;
+    const rightFungusPenalty = right.fungusCount === 1 ? 0 : 1;
+    if (leftFungusPenalty !== rightFungusPenalty) {
+      return leftFungusPenalty - rightFungusPenalty;
+    }
+
+    const leftDistance = Math.abs((left.plantCount / left.herbivoreCount) - 2.7);
+    const rightDistance = Math.abs((right.plantCount / right.herbivoreCount) - 2.7);
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance;
+    }
+
+    return random() < 0.5 ? -1 : 1;
+  });
+
+  const viableCandidate = candidateCounts.find((candidate) => {
+    if (candidate.totalLiving > DEFAULT_COUNT_HEURISTIC_LIMIT) {
+      return false;
+    }
+
+    if (candidate.plantCount <= candidate.herbivoreCount) {
+      return false;
+    }
+
+    if (candidate.herbivoreCount < candidate.carnivoreCount) {
+      return false;
+    }
+
+    const plantPerHerbivore = candidate.plantCount / candidate.herbivoreCount;
+    const herbivorePerCarnivore = candidate.herbivoreCount / candidate.carnivoreCount;
+
+    return plantPerHerbivore >= 2.2 && herbivorePerCarnivore >= 2.5;
+  });
+
+  if (viableCandidate) {
+    return viableCandidate;
+  }
+
+  return {
+    plantCount: CANDIDATE_COUNT_BOUNDS.minPlants,
+    herbivoreCount: CANDIDATE_COUNT_BOUNDS.minHerbivores,
+    carnivoreCount: CANDIDATE_COUNT_BOUNDS.minCarnivores,
+    fungusCount: CANDIDATE_COUNT_BOUNDS.minFungi,
+    totalLiving:
+      CANDIDATE_COUNT_BOUNDS.minPlants +
+      CANDIDATE_COUNT_BOUNDS.minHerbivores +
+      CANDIDATE_COUNT_BOUNDS.minCarnivores +
+      CANDIDATE_COUNT_BOUNDS.minFungi
+  };
+}
+
+function createEntityIdentity(type, index, usedNames, nameSamplingPlan) {
   const keyword = nameSamplingPlan.keywords[index];
   const descriptor = nameSamplingPlan.descriptors[index];
   const suffix = nameSamplingPlan.suffixes[index];
+  const family = nameSamplingPlan.families[index];
+
   const baseName = `${keyword}-${descriptor}-${suffix}`;
 
   let candidateName = baseName;
@@ -301,103 +401,311 @@ function createEntityIdentity(type, index, random, usedNames, nameSamplingPlan) 
   usedNames.add(candidateName);
   return {
     name: candidateName,
-    species: `${titleCase(keyword)} ${titleCase(config.speciesFamilies[index % config.speciesFamilies.length])}`
+    species: `${toTitleCase(keyword)} ${toTitleCase(family)}`
   };
 }
 
-function createEntity(type, index, random, timestamp, usedNames, traitSamplingPlan, nameSamplingPlan) {
-  const identity = createEntityIdentity(type, index, random, usedNames, nameSamplingPlan);
+function createHabitatZoneCenters(random, zoneCount, xPadding, yPadding, minDistance) {
+  const centers = [];
 
-  if (type === 'plant') {
-    return {
-      id: createDeterministicUuid(random),
-      type,
-      name: identity.name,
-      species: identity.species,
-      positionX: randomFloatInRange(random, 0, GARDEN_WIDTH),
-      positionY: randomFloatInRange(random, 0, GARDEN_HEIGHT),
-      energy: sampleTraitValue(random, traitSamplingPlan, 'energy', index, 44, 62),
-      traits: {
-        reproductionRate: sampleTraitValue(random, traitSamplingPlan, 'reproductionRate', index, 0.035, 0.075),
-        metabolismEfficiency: sampleTraitValue(random, traitSamplingPlan, 'metabolismEfficiency', index, 0.85, 1.2),
-        photosynthesisRate: sampleTraitValue(random, traitSamplingPlan, 'photosynthesisRate', index, 0.8, 1.3)
-      },
-      timestamp
-    };
+  for (let zoneIndex = 0; zoneIndex < zoneCount; zoneIndex += 1) {
+    let acceptedCenter = null;
+
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const candidateCenter = {
+        x: randomFloatInRange(random, xPadding, GARDEN_WIDTH - xPadding),
+        y: randomFloatInRange(random, yPadding, GARDEN_HEIGHT - yPadding)
+      };
+
+      const hasConflict = centers.some((existingCenter) => {
+        const dx = existingCenter.x - candidateCenter.x;
+        const dy = existingCenter.y - candidateCenter.y;
+        return Math.hypot(dx, dy) < minDistance;
+      });
+
+      if (!hasConflict) {
+        acceptedCenter = candidateCenter;
+        break;
+      }
+    }
+
+    if (!acceptedCenter) {
+      acceptedCenter = {
+        x: randomFloatInRange(random, xPadding, GARDEN_WIDTH - xPadding),
+        y: randomFloatInRange(random, yPadding, GARDEN_HEIGHT - yPadding)
+      };
+    }
+
+    centers.push(acceptedCenter);
   }
 
-  if (type === 'herbivore') {
+  return centers;
+}
+
+function createNaturalPlacementMap(random, counts) {
+  const plantZoneCount = Math.max(3, Math.min(5, Math.ceil(counts.plantCount / 3)));
+  const plantPatchCenters = createHabitatZoneCenters(random, plantZoneCount, 75, 75, 120);
+
+  const herbivoreBandCenters = plantPatchCenters.map((center) => {
+    const angle = randomFloatInRange(random, 0, Math.PI * 2);
+    const radius = randomFloatInRange(random, 55, 95);
     return {
-      id: createDeterministicUuid(random),
-      type,
-      name: identity.name,
-      species: identity.species,
-      positionX: randomFloatInRange(random, 0, GARDEN_WIDTH),
-      positionY: randomFloatInRange(random, 0, GARDEN_HEIGHT),
-      energy: sampleTraitValue(random, traitSamplingPlan, 'energy', index, 50, 70),
-      traits: {
-        reproductionRate: sampleTraitValue(random, traitSamplingPlan, 'reproductionRate', index, 0.02, 0.04),
-        movementSpeed: sampleTraitValue(random, traitSamplingPlan, 'movementSpeed', index, 1.5, 2.9),
-        metabolismEfficiency: sampleTraitValue(random, traitSamplingPlan, 'metabolismEfficiency', index, 0.82, 1.25),
-        perceptionRadius: sampleTraitValue(random, traitSamplingPlan, 'perceptionRadius', index, 80, 140),
-        threatDetectionRadius: sampleTraitValue(random, traitSamplingPlan, 'threatDetectionRadius', index, 95, 170)
-      },
-      timestamp
+      x: clamp(center.x + Math.cos(angle) * radius, 24, GARDEN_WIDTH - 24),
+      y: clamp(center.y + Math.sin(angle) * radius, 24, GARDEN_HEIGHT - 24)
     };
+  });
+
+  const carnivoreBandCenters = herbivoreBandCenters.map((center) => {
+    const angle = randomFloatInRange(random, 0, Math.PI * 2);
+    const radius = randomFloatInRange(random, 85, 145);
+    return {
+      x: clamp(center.x + Math.cos(angle) * radius, 24, GARDEN_WIDTH - 24),
+      y: clamp(center.y + Math.sin(angle) * radius, 24, GARDEN_HEIGHT - 24)
+    };
+  });
+
+  const fungusCorridorCenters = herbivoreBandCenters.map((center, index) => {
+    const pairedCarnivoreCenter = carnivoreBandCenters[index % carnivoreBandCenters.length];
+    const midpointX = (center.x + pairedCarnivoreCenter.x) * 0.5;
+    const midpointY = (center.y + pairedCarnivoreCenter.y) * 0.5;
+    const offsetAngle = randomFloatInRange(random, 0, Math.PI * 2);
+    const offsetRadius = randomFloatInRange(random, 10, 36);
+
+    return {
+      x: clamp(midpointX + Math.cos(offsetAngle) * offsetRadius, 24, GARDEN_WIDTH - 24),
+      y: clamp(midpointY + Math.sin(offsetAngle) * offsetRadius, 24, GARDEN_HEIGHT - 24)
+    };
+  });
+
+  return {
+    plant: plantPatchCenters,
+    herbivore: herbivoreBandCenters,
+    carnivore: carnivoreBandCenters,
+    fungus: fungusCorridorCenters
+  };
+}
+
+function isPositionTooCloseToSameType(placedEntities, type, position, minDistance) {
+  return placedEntities.some((entity) => {
+    if (entity.type !== type) {
+      return false;
+    }
+
+    const dx = entity.positionX - position.x;
+    const dy = entity.positionY - position.y;
+    return Math.hypot(dx, dy) < minDistance;
+  });
+}
+
+function selectPlacementCenter(placementMap, type, index) {
+  const centers = placementMap[type];
+  return centers[index % centers.length];
+}
+
+function samplePositionAroundCenter(random, center, baseRadius) {
+  const angle = randomFloatInRange(random, 0, Math.PI * 2);
+  const radius = randomFloatInRange(random, 0, baseRadius);
+
+  return {
+    x: clamp(center.x + Math.cos(angle) * radius, 0, GARDEN_WIDTH),
+    y: clamp(center.y + Math.sin(angle) * radius, 0, GARDEN_HEIGHT)
+  };
+}
+
+function createNaturalPosition(type, index, random, placementMap, placedEntities) {
+  const center = selectPlacementCenter(placementMap, type, index);
+
+  const radiusByType = {
+    plant: 58,
+    herbivore: 62,
+    carnivore: 72,
+    fungus: 44
+  };
+
+  const minSpacing = MIN_SPACING_BY_TYPE[type];
+  const baseRadius = radiusByType[type];
+
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    const candidate = samplePositionAroundCenter(random, center, baseRadius);
+
+    if (!isPositionTooCloseToSameType(placedEntities, type, candidate, minSpacing)) {
+      return candidate;
+    }
   }
 
   return {
+    x: clamp(center.x + randomFloatInRange(random, -10, 10), 0, GARDEN_WIDTH),
+    y: clamp(center.y + randomFloatInRange(random, -10, 10), 0, GARDEN_HEIGHT)
+  };
+}
+
+function createEntityTraits(type, index, random, traitSamplingPlan) {
+  const ranges = TRAIT_RANGES[type];
+
+  const sampledTraits = {};
+  for (const traitKey of Object.keys(ranges)) {
+    const [min, max] = ranges[traitKey];
+    sampledTraits[traitKey] = sampleTraitValue(random, traitSamplingPlan, traitKey, index, min, max);
+  }
+
+  return sampledTraits;
+}
+
+function applyTraitDiversityShaping(type, index, totalCount, traits) {
+  if (type === 'plant') {
+    const antiCorrelationShift = ((index % 2 === 0) ? -1 : 1) * 0.018;
+    traits.reproductionRate = clamp(traits.reproductionRate + antiCorrelationShift, TRAIT_RANGES.plant.reproductionRate[0], TRAIT_RANGES.plant.reproductionRate[1]);
+    traits.photosynthesisRate = clamp(traits.photosynthesisRate - antiCorrelationShift * 1.7, TRAIT_RANGES.plant.photosynthesisRate[0], TRAIT_RANGES.plant.photosynthesisRate[1]);
+  }
+
+  if (type === 'herbivore') {
+    const gradient = totalCount <= 1 ? 0 : (index / (totalCount - 1));
+    traits.movementSpeed = clamp(traits.movementSpeed + ((gradient - 0.5) * 0.26), TRAIT_RANGES.herbivore.movementSpeed[0], TRAIT_RANGES.herbivore.movementSpeed[1]);
+    traits.metabolismEfficiency = clamp(traits.metabolismEfficiency - ((gradient - 0.5) * 0.14), TRAIT_RANGES.herbivore.metabolismEfficiency[0], TRAIT_RANGES.herbivore.metabolismEfficiency[1]);
+  }
+
+  if (type === 'carnivore') {
+    const antiCorrelationShift = ((index % 2 === 0) ? -1 : 1) * 0.09;
+    traits.movementSpeed = clamp(traits.movementSpeed + antiCorrelationShift, TRAIT_RANGES.carnivore.movementSpeed[0], TRAIT_RANGES.carnivore.movementSpeed[1]);
+    traits.perceptionRadius = clamp(traits.perceptionRadius - (antiCorrelationShift * 14), TRAIT_RANGES.carnivore.perceptionRadius[0], TRAIT_RANGES.carnivore.perceptionRadius[1]);
+  }
+
+  if (type === 'fungus') {
+    const antiCorrelationShift = ((index % 2 === 0) ? -1 : 1) * 0.07;
+    traits.decompositionRate = clamp(traits.decompositionRate + antiCorrelationShift, TRAIT_RANGES.fungus.decompositionRate[0], TRAIT_RANGES.fungus.decompositionRate[1]);
+    traits.metabolismEfficiency = clamp(traits.metabolismEfficiency - (antiCorrelationShift * 0.35), TRAIT_RANGES.fungus.metabolismEfficiency[0], TRAIT_RANGES.fungus.metabolismEfficiency[1]);
+  }
+
+  return traits;
+}
+
+function createEntity(type, index, random, timestamp, usedNames, traitSamplingPlan, nameSamplingPlan, placementMap, placedEntities) {
+  const identity = createEntityIdentity(type, index, usedNames, nameSamplingPlan);
+  const position = createNaturalPosition(type, index, random, placementMap, placedEntities);
+  const traits = createEntityTraits(type, index, random, traitSamplingPlan);
+
+  applyTraitDiversityShaping(type, index, nameSamplingPlan.keywords.length, traits);
+
+  const baseEntity = {
     id: createDeterministicUuid(random),
     type,
     name: identity.name,
     species: identity.species,
-    positionX: randomFloatInRange(random, 0, GARDEN_WIDTH),
-    positionY: randomFloatInRange(random, 0, GARDEN_HEIGHT),
-    energy: sampleTraitValue(random, traitSamplingPlan, 'energy', index, 46, 66),
-    traits: {
-      reproductionRate: sampleTraitValue(random, traitSamplingPlan, 'reproductionRate', index, 0.012, 0.03),
-      movementSpeed: sampleTraitValue(random, traitSamplingPlan, 'movementSpeed', index, 2.8, 4.2),
-      metabolismEfficiency: sampleTraitValue(random, traitSamplingPlan, 'metabolismEfficiency', index, 0.85, 1.25),
-      perceptionRadius: sampleTraitValue(random, traitSamplingPlan, 'perceptionRadius', index, 130, 190)
-    },
+    positionX: position.x,
+    positionY: position.y,
+    energy: traits.energy,
+    traits,
     timestamp
   };
+
+  delete baseEntity.traits.energy;
+
+  return baseEntity;
 }
 
-function generateEntities(seed, totalEntities) {
+function buildTypeEntities(type, count, random, seedTimestamp, usedNamesByType, placementMap, placedEntities) {
+  const traitPlan = createTraitSamplingPlan(random, count, TRAIT_SAMPLING_KEYS[type]);
+  const namePlan = createNameSamplingPlan(random, type, count);
+  const entities = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const entity = createEntity(type, index, random, seedTimestamp, usedNamesByType[type], traitPlan, namePlan, placementMap, placedEntities);
+    entities.push(entity);
+    placedEntities.push(entity);
+  }
+
+  return entities;
+}
+
+function generateEntities(seed) {
   const random = createSeededRandom(seed);
   const seedTimestamp = new Date().toISOString();
-  const counts = generatePopulationCounts(random, totalEntities);
+  const counts = determineCandidatePopulationCounts(seed);
+
   const usedNamesByType = {
     plant: new Set(),
     herbivore: new Set(),
-    carnivore: new Set()
-  };
-  const traitPlansByType = {
-    plant: createTraitSamplingPlan(random, counts.plantCount, TRAIT_SAMPLING_KEYS.plant),
-    herbivore: createTraitSamplingPlan(random, counts.herbivoreCount, TRAIT_SAMPLING_KEYS.herbivore),
-    carnivore: createTraitSamplingPlan(random, counts.carnivoreCount, TRAIT_SAMPLING_KEYS.carnivore)
-  };
-  const namePlansByType = {
-    plant: createNameSamplingPlan(random, 'plant', counts.plantCount),
-    herbivore: createNameSamplingPlan(random, 'herbivore', counts.herbivoreCount),
-    carnivore: createNameSamplingPlan(random, 'carnivore', counts.carnivoreCount)
+    carnivore: new Set(),
+    fungus: new Set()
   };
 
-  const plants = Array.from({ length: counts.plantCount }, (_, index) =>
-    createEntity('plant', index, random, seedTimestamp, usedNamesByType.plant, traitPlansByType.plant, namePlansByType.plant)
-  );
-  const herbivores = Array.from({ length: counts.herbivoreCount }, (_, index) =>
-    createEntity('herbivore', index, random, seedTimestamp, usedNamesByType.herbivore, traitPlansByType.herbivore, namePlansByType.herbivore)
-  );
-  const carnivores = Array.from({ length: counts.carnivoreCount }, (_, index) =>
-    createEntity('carnivore', index, random, seedTimestamp, usedNamesByType.carnivore, traitPlansByType.carnivore, namePlansByType.carnivore)
-  );
+  const placementMap = createNaturalPlacementMap(random, counts);
+  const placedEntities = [];
+
+  const plants = buildTypeEntities('plant', counts.plantCount, random, seedTimestamp, usedNamesByType, placementMap, placedEntities);
+  const herbivores = buildTypeEntities('herbivore', counts.herbivoreCount, random, seedTimestamp, usedNamesByType, placementMap, placedEntities);
+  const carnivores = buildTypeEntities('carnivore', counts.carnivoreCount, random, seedTimestamp, usedNamesByType, placementMap, placedEntities);
+  const fungi = buildTypeEntities('fungus', counts.fungusCount, random, seedTimestamp, usedNamesByType, placementMap, placedEntities);
 
   return {
-    entities: [...plants, ...herbivores, ...carnivores],
+    entities: [...plants, ...herbivores, ...carnivores, ...fungi],
     counts,
-    seedTimestamp
+    seedTimestamp,
+    sustainabilityContract: {
+      tickWindow: SUSTAINABILITY_TICK_WINDOW,
+      minimums: { ...SUSTAINABILITY_MINIMUMS }
+    }
+  };
+}
+
+function calculateMinimumSameTypeDistance(entities, type) {
+  const sameType = entities.filter((entity) => entity.type === type);
+  if (sameType.length <= 1) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  let minimumDistance = Number.POSITIVE_INFINITY;
+
+  for (let leftIndex = 0; leftIndex < sameType.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < sameType.length; rightIndex += 1) {
+      const left = sameType[leftIndex];
+      const right = sameType[rightIndex];
+      const distance = Math.hypot(left.positionX - right.positionX, left.positionY - right.positionY);
+      minimumDistance = Math.min(minimumDistance, distance);
+    }
+  }
+
+  return minimumDistance;
+}
+
+function getDiversitySummary(entities) {
+  const names = entities.map((entity) => entity.name);
+  const uniqueNameCount = new Set(names).size;
+
+  const speciesByType = {
+    plant: new Set(),
+    herbivore: new Set(),
+    carnivore: new Set(),
+    fungus: new Set()
+  };
+
+  for (const entity of entities) {
+    speciesByType[entity.type].add(entity.species);
+  }
+
+  return {
+    totalNames: names.length,
+    uniqueNameCount,
+    uniqueSpeciesCounts: {
+      plant: speciesByType.plant.size,
+      herbivore: speciesByType.herbivore.size,
+      carnivore: speciesByType.carnivore.size,
+      fungus: speciesByType.fungus.size
+    }
+  };
+}
+
+function createSustainabilitySummary(seedData) {
+  return {
+    tickWindow: SUSTAINABILITY_TICK_WINDOW,
+    minimums: { ...SUSTAINABILITY_MINIMUMS },
+    seeded: {
+      plants: seedData.counts.plantCount,
+      herbivores: seedData.counts.herbivoreCount,
+      carnivores: seedData.counts.carnivoreCount,
+      fungi: seedData.counts.fungusCount,
+      totalLiving: seedData.entities.length
+    }
   };
 }
 
@@ -574,6 +882,13 @@ function executeSqlCommandJson(command, description, commandOptions) {
   return firstRow || null;
 }
 
+function executeSqlRowsJson(command, description, commandOptions) {
+  const output = runWranglerExecute([`--command=${command}`, '--json'], description, commandOptions);
+  const parsedOutput = JSON.parse(output);
+  const [firstResult] = Array.isArray(parsedOutput) ? parsedOutput : [];
+  return firstResult?.results || [];
+}
+
 function assertVerification(checkName, isValid, details) {
   if (!isValid) {
     throw new Error(`Verification failed: ${checkName}. ${details}`);
@@ -626,6 +941,7 @@ INSERT INTO entities (
 function createSeedSql(seedData, seed) {
   const { entities, counts, seedTimestamp } = seedData;
   const totalLiving = entities.length;
+  const sustainabilitySummary = createSustainabilitySummary(seedData);
 
   const insertStatements = entities.map(createEntityInsertSql).join('\n');
 
@@ -639,7 +955,7 @@ SET
   plants = ${counts.plantCount},
   herbivores = ${counts.herbivoreCount},
   carnivores = ${counts.carnivoreCount},
-  fungi = 0,
+  fungi = ${counts.fungusCount},
   dead_plants = 0,
   dead_herbivores = 0,
   dead_carnivores = 0,
@@ -659,10 +975,10 @@ INSERT INTO simulation_events (
   garden_state_id, tick, timestamp, event_type, description,
   entities_affected, tags, severity, metadata
 ) VALUES
-  ((SELECT id FROM garden_state WHERE tick = 0 LIMIT 1), 0, '${seedTimestamp}', 'BIRTH', 'Production garden initialized with fair-ratio seeded entities', '[]', '["genesis","production"]', 'LOW', '{"source":"production-init","seed":${seed}}'),
+  ((SELECT id FROM garden_state WHERE tick = 0 LIMIT 1), 0, '${seedTimestamp}', 'BIRTH', 'Production garden initialized with minimal sustainable habitat-zoned entities', '[]', '["genesis","production","sustainable-seed"]', 'LOW', '{"source":"production-init-v2","seed":${seed},"sustainability":${escapeSqlString(JSON.stringify(sustainabilitySummary))}}'),
   ((SELECT id FROM garden_state WHERE tick = 0 LIMIT 1), 0, '${seedTimestamp}', 'BIRTH', '${counts.plantCount} plants seeded for production start', '[]', '["plant","birth"]', 'LOW', '{"count":${counts.plantCount},"type":"plants"}'),
   ((SELECT id FROM garden_state WHERE tick = 0 LIMIT 1), 0, '${seedTimestamp}', 'BIRTH', '${counts.herbivoreCount} herbivores seeded for production start', '[]', '["herbivore","birth"]', 'LOW', '{"count":${counts.herbivoreCount},"type":"herbivores"}'),
-  ((SELECT id FROM garden_state WHERE tick = 0 LIMIT 1), 0, '${seedTimestamp}', 'BIRTH', '${counts.carnivoreCount} carnivores seeded for production start', '[]', '["carnivore","birth"]', 'LOW', '{"count":${counts.carnivoreCount},"type":"carnivores"}');
+  ((SELECT id FROM garden_state WHERE tick = 0 LIMIT 1), 0, '${seedTimestamp}', 'BIRTH', '${counts.carnivoreCount} carnivores and ${counts.fungusCount} fungi seeded for production start', '[]', '["carnivore","fungus","birth"]', 'LOW', '{"carnivoreCount":${counts.carnivoreCount},"fungusCount":${counts.fungusCount},"type":"predators-and-decomposers"}');
 `;
 }
 
@@ -677,36 +993,82 @@ function runVerification(commandOptions) {
 
   assertVerification('tick zero row exists', population !== null, 'Expected a tick 0 row in garden_state.');
 
-  const totalLiving = population.total_living;
-  const plants = population.plants;
-  const herbivores = population.herbivores;
-  const carnivores = population.carnivores;
-  const fungi = population.fungi;
+  const totalLiving = Number(population.total_living || 0);
+  const plants = Number(population.plants || 0);
+  const herbivores = Number(population.herbivores || 0);
+  const carnivores = Number(population.carnivores || 0);
+  const fungi = Number(population.fungi || 0);
 
-  assertVerification('minimum plant count', plants >= 6, `Expected plants >= 6, got ${plants}.`);
-  assertVerification('minimum herbivore count', herbivores >= 3, `Expected herbivores >= 3, got ${herbivores}.`);
-  assertVerification('minimum carnivore count', carnivores >= 1, `Expected carnivores >= 1, got ${carnivores}.`);
-  assertVerification('fungi count', fungi === 0, `Expected fungi = 0, got ${fungi}.`);
+  assertVerification('minimum plant count', plants >= CANDIDATE_COUNT_BOUNDS.minPlants, `Expected plants >= ${CANDIDATE_COUNT_BOUNDS.minPlants}, got ${plants}.`);
+  assertVerification('minimum herbivore count', herbivores >= CANDIDATE_COUNT_BOUNDS.minHerbivores, `Expected herbivores >= ${CANDIDATE_COUNT_BOUNDS.minHerbivores}, got ${herbivores}.`);
+  assertVerification('minimum carnivore count', carnivores >= CANDIDATE_COUNT_BOUNDS.minCarnivores, `Expected carnivores >= ${CANDIDATE_COUNT_BOUNDS.minCarnivores}, got ${carnivores}.`);
+  assertVerification('fungi range', fungi >= 1 && fungi <= 2, `Expected fungi in [1,2], got ${fungi}.`);
 
-  const ratioLooksFair = plants > herbivores && herbivores > carnivores;
-  assertVerification(
-    'fair ratio ordering',
-    ratioLooksFair,
-    `Expected plants > herbivores > carnivores, got ${plants}/${herbivores}/${carnivores}.`
-  );
-
-  const entityCounts = executeSqlCommandJson(
-    "SELECT COUNT(*) AS total, SUM(CASE WHEN type='plant' AND is_alive=1 THEN 1 ELSE 0 END) AS plants, SUM(CASE WHEN type='herbivore' AND is_alive=1 THEN 1 ELSE 0 END) AS herbivores, SUM(CASE WHEN type='carnivore' AND is_alive=1 THEN 1 ELSE 0 END) AS carnivores FROM entities",
-    'Verifying entity table counts',
+  const entityRows = executeSqlRowsJson(
+    `SELECT type, name, species, position_x, position_y, traits
+     FROM entities
+     WHERE is_alive = 1
+     ORDER BY type, name, id`,
+    'Verifying entity diversity and spacing',
     commandOptions
   );
 
-  assertVerification('entity total matches garden_state', entityCounts.total === totalLiving, `Expected ${totalLiving}, got ${entityCounts.total}.`);
-  assertVerification('plant table count matches', entityCounts.plants === plants, `Expected ${plants}, got ${entityCounts.plants}.`);
-  assertVerification('herbivore table count matches', entityCounts.herbivores === herbivores, `Expected ${herbivores}, got ${entityCounts.herbivores}.`);
-  assertVerification('carnivore table count matches', entityCounts.carnivores === carnivores, `Expected ${carnivores}, got ${entityCounts.carnivores}.`);
+  assertVerification(
+    'entity total matches garden_state',
+    entityRows.length === totalLiving,
+    `Expected ${totalLiving}, got ${entityRows.length}.`
+  );
 
-  console.log(`✅ Verification passed (plants/herbivores/carnivores: ${plants}/${herbivores}/${carnivores})`);
+  const typeCounts = {
+    plant: 0,
+    herbivore: 0,
+    carnivore: 0,
+    fungus: 0
+  };
+
+  const normalizedEntities = entityRows.map((row) => {
+    const type = row.type;
+    if (Object.prototype.hasOwnProperty.call(typeCounts, type)) {
+      typeCounts[type] += 1;
+    }
+
+    return {
+      type,
+      name: row.name,
+      species: row.species,
+      positionX: Number(row.position_x),
+      positionY: Number(row.position_y),
+      traits: JSON.parse(row.traits)
+    };
+  });
+
+  assertVerification('plant count consistency', typeCounts.plant === plants, `Expected ${plants}, got ${typeCounts.plant}.`);
+  assertVerification('herbivore count consistency', typeCounts.herbivore === herbivores, `Expected ${herbivores}, got ${typeCounts.herbivore}.`);
+  assertVerification('carnivore count consistency', typeCounts.carnivore === carnivores, `Expected ${carnivores}, got ${typeCounts.carnivore}.`);
+  assertVerification('fungus count consistency', typeCounts.fungus === fungi, `Expected ${fungi}, got ${typeCounts.fungus}.`);
+
+  const diversitySummary = getDiversitySummary(normalizedEntities);
+  assertVerification('global unique names', diversitySummary.uniqueNameCount === diversitySummary.totalNames, `Expected ${diversitySummary.totalNames} unique names, got ${diversitySummary.uniqueNameCount}.`);
+
+  for (const type of TYPE_ORDER) {
+    const minimumSpecies = DIVERSITY_MINIMUMS[type].minUniqueSpecies;
+    assertVerification(
+      `${type} unique species minimum`,
+      diversitySummary.uniqueSpeciesCounts[type] >= Math.min(minimumSpecies, typeCounts[type]),
+      `Expected at least ${Math.min(minimumSpecies, typeCounts[type])}, got ${diversitySummary.uniqueSpeciesCounts[type]}.`
+    );
+
+    const minimumDistance = calculateMinimumSameTypeDistance(normalizedEntities, type);
+    if (Number.isFinite(minimumDistance)) {
+      assertVerification(
+        `${type} spacing floor`,
+        minimumDistance >= Math.max(8, MIN_SPACING_BY_TYPE[type] * 0.45),
+        `Expected minimum distance >= ${Math.max(8, MIN_SPACING_BY_TYPE[type] * 0.45).toFixed(2)}, got ${minimumDistance.toFixed(2)}.`
+      );
+    }
+  }
+
+  console.log(`✅ Verification passed (sustainability horizon: ${SUSTAINABILITY_TICK_WINDOW} ticks; plants/herbivores/carnivores/fungi: ${plants}/${herbivores}/${carnivores}/${fungi})`);
 }
 
 function initializeProductionDatabase(options) {
@@ -717,20 +1079,19 @@ function initializeProductionDatabase(options) {
 
   console.log('🌿 Chaos Garden Production Database Initialization');
   console.log('===================================================');
-  console.log(`Mode: ${options.verifyOnly ? 'verify-only' : 'full reset + seeded fair-ratio population'}`);
+  console.log(`Mode: ${options.verifyOnly ? 'verify-only' : 'full reset + minimal-sustainable habitat-zoned population'}`);
   console.log(`Database: ${commandOptions.databaseName}`);
   console.log(`Wrangler config: ${commandOptions.wranglerConfig}`);
   console.log(`Seed: ${options.seed}`);
-  console.log(`Target population size: ${options.totalEntities}`);
 
   if (options.verifyOnly) {
     runVerification(commandOptions);
     return;
   }
 
-  const seedData = generateEntities(options.seed, options.totalEntities);
+  const seedData = generateEntities(options.seed);
   console.log(
-    `Generated counts => plants: ${seedData.counts.plantCount}, herbivores: ${seedData.counts.herbivoreCount}, carnivores: ${seedData.counts.carnivoreCount}`
+    `Generated counts => plants: ${seedData.counts.plantCount}, herbivores: ${seedData.counts.herbivoreCount}, carnivores: ${seedData.counts.carnivoreCount}, fungi: ${seedData.counts.fungusCount}`
   );
 
   executeSqlPhase(createCleanupSql(), 'Dropping existing schema artifacts', commandOptions);
@@ -756,8 +1117,13 @@ module.exports = {
   parseCliArgs,
   parseSqlStatements,
   isRemoteImportAuthenticationError,
-  generatePopulationCounts,
+  determineCandidatePopulationCounts,
   generateEntities,
+  calculateMinimumSameTypeDistance,
+  getDiversitySummary,
   createSeedSql,
-  initializeProductionDatabase
+  initializeProductionDatabase,
+  SUSTAINABILITY_TICK_WINDOW,
+  SUSTAINABILITY_MINIMUMS,
+  MIN_SPACING_BY_TYPE
 };

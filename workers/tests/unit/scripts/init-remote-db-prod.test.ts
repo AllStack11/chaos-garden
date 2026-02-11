@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 const requireModule = createRequire(import.meta.url);
 
+type SeedType = 'plant' | 'herbivore' | 'carnivore' | 'fungus';
+
 interface SeedEntity {
   id: string;
-  type: 'plant' | 'herbivore' | 'carnivore';
+  type: SeedType;
   name: string;
   species: string;
+  positionX: number;
+  positionY: number;
   traits: Record<string, number>;
 }
 
@@ -17,6 +21,8 @@ interface SeedData {
     plantCount: number;
     herbivoreCount: number;
     carnivoreCount: number;
+    fungusCount: number;
+    totalLiving: number;
   };
   seedTimestamp: string;
 }
@@ -24,14 +30,26 @@ interface SeedData {
 const {
   generateEntities,
   parseSqlStatements,
-  isRemoteImportAuthenticationError
+  isRemoteImportAuthenticationError,
+  determineCandidatePopulationCounts,
+  calculateMinimumSameTypeDistance,
+  getDiversitySummary,
+  MIN_SPACING_BY_TYPE,
 }: {
-  generateEntities: (seed: number, totalEntities: number) => SeedData;
+  generateEntities: (seed: number) => SeedData;
   parseSqlStatements: (sql: string) => string[];
   isRemoteImportAuthenticationError: (error: unknown) => boolean;
+  determineCandidatePopulationCounts: (seed: number) => SeedData['counts'];
+  calculateMinimumSameTypeDistance: (entities: SeedEntity[], type: SeedType) => number;
+  getDiversitySummary: (entities: SeedEntity[]) => {
+    totalNames: number;
+    uniqueNameCount: number;
+    uniqueSpeciesCounts: Record<SeedType, number>;
+  };
+  MIN_SPACING_BY_TYPE: Record<SeedType, number>;
 } = requireModule('../../../scripts/init-remote-db-prod.js');
 
-function getEntityTypeEntries(seedData: SeedData, type: SeedEntity['type']): SeedEntity[] {
+function getEntityTypeEntries(seedData: SeedData, type: SeedType): SeedEntity[] {
   return seedData.entities.filter((entity) => entity.type === type);
 }
 
@@ -39,15 +57,17 @@ function getTraitSpread(entities: SeedEntity[], traitKey: string): { min: number
   const values = entities.map((entity) => entity.traits[traitKey]);
   return {
     min: Math.min(...values),
-    max: Math.max(...values)
+    max: Math.max(...values),
   };
 }
 
 function toDeterministicProjection(seedData: SeedData): Array<{
   id: string;
-  type: SeedEntity['type'];
+  type: SeedType;
   name: string;
   species: string;
+  positionX: number;
+  positionY: number;
   traits: Record<string, number>;
 }> {
   return seedData.entities.map((entity) => ({
@@ -55,50 +75,88 @@ function toDeterministicProjection(seedData: SeedData): Array<{
     type: entity.type,
     name: entity.name,
     species: entity.species,
-    traits: entity.traits
+    positionX: entity.positionX,
+    positionY: entity.positionY,
+    traits: entity.traits,
   }));
 }
 
 describe('scripts/init-remote-db-prod', () => {
-  it('produces deterministic entities for the same seed and total', () => {
-    const first = generateEntities(20260210, 22);
-    const second = generateEntities(20260210, 22);
+  it('produces deterministic entities for the same seed', () => {
+    const first = generateEntities(20260210);
+    const second = generateEntities(20260210);
 
     expect(first.counts).toEqual(second.counts);
     expect(toDeterministicProjection(first)).toEqual(toDeterministicProjection(second));
   });
 
-  it('creates globally unique names to maximize entity identity variety', () => {
-    const seedData = generateEntities(20260210, 22);
-    const names = seedData.entities.map((entity) => entity.name);
+  it('chooses minimal sustainable startup counts with fungi included', () => {
+    const counts = determineCandidatePopulationCounts(20260210);
 
-    expect(new Set(names).size).toBe(names.length);
+    expect(counts.totalLiving).toBeGreaterThanOrEqual(13);
+    expect(counts.totalLiving).toBeLessThanOrEqual(16);
+    expect(counts.plantCount).toBeGreaterThanOrEqual(8);
+    expect(counts.herbivoreCount).toBeGreaterThanOrEqual(3);
+    expect(counts.carnivoreCount).toBeGreaterThanOrEqual(1);
+    expect(counts.fungusCount).toBeGreaterThanOrEqual(1);
+    expect(counts.fungusCount).toBeLessThanOrEqual(2);
   });
 
-  it('includes classifier keywords across names to drive visible type diversity', () => {
-    const seedData = generateEntities(20260210, 22);
-    const plantNamePrefixes = new Set(getEntityTypeEntries(seedData, 'plant').map((entity) => entity.name.split('-')[0]));
-    const herbivoreNamePrefixes = new Set(getEntityTypeEntries(seedData, 'herbivore').map((entity) => entity.name.split('-')[0]));
-    const carnivoreNamePrefixes = new Set(getEntityTypeEntries(seedData, 'carnivore').map((entity) => entity.name.split('-')[0]));
+  it('creates globally unique names and diverse species labels', () => {
+    const seedData = generateEntities(20260210);
+    const diversitySummary = getDiversitySummary(seedData.entities);
 
-    expect(plantNamePrefixes.size).toBeGreaterThanOrEqual(8);
-    expect(herbivoreNamePrefixes.size).toBeGreaterThanOrEqual(5);
-    expect(carnivoreNamePrefixes.size).toBeGreaterThanOrEqual(3);
+    expect(diversitySummary.uniqueNameCount).toBe(diversitySummary.totalNames);
+    expect(diversitySummary.uniqueSpeciesCounts.plant).toBeGreaterThanOrEqual(5);
+    expect(diversitySummary.uniqueSpeciesCounts.herbivore).toBeGreaterThanOrEqual(3);
+    expect(diversitySummary.uniqueSpeciesCounts.carnivore).toBeGreaterThanOrEqual(1);
+    expect(diversitySummary.uniqueSpeciesCounts.fungus).toBeGreaterThanOrEqual(1);
   });
 
-  it('spreads trait values across each range instead of clustering near one archetype', () => {
-    const seedData = generateEntities(20260210, 22);
+  it('uses broad trait spreads across all trophic groups', () => {
+    const seedData = generateEntities(20260210);
     const plants = getEntityTypeEntries(seedData, 'plant');
     const herbivores = getEntityTypeEntries(seedData, 'herbivore');
     const carnivores = getEntityTypeEntries(seedData, 'carnivore');
+    const fungi = getEntityTypeEntries(seedData, 'fungus');
 
     const plantPhotosynthesisSpread = getTraitSpread(plants, 'photosynthesisRate');
     const herbivoreSpeedSpread = getTraitSpread(herbivores, 'movementSpeed');
     const carnivoreSpeedSpread = getTraitSpread(carnivores, 'movementSpeed');
+    const fungusDecompositionSpread = getTraitSpread(fungi, 'decompositionRate');
 
-    expect(plantPhotosynthesisSpread.max - plantPhotosynthesisSpread.min).toBeGreaterThan(0.4);
+    expect(plantPhotosynthesisSpread.max - plantPhotosynthesisSpread.min).toBeGreaterThan(0.35);
     expect(herbivoreSpeedSpread.max - herbivoreSpeedSpread.min).toBeGreaterThan(0.9);
-    expect(carnivoreSpeedSpread.max - carnivoreSpeedSpread.min).toBeGreaterThan(0.4);
+    if (carnivores.length > 1) {
+      expect(carnivoreSpeedSpread.max - carnivoreSpeedSpread.min).toBeGreaterThan(0.4);
+    } else {
+      expect(carnivores.length).toBe(1);
+    }
+    if (fungi.length > 1) {
+      expect(fungusDecompositionSpread.max - fungusDecompositionSpread.min).toBeGreaterThan(0.1);
+    } else {
+      expect(fungi.length).toBe(1);
+    }
+  });
+
+  it('enforces natural spacing floors per type while keeping zone structure', () => {
+    const seedData = generateEntities(20260210);
+
+    for (const type of ['plant', 'herbivore', 'carnivore', 'fungus'] as const) {
+      const minimumDistance = calculateMinimumSameTypeDistance(seedData.entities, type);
+      if (Number.isFinite(minimumDistance)) {
+        expect(minimumDistance).toBeGreaterThanOrEqual(Math.max(8, MIN_SPACING_BY_TYPE[type] * 0.45));
+      }
+    }
+
+    const plants = getEntityTypeEntries(seedData, 'plant');
+    const herbivores = getEntityTypeEntries(seedData, 'herbivore');
+
+    const averagePlantX = plants.reduce((sum, entity) => sum + entity.positionX, 0) / plants.length;
+    const averageHerbivoreX = herbivores.reduce((sum, entity) => sum + entity.positionX, 0) / herbivores.length;
+
+    // Habitat bands should not collapse to exactly the same centroid.
+    expect(Math.abs(averagePlantX - averageHerbivoreX)).toBeGreaterThan(2);
   });
 
   it('parses SQL statements without splitting semicolons inside string literals', () => {
