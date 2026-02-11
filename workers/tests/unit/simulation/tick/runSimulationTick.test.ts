@@ -83,6 +83,7 @@ import { runSimulationTick } from '../../../../src/simulation/tick/tick';
 
 describe('simulation/tick/runSimulationTick', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
 
     const previousState: GardenState = {
@@ -196,9 +197,12 @@ describe('simulation/tick/runSimulationTick', () => {
   });
 
   it('logs ambient narrative once per successful tick', async () => {
+    const mathRandomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.25);
+
     await runSimulationTick({} as any, createFakeApplicationLogger(), false);
 
     expect(mockEventLoggerFactories.eventLogger.logAmbientNarrative).toHaveBeenCalledTimes(1);
+    mathRandomSpy.mockRestore();
   });
 
   it('binds persisted events to the newly created garden state', async () => {

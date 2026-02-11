@@ -9,6 +9,7 @@ import Layout from '../layouts/Layout.astro';
 import GardenCanvas from '../components/GardenCanvas.astro';
 import StatsPanel from '../components/StatsPanel.astro';
 import NarrativeTicker from '../components/NarrativeTicker.astro';
+import JournalOverlay from '../components/JournalOverlay.astro';
 import StatsOverlay from '../components/StatsOverlay.astro';
 
 // API URL — required at build time
@@ -31,13 +32,17 @@ if (!API_URL) {
       <!-- Top Subtle Info -->
       <div class="flex items-start justify-between gap-4">
         <div class="group pointer-events-auto">
-          <div class="flex flex-col opacity-50 transition-opacity hover:opacity-100 drop-shadow-sm">
+          <button
+            type="button"
+            data-journal-toggle
+            class="flex flex-col opacity-50 transition-opacity hover:opacity-100 drop-shadow-sm text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-garden-green-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded"
+          >
             <h1 class="text-sm sm:text-base md:text-lg font-light tracking-[0.25em] sm:tracking-widest text-white uppercase">Chaos Garden</h1>
             <div id="system-status-container" class="mt-1 flex items-center space-x-2 text-[10px]">
               <div id="system-status-dot" class="h-1.5 w-1.5 rounded-full bg-white/40"></div>
               <span id="system-status-subtitle" class="font-mono text-white/60 tracking-tighter uppercase">Initializing...</span>
             </div>
-          </div>
+          </button>
         </div>
 
         <div class="group pointer-events-auto">
@@ -125,6 +130,7 @@ if (!API_URL) {
 
     <!-- Narrative overlays remain visible even when UI overlay fades -->
     <NarrativeTicker />
+    <JournalOverlay />
     <StatsOverlay apiUrl={API_URL} />
 
     <!-- Loading State (Minimal Ambient) -->
@@ -162,6 +168,7 @@ if (!API_URL) {
       lastTickTime: Date | null;
       hasLoadedOnce: boolean;
       isStatsOverlayOpen: boolean;
+      isJournalOverlayOpen: boolean;
     } = {
       gardenState: null,
       entities: [],
@@ -172,6 +179,7 @@ if (!API_URL) {
       lastTickTime: null,
       hasLoadedOnce: false,
       isStatsOverlayOpen: false,
+      isJournalOverlayOpen: false,
     };
 
     constructor() {
@@ -218,6 +226,10 @@ if (!API_URL) {
       this.removeEventListener('entity-selected', this.handleEntitySelected as EventListener);
       this.removeEventListener('stats-overlay-open-requested', this.handleStatsOverlayOpen as EventListener);
       this.removeEventListener('stats-overlay-closed', this.handleStatsOverlayClosed as EventListener);
+      this.removeEventListener('journal-overlay-open-requested', this.handleJournalOverlayOpen as EventListener);
+      this.removeEventListener('journal-overlay-closed', this.handleJournalOverlayClosed as EventListener);
+      const journalToggle = this.querySelector('[data-journal-toggle]');
+      journalToggle?.removeEventListener('click', this.handleJournalToggle);
       window.removeEventListener('mousemove', this.resetUIOverlayOpacity);
       window.removeEventListener('click', this.resetUIOverlayOpacity);
       window.removeEventListener('pointerdown', this.resetUIOverlayOpacity);
@@ -232,6 +244,10 @@ if (!API_URL) {
       this.updateUI();
     };
 
+    private readonly handleJournalToggle = () => {
+      this.dispatchEvent(new CustomEvent('journal-overlay-open-requested', { bubbles: true, composed: true }));
+    };
+
     private readonly resetUIOverlayOpacity = () => {
       const overlay = this.querySelector('#ui-overlay');
       if (overlay) overlay.classList.remove('opacity-0');
@@ -240,7 +256,7 @@ if (!API_URL) {
         this.uiTimeout = null;
       }
 
-      if (this.state.isStatsOverlayOpen) {
+      if (this.state.isStatsOverlayOpen || this.state.isJournalOverlayOpen) {
         return;
       }
 
@@ -266,6 +282,10 @@ if (!API_URL) {
       this.addEventListener('entity-selected', this.handleEntitySelected as EventListener);
       this.addEventListener('stats-overlay-open-requested', this.handleStatsOverlayOpen as EventListener);
       this.addEventListener('stats-overlay-closed', this.handleStatsOverlayClosed as EventListener);
+      this.addEventListener('journal-overlay-open-requested', this.handleJournalOverlayOpen as EventListener);
+      this.addEventListener('journal-overlay-closed', this.handleJournalOverlayClosed as EventListener);
+      const journalToggle = this.querySelector('[data-journal-toggle]');
+      journalToggle?.addEventListener('click', this.handleJournalToggle);
       window.addEventListener('mousemove', this.resetUIOverlayOpacity);
       window.addEventListener('click', this.resetUIOverlayOpacity);
       window.addEventListener('pointerdown', this.resetUIOverlayOpacity);
@@ -289,6 +309,32 @@ if (!API_URL) {
 
     private readonly handleStatsOverlayClosed = () => {
       this.state.isStatsOverlayOpen = false;
+      const overlayLayer = this.querySelector('#ui-overlay');
+      if (overlayLayer) {
+        overlayLayer.classList.remove('opacity-0');
+      }
+      this.resetUIOverlayOpacity();
+    };
+
+    private readonly handleJournalOverlayOpen = () => {
+      const overlay = this.querySelector('journal-overlay') as HTMLElement & { openOverlay?: () => void; setEvents?: (events: SimulationEvent[]) => void };
+      if (overlay) {
+        if (typeof overlay.setEvents === 'function') {
+          overlay.setEvents(this.state.recentEvents);
+        }
+        if (typeof overlay.openOverlay === 'function') {
+          overlay.openOverlay();
+          this.state.isJournalOverlayOpen = true;
+          const overlayLayer = this.querySelector('#ui-overlay');
+          if (overlayLayer) {
+            overlayLayer.classList.add('opacity-0');
+          }
+        }
+      }
+    };
+
+    private readonly handleJournalOverlayClosed = () => {
+      this.state.isJournalOverlayOpen = false;
       const overlayLayer = this.querySelector('#ui-overlay');
       if (overlayLayer) {
         overlayLayer.classList.remove('opacity-0');
@@ -360,6 +406,12 @@ if (!API_URL) {
       const narrativeTicker = this.querySelector('narrative-ticker') as HTMLElement & { updateNarrativeEvents?: (events: SimulationEvent[]) => void };
       if (narrativeTicker && typeof narrativeTicker.updateNarrativeEvents === 'function') {
         narrativeTicker.updateNarrativeEvents(this.state.recentEvents);
+      }
+
+      // Update Journal Overlay feed
+      const journalOverlay = this.querySelector('journal-overlay') as HTMLElement & { setEvents?: (events: SimulationEvent[]) => void };
+      if (journalOverlay && typeof journalOverlay.setEvents === 'function') {
+        journalOverlay.setEvents(this.state.recentEvents);
       }
 
       // Update Loading

@@ -22,7 +22,8 @@ import {
 import type { ApplicationLogger } from '../../logging/application-logger';
 import {
   createTimestamp,
-  countEntitiesByType
+  countEntitiesByType,
+  willRandomEventOccur
 } from '../environment/helpers';
 import { applyEnvironmentalEffectsToCreature } from '../environment/creature-effects';
 import { updateEnvironmentForNextTick } from '../environment';
@@ -101,6 +102,7 @@ export async function runSimulationTick(
   const lockTtlMs = 120000;
   let lockOwnerId: string | null = null;
   let hasAcquiredLock = false;
+  const AMBIENT_EVENT_PROBABILITY = 0.5;
   
   try {
     await appLogger.info('tick_start', 'Beginning simulation tick');
@@ -273,8 +275,10 @@ export async function runSimulationTick(
       eventLogger
     );
 
-    // 8. Generate ambient narrative (guarantees at least one narrative event per tick)
-    await eventLogger.logAmbientNarrative(updatedEnvironment, newPopulations, allLivingEntitiesAfterTick);
+    // 8. Maybe generate ambient narrative (50% chance per tick)
+    if (willRandomEventOccur(AMBIENT_EVENT_PROBABILITY)) {
+      await eventLogger.logAmbientNarrative(updatedEnvironment, newPopulations, allLivingEntitiesAfterTick);
+    }
 
     // 9. Persist state/entity/event updates.
     const persistenceStart = Date.now();

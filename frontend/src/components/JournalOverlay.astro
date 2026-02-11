@@ -1,0 +1,589 @@
+---
+/**
+ * Garden Journal / Storybook overlay.
+ * Presents recent simulation events in multiple narrative views.
+ */
+
+import type { SimulationEvent } from '../env.d.ts';
+
+export interface Props {}
+
+---
+
+<journal-overlay data-overlay-state="closed" class="fixed inset-0 z-50 hidden pointer-events-none opacity-0 transition-opacity duration-300 ease-out">
+  <div data-overlay-backdrop class="absolute inset-0 bg-gradient-to-br from-black/70 via-slate-900/70 to-emerald-900/50 backdrop-blur-[3px] transition-opacity duration-300"></div>
+
+  <div data-panel-shell class="relative h-full overflow-y-auto opacity-0 translate-y-3 scale-[0.99] transition-all duration-300 ease-out">
+    <div class="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <header class="sticky top-0 z-10 mb-6 rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-xl shadow-xl">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="inline-flex items-center text-[11px] uppercase tracking-[0.24em] text-emerald-200/80">Garden Chronicle</p>
+            <h1 class="mt-1 text-2xl font-semibold text-white sm:text-3xl">Living Storybook</h1>
+            <p class="mt-1 text-sm text-white/70">Flip through the latest happenings as a timeline, vignette, or signal scan.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-1 text-[11px] uppercase tracking-[0.2em] text-white/60" data-event-count>-- events</div>
+            <div class="flex rounded-full bg-white/5 p-1 shadow-inner" data-view-switch>
+              <button type="button" data-view-button="timeline" class="view-pill">Timeline</button>
+              <button type="button" data-view-button="storybook" class="view-pill">Storybook</button>
+              <button type="button" data-view-button="signals" class="view-pill">Signals</button>
+            </div>
+            <button type="button" data-close-overlay class="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20">Close</button>
+          </div>
+        </div>
+      </header>
+
+      <div data-view-panel="timeline" class="space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <article class="story-card">
+            <h2 class="card-title">Latest Pulse</h2>
+            <div data-timeline-grid class="mt-3 space-y-3"></div>
+          </article>
+          <article class="story-card">
+            <h2 class="card-title">Tags + Themes</h2>
+            <div data-tag-cloud class="mt-3 flex flex-wrap gap-2 text-xs text-white/75"></div>
+            <div class="mt-4 border-t border-white/10 pt-3">
+              <h3 class="text-[11px] uppercase tracking-[0.2em] text-white/50">Quick Signals</h3>
+              <div data-quick-signals class="mt-2 space-y-2"></div>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div data-view-panel="storybook" class="space-y-4 hidden">
+        <article class="story-card">
+          <h2 class="card-title">Narrative Vignettes</h2>
+          <div data-story-vignettes class="mt-3 grid gap-3 sm:grid-cols-2"></div>
+        </article>
+        <article class="story-card">
+          <h2 class="card-title">Species Journals</h2>
+          <div data-species-journals class="mt-3 grid gap-3 sm:grid-cols-3"></div>
+        </article>
+      </div>
+
+      <div data-view-panel="signals" class="space-y-4 hidden">
+        <article class="story-card">
+          <h2 class="card-title">Critical + High Severity</h2>
+          <div data-critical-feed class="mt-3 space-y-2"></div>
+        </article>
+        <article class="story-card">
+          <h2 class="card-title">Tempo + Mood</h2>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="mini-meter" data-meter="balance"></div>
+            <div class="mini-meter" data-meter="tension"></div>
+          </div>
+          <div class="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/80" data-signal-summary></div>
+        </article>
+      </div>
+    </div>
+  </div>
+</journal-overlay>
+
+<style>
+  .story-card {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+    box-shadow: 0 18px 55px rgba(0, 0, 0, 0.3);
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.24em;
+    color: rgba(255, 255, 255, 0.64);
+  }
+
+  .view-pill {
+    padding: 0.5rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.78);
+    transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+  }
+
+  .view-pill[data-active="true"] {
+    background: linear-gradient(120deg, rgba(34, 197, 94, 0.28), rgba(74, 222, 128, 0.2));
+    color: #e8fff5;
+    border: 1px solid rgba(74, 222, 128, 0.35);
+    box-shadow: 0 6px 18px rgba(74, 222, 128, 0.2);
+  }
+
+  .mini-meter {
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: radial-gradient(circle at 18% 20%, rgba(74, 222, 128, 0.15), rgba(0, 0, 0, 0));
+    padding: 12px;
+    color: rgba(255, 255, 255, 0.82);
+    min-height: 96px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    journal-overlay,
+    .story-card,
+    .view-pill,
+    .mini-meter {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import type { SimulationEvent } from '../env.d.ts';
+
+  type JournalView = 'timeline' | 'storybook' | 'signals';
+
+  const MAX_RENDER_EVENTS = 120;
+  const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+  const TAG_FALLBACK = 'untagged';
+
+  class JournalOverlay extends HTMLElement {
+    private readonly closeTransitionMs = 280;
+    private closeTimer: number | null = null;
+    private isOpen = false;
+    private events: SimulationEvent[] = [];
+    private activeView: JournalView = 'timeline';
+
+    private readonly handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && this.isOpen) {
+        this.closeOverlay();
+      }
+    };
+
+    private readonly handleCloseRequested = () => {
+      this.closeOverlay();
+    };
+
+    private readonly handleViewButtonClick = (event: Event) => {
+      const button = event.currentTarget as HTMLElement | null;
+      const target = button?.getAttribute('data-view-button') as JournalView | null;
+      if (target) {
+        this.setActiveView(target);
+      }
+    };
+
+    connectedCallback() {
+      const backdrop = this.querySelector('[data-overlay-backdrop]');
+      backdrop?.addEventListener('click', this.handleCloseRequested);
+
+      const closeButton = this.querySelector('[data-close-overlay]');
+      closeButton?.addEventListener('click', this.handleCloseRequested);
+
+      const viewButtons = this.querySelectorAll('[data-view-button]');
+      viewButtons.forEach((button) => {
+        button.addEventListener('click', this.handleViewButtonClick);
+      });
+
+      window.addEventListener('keydown', this.handleEscape);
+      this.updateViewButtons();
+    }
+
+    disconnectedCallback() {
+      const backdrop = this.querySelector('[data-overlay-backdrop]');
+      backdrop?.removeEventListener('click', this.handleCloseRequested);
+
+      const closeButton = this.querySelector('[data-close-overlay]');
+      closeButton?.removeEventListener('click', this.handleCloseRequested);
+
+      const viewButtons = this.querySelectorAll('[data-view-button]');
+      viewButtons.forEach((button) => button.removeEventListener('click', this.handleViewButtonClick));
+
+      window.removeEventListener('keydown', this.handleEscape);
+
+      if (this.closeTimer) {
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+      }
+    }
+
+    public setEvents(events: SimulationEvent[]) {
+      if (!Array.isArray(events)) {
+        return;
+      }
+      const sorted = [...events].sort((a, b) => {
+        if (a.tick !== b.tick) return b.tick - a.tick;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+      this.events = sorted.slice(0, MAX_RENDER_EVENTS);
+      this.renderContent();
+    }
+
+    public openOverlay() {
+      if (this.closeTimer) {
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+      }
+
+      this.isOpen = true;
+      this.dataset.overlayState = 'opening';
+      this.classList.remove('hidden', 'pointer-events-none', 'opacity-0');
+      this.classList.add('pointer-events-auto', 'opacity-100');
+
+      const panelShell = this.querySelector('[data-panel-shell]') as HTMLElement | null;
+      requestAnimationFrame(() => {
+        panelShell?.classList.remove('opacity-0', 'translate-y-3', 'scale-[0.99]');
+      });
+
+      this.renderContent();
+
+      this.dataset.overlayState = 'open';
+      this.dispatchEvent(new CustomEvent('journal-overlay-opened', { bubbles: true, composed: true }));
+    }
+
+    public closeOverlay() {
+      if (!this.isOpen && !this.classList.contains('opacity-100')) {
+        return;
+      }
+
+      this.isOpen = false;
+      this.dataset.overlayState = 'closing';
+      this.classList.remove('opacity-100');
+      this.classList.add('opacity-0');
+
+      const panelShell = this.querySelector('[data-panel-shell]') as HTMLElement | null;
+      panelShell?.classList.add('opacity-0', 'translate-y-3', 'scale-[0.99]');
+
+      if (this.closeTimer) {
+        clearTimeout(this.closeTimer);
+      }
+
+      this.closeTimer = window.setTimeout(() => {
+        this.classList.add('hidden', 'pointer-events-none');
+        this.classList.remove('pointer-events-auto');
+        this.dataset.overlayState = 'closed';
+        this.dispatchEvent(new CustomEvent('journal-overlay-closed', { bubbles: true, composed: true }));
+        this.closeTimer = null;
+      }, this.closeTransitionMs);
+    }
+
+    private setActiveView(view: JournalView) {
+      if (this.activeView === view) return;
+      this.activeView = view;
+      this.updateViewPanels();
+      this.updateViewButtons();
+    }
+
+    private updateViewButtons() {
+      const buttons = this.querySelectorAll('[data-view-button]');
+      buttons.forEach((button) => {
+        const view = button.getAttribute('data-view-button');
+        button.setAttribute('data-active', view === this.activeView ? 'true' : 'false');
+      });
+    }
+
+    private updateViewPanels() {
+      const panels = this.querySelectorAll('[data-view-panel]');
+      panels.forEach((panel) => {
+        const view = panel.getAttribute('data-view-panel');
+        panel.classList.toggle('hidden', view !== this.activeView);
+      });
+    }
+
+    private renderContent() {
+      this.updateEventCount();
+      this.updateViewPanels();
+      this.renderTimeline();
+      this.renderTagCloud();
+      this.renderQuickSignals();
+      this.renderVignettes();
+      this.renderSpeciesJournals();
+      this.renderCriticalFeed();
+      this.renderMeters();
+      this.renderSignalSummary();
+    }
+
+    private updateEventCount() {
+      const counter = this.querySelector('[data-event-count]');
+      if (counter) {
+        counter.textContent = `${this.events.length} events tracked`;
+      }
+    }
+
+    private renderTimeline() {
+      const container = this.querySelector('[data-timeline-grid]');
+      if (!container) return;
+
+      if (this.events.length === 0) {
+        container.innerHTML = '<p class="text-white/60 text-sm">No events yet. Let the garden breathe.</p>';
+        return;
+      }
+
+      container.innerHTML = this.events
+        .slice(0, 30)
+        .map((event) => {
+          const timeLabel = this.buildTimeLabel(event);
+          const severity = event.severity ?? 'LOW';
+          const severityClass = this.severityPillClass(severity);
+          const tags = this.formatTags(event.tags);
+          return `
+            <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-3 shadow-inner">
+              <div class="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/60">
+                <span>Tick ${event.tick}</span>
+                <span class="${severityClass}">${severity}</span>
+              </div>
+              <p class="mt-2 text-white/90 text-sm leading-relaxed">${event.description}</p>
+              <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-white/50">
+                <span class="rounded-full bg-white/5 px-2 py-1">${timeLabel}</span>
+                ${tags}
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    private renderTagCloud() {
+      const container = this.querySelector('[data-tag-cloud]');
+      if (!container) return;
+      if (this.events.length === 0) {
+        container.innerHTML = '<span class="text-white/50">Waiting for stories...</span>';
+        return;
+      }
+
+      const tagCounts = new Map<string, number>();
+      this.events.forEach((event) => {
+        const tags = event.tags?.length ? event.tags : [TAG_FALLBACK];
+        tags.forEach((tag) => {
+          const key = tag.toLowerCase();
+          tagCounts.set(key, (tagCounts.get(key) ?? 0) + 1);
+        });
+      });
+
+      const sortedTags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 18);
+      container.innerHTML = sortedTags
+        .map(([tag, count]) => `<span class="rounded-full border border-white/15 px-3 py-1">${tag} · ${count}</span>`)
+        .join('');
+    }
+
+    private renderQuickSignals() {
+      const container = this.querySelector('[data-quick-signals]');
+      if (!container) return;
+      if (this.events.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const newest = this.events[0];
+      const criticalCount = this.events.filter((e) => e.severity === 'CRITICAL').length;
+      const births = this.events.filter((e) => e.eventType === 'BIRTH').length;
+      const deaths = this.events.filter((e) => e.eventType === 'DEATH').length;
+
+      container.innerHTML = `
+        <div class="flex justify-between text-sm text-white/80">
+          <span class="text-white/60">Newest</span>
+          <span>${newest.description}</span>
+        </div>
+        <div class="flex justify-between text-sm text-white/80">
+          <span class="text-white/60">Critical</span>
+          <span>${criticalCount}</span>
+        </div>
+        <div class="flex justify-between text-sm text-white/80">
+          <span class="text-white/60">Births</span>
+          <span>${births}</span>
+        </div>
+        <div class="flex justify-between text-sm text-white/80">
+          <span class="text-white/60">Deaths</span>
+          <span>${deaths}</span>
+        </div>
+      `;
+    }
+
+    private renderVignettes() {
+      const container = this.querySelector('[data-story-vignettes]');
+      if (!container) return;
+      if (this.events.length === 0) {
+        container.innerHTML = '<p class="text-white/60 text-sm">No stories yet.</p>';
+        return;
+      }
+
+      const slices = this.events.slice(0, 12);
+      container.innerHTML = slices
+        .map((event, index) => {
+          const opener = this.buildOpener(event, index);
+          return `
+            <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/3 to-white/0 p-3 text-sm text-white/85 shadow-lg">
+              <div class="text-[11px] uppercase tracking-[0.2em] text-white/55">Tick ${event.tick}</div>
+              <p class="mt-1 font-semibold text-white">${opener}</p>
+              <p class="mt-1 text-white/80 leading-relaxed">${event.description}</p>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    private renderSpeciesJournals() {
+      const container = this.querySelector('[data-species-journals]');
+      if (!container) return;
+      if (this.events.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const byTag = this.groupByPrimaryTag();
+      container.innerHTML = Object.entries(byTag)
+        .slice(0, 6)
+        .map(([tag, events]) => {
+          const focus = events[0];
+          return `
+            <div class="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/85">
+              <div class="text-[11px] uppercase tracking-[0.22em] text-white/60">${tag}</div>
+              <p class="mt-1 text-white">${focus.description}</p>
+              <p class="mt-1 text-white/60 text-xs">${events.length} notes logged</p>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    private renderCriticalFeed() {
+      const container = this.querySelector('[data-critical-feed]');
+      if (!container) return;
+
+      const criticalEvents = this.events
+        .filter((event) => SEVERITY_ORDER[event.severity ?? 'LOW'] >= 3)
+        .slice(0, 20);
+
+      if (criticalEvents.length === 0) {
+        container.innerHTML = '<p class="text-white/60 text-sm">No high-severity signals right now.</p>';
+        return;
+      }
+
+      container.innerHTML = criticalEvents
+        .map((event) => {
+          const severityClass = this.severityPillClass(event.severity ?? 'LOW');
+          return `
+            <div class="rounded-xl border border-white/10 bg-red-500/5 px-3 py-2">
+              <div class="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/65">
+                <span>${event.eventType}</span>
+                <span class="${severityClass}">${event.severity}</span>
+              </div>
+              <p class="mt-1 text-white/90">${event.description}</p>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    private renderMeters() {
+      const balanceMeter = this.querySelector('[data-meter="balance"]');
+      const tensionMeter = this.querySelector('[data-meter="tension"]');
+      if (!balanceMeter || !tensionMeter) return;
+
+      const balanceScore = this.computeBalanceScore();
+      const tensionScore = this.computeTensionScore();
+
+      balanceMeter.innerHTML = this.buildMeterMarkup('Balance', balanceScore, 'Harmony vs flux');
+      tensionMeter.innerHTML = this.buildMeterMarkup('Tension', tensionScore, 'Risk + drama index');
+    }
+
+    private renderSignalSummary() {
+      const container = this.querySelector('[data-signal-summary]');
+      if (!container) return;
+      if (this.events.length === 0) {
+        container.textContent = 'No signals to summarize yet.';
+        return;
+      }
+
+      const recent = this.events.slice(0, 8);
+      const critical = recent.find((event) => event.severity === 'CRITICAL');
+      const births = recent.filter((event) => event.eventType === 'BIRTH').length;
+      const deaths = recent.filter((event) => event.eventType === 'DEATH').length;
+      const envChange = recent.find((event) => event.eventType === 'ENVIRONMENT_CHANGE');
+
+      const lines = [
+        critical ? `Critical alert: ${critical.description}` : 'No critical alerts in the latest window.',
+        `Life cycle: ${births} births, ${deaths} deaths logged recently.`,
+        envChange ? `Environment shift: ${envChange.description}` : 'Environment steady this interval.',
+      ];
+
+      container.innerHTML = lines.map((line) => `<p class="mb-1">${line}</p>`).join('');
+    }
+
+    private buildTimeLabel(event: SimulationEvent): string {
+      const time = new Date(event.timestamp).toLocaleTimeString();
+      return `${time}`;
+    }
+
+    private severityPillClass(severity: string | undefined): string {
+      const base = 'rounded-full border px-2 py-1 text-[10px]';
+      switch (severity) {
+        case 'CRITICAL':
+          return `${base} border-red-300/40 text-red-100 bg-red-500/20`;
+        case 'HIGH':
+          return `${base} border-orange-300/40 text-orange-100 bg-orange-500/15`;
+        case 'MEDIUM':
+          return `${base} border-yellow-300/40 text-yellow-100 bg-yellow-500/15`;
+        default:
+          return `${base} border-emerald-300/30 text-emerald-100 bg-emerald-500/10`;
+      }
+    }
+
+    private formatTags(tags: string[] | undefined): string {
+      const list = tags?.length ? tags : [TAG_FALLBACK];
+      return list
+        .slice(0, 4)
+        .map((tag) => `<span class="rounded-full bg-white/5 px-2 py-1">${tag}</span>`)
+        .join('');
+    }
+
+    private buildOpener(event: SimulationEvent, index: number): string {
+      const openers = [
+        'A soft rustle precedes',
+        'From the canopy we note',
+        'The ground remembers',
+        'Whispers carry news:',
+        'A quiet ripple signals',
+      ];
+      return openers[index % openers.length];
+    }
+
+    private groupByPrimaryTag(): Record<string, SimulationEvent[]> {
+      const result: Record<string, SimulationEvent[]> = {};
+      for (const event of this.events) {
+        const tag = (event.tags?.[0] || TAG_FALLBACK).toUpperCase();
+        if (!result[tag]) {
+          result[tag] = [];
+        }
+        result[tag].push(event);
+      }
+      return result;
+    }
+
+    private computeBalanceScore(): number {
+      if (this.events.length === 0) return 0.5;
+      const births = this.events.filter((event) => event.eventType === 'BIRTH').length;
+      const deaths = this.events.filter((event) => event.eventType === 'DEATH').length;
+      const total = births + deaths || 1;
+      const ratio = births / total;
+      return Math.min(1, Math.max(0, ratio));
+    }
+
+    private computeTensionScore(): number {
+      if (this.events.length === 0) return 0.2;
+      const weightedSum = this.events.reduce((sum, event) => sum + (SEVERITY_ORDER[event.severity ?? 'LOW'] ?? 1), 0);
+      const maxPossible = this.events.length * SEVERITY_ORDER.CRITICAL;
+      return Math.min(1, weightedSum / maxPossible);
+    }
+
+    private buildMeterMarkup(label: string, value: number, subtitle: string): string {
+      const percentage = Math.round(value * 100);
+      const width = `${percentage}%`;
+      return `
+        <div class="flex justify-between text-[11px] uppercase tracking-[0.2em] text-white/60">
+          <span>${label}</span>
+          <span>${percentage}%</span>
+        </div>
+        <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+          <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300" style="width:${width}"></div>
+        </div>
+        <p class="mt-2 text-xs text-white/65">${subtitle}</p>
+      `;
+    }
+  }
+
+  if (!customElements.get('journal-overlay')) {
+    customElements.define('journal-overlay', JournalOverlay);
+  }
+</script>
