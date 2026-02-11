@@ -91,7 +91,7 @@ export const DROUGHT_STRESS_ENERGY_PENALTY = 0.4;
 // ==========================================
 
 /** Default threat detection radius for herbivores (pixels) */
-export const THREAT_DETECTION_RADIUS_DEFAULT = 130;
+export const THREAT_DETECTION_RADIUS_DEFAULT = 110;
 
 /** Minimum threat detection radius (mutation floor) */
 export const MIN_THREAT_DETECTION_RADIUS = 80;
@@ -110,16 +110,16 @@ export const PACK_COORDINATION_RADIUS = 100;
 // ==========================================
 
 /** Speed multiplier when fleeing (herbivore fleeSpeed = movementSpeed * multiplier) */
-export const FLEE_SPEED_MULTIPLIER = 1.35;
+export const FLEE_SPEED_MULTIPLIER = 1.2;
 
 /** Energy cost multiplier when fleeing (more expensive than normal movement) */
 export const FLEE_ENERGY_COST_MULTIPLIER = 1.6;
 
 /** Panic threshold distance when energy is low (flee earlier when weak) */
-export const PANIC_THRESHOLD_LOW_ENERGY = 150;
+export const PANIC_THRESHOLD_LOW_ENERGY = 120;
 
 /** Panic threshold distance when energy is high (flee later when strong) */
-export const PANIC_THRESHOLD_HIGH_ENERGY = 100;
+export const PANIC_THRESHOLD_HIGH_ENERGY = 85;
 
 /** Consecutive fleeing ticks before exhaustion sets in */
 export const EXHAUSTION_THRESHOLD_TICKS = 15;
@@ -144,13 +144,13 @@ export const BOUNDARY_AVOIDANCE_THRESHOLD = 50;
 // ==========================================
 
 /** Stalking speed multiplier when within ambush radius */
-export const STALKING_SPEED_MULTIPLIER = 0.5;
+export const STALKING_SPEED_MULTIPLIER = 0.65;
 
 /** Energy cost multiplier when stalking (lower than normal) */
-export const STALKING_ENERGY_COST_MULTIPLIER = 0.7;
+export const STALKING_ENERGY_COST_MULTIPLIER = 0.6;
 
 /** Ticks spent hunting before abandoning target */
-export const HUNT_ABANDONMENT_TICKS = 25;
+export const HUNT_ABANDONMENT_TICKS = 35;
 
 /** Energy threshold above which carnivore enters resting state */
 export const RESTING_ENERGY_THRESHOLD = 80;

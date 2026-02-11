@@ -50,11 +50,11 @@ import {
 const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick) * 0.8 ; // Herbivores are slightly more efficient than carnivores
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.herbivoreReproductionThreshold;
 const MAX_ENERGY = 100;
-const REPRODUCTION_COST = 40;
+const REPRODUCTION_COST = 30; // cheaper so reproduction is less energy prohibitive
 const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
 const MIN_MOVEMENT_SPEED = 0.35; // ensure movement never fully stalls
-const MAX_REPRODUCTIVE_AGE = 110; // older herbivores can no longer reproduce
+const MAX_REPRODUCTIVE_AGE = 125; // extend reproductive window to soften cohort die-offs
 const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
 const HEALTH_RECOVERY_FROM_FEED = 5;
 const MOVE_TO_PLANT_COST_MULTIPLIER = 0.68;
@@ -97,7 +97,7 @@ export function createNewHerbivoreEntity(
     energy: 60,
     health: 100,
     age: 0,
-    reproductionRate: traits?.reproductionRate ?? 0.03,
+    reproductionRate: traits?.reproductionRate ?? 0.05, // slightly higher baseline reproduction chance
     movementSpeed: traits?.movementSpeed ?? 2.0,
     metabolismEfficiency: traits?.metabolismEfficiency ?? 1.0,
     perceptionRadius: traits?.perceptionRadius ?? 100,

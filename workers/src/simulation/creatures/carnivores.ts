@@ -49,7 +49,7 @@ const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick);
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.carnivoreReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 50;
-const HUNTING_DISTANCE = 8; // pixels (slightly larger than herbivore eating)
+const HUNTING_DISTANCE = 10; // pixels (slightly larger than herbivore eating)
 const MAX_AGE = 200; // ticks (carnivores live longer but are fewer)
 const MAX_REPRODUCTIVE_AGE = 150; // older carnivores can no longer reproduce
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
@@ -58,7 +58,7 @@ const MIN_MOVEMENT_SPEED = 0.4; // ensure movement never stalls from bad mutatio
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
-const HUNT_MOVEMENT_COST_MULTIPLIER = 0.75;
+const HUNT_MOVEMENT_COST_MULTIPLIER = 0.65;
 const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
 const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
