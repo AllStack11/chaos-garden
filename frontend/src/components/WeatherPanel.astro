@@ -1,0 +1,115 @@
+---
+/**
+ * Weather / Atmosphere Readout Component
+ *
+ * Refactored to be more compact, matching the StatsPanel style.
+ */
+
+import type { GardenState } from '../env.d.ts';
+
+export interface Props {
+  gardenState?: GardenState | null;
+}
+---
+
+<weather-panel class="block pointer-events-none select-none">
+  <div class="flex items-center space-x-6 px-5 py-2.5 rounded-full bg-white/5 backdrop-blur-[2px] transition-all duration-700">
+    
+    <!-- Weather Condition -->
+    <div class="flex items-center space-x-2 group/item min-w-[32px] sm:min-w-[80px]">
+      <div data-weather-icon class="text-sm transition-transform duration-500 group-hover/item:scale-110">--</div>
+      <span data-weather-value class="text-[10px] font-mono font-medium text-white/70 tracking-tighter uppercase hidden sm:inline-block truncate">--</span>
+    </div>
+
+    <!-- Temperature -->
+    <div class="flex items-center space-x-2 group/item">
+      <div class="text-blue-300/80 text-[10px] animate-pulse">🌡️</div>
+      <span data-temperature-value class="text-xs font-mono font-medium text-white/80 group-hover/item:text-white transition-colors">--°C</span>
+    </div>
+
+    <!-- Sunlight / Luminance -->
+    <div class="flex items-center space-x-2 group/item">
+      <div class="text-yellow-400/80 text-[10px] group-hover/item:animate-spin-slow">☀️</div>
+      <span data-sunlight-value class="text-xs font-mono font-medium text-white/80 group-hover/item:text-white transition-colors">--%</span>
+    </div>
+
+  </div>
+</weather-panel>
+
+<style>
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .group-hover\/item\:animate-spin-slow:hover {
+    animation: spin-slow 8s linear infinite;
+  }
+  
+  [data-weather-icon].animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-2px); }
+  }
+</style>
+
+<script>
+  import type { GardenState } from '../env.d.ts';
+
+  class WeatherPanel extends HTMLElement {
+    private readonly weatherIcons: Record<string, string> = {
+      CLEAR: '☀️',
+      OVERCAST: '☁️',
+      RAIN: '🌧️',
+      STORM: '⛈️',
+      DROUGHT: '🔥',
+      FOG: '🌫️',
+    };
+
+    private readonly weatherLabels: Record<string, string> = {
+      CLEAR: 'Clear',
+      OVERCAST: 'Cloudy',
+      RAIN: 'Rain',
+      STORM: 'Storm',
+      DROUGHT: 'Drought',
+      FOG: 'Fog',
+    };
+
+    constructor() {
+      super();
+    }
+
+    public updateState(gardenState: GardenState | null) {
+      if (!gardenState) return;
+
+      const currentWeather = gardenState.environment.weatherState?.currentState || 'CLEAR';
+      const weatherIcon = this.weatherIcons[currentWeather] || '🌡️';
+      const weatherLabel = this.weatherLabels[currentWeather] || currentWeather;
+      
+      const temperatureText = `${Math.round(gardenState.environment.temperature)}°C`;
+      const sunlightText = `${Math.round(gardenState.environment.sunlight * 100)}%`;
+
+      this.updateElement('[data-weather-icon]', weatherIcon);
+      this.updateElement('[data-weather-value]', weatherLabel);
+      this.updateElement('[data-temperature-value]', temperatureText);
+      this.updateElement('[data-sunlight-value]', sunlightText);
+
+      // Add floating animation to icon
+      const iconEl = this.querySelector('[data-weather-icon]');
+      if (iconEl) {
+        iconEl.classList.add('animate-float');
+      }
+    }
+
+    private updateElement(selector: string, value: string) {
+      const el = this.querySelector<HTMLElement>(selector);
+      if (el) el.textContent = value;
+    }
+  }
+
+  if (!customElements.get('weather-panel')) {
+    customElements.define('weather-panel', WeatherPanel);
+  }
+</script>
