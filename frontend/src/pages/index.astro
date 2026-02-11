@@ -9,6 +9,7 @@ import Layout from '../layouts/Layout.astro';
 import GardenCanvas from '../components/GardenCanvas.astro';
 import StatsPanel from '../components/StatsPanel.astro';
 import NarrativeTicker from '../components/NarrativeTicker.astro';
+import StatsOverlay from '../components/StatsOverlay.astro';
 
 // API URL — required at build time
 const API_URL = import.meta.env.PUBLIC_API_URL?.trim();
@@ -124,6 +125,7 @@ if (!API_URL) {
 
     <!-- Narrative overlays remain visible even when UI overlay fades -->
     <NarrativeTicker />
+    <StatsOverlay apiUrl={API_URL} />
 
     <!-- Loading State (Minimal Ambient) -->
     <div data-loading class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-1000">
@@ -159,6 +161,7 @@ if (!API_URL) {
       health: HealthStatus | null;
       lastTickTime: Date | null;
       hasLoadedOnce: boolean;
+      isStatsOverlayOpen: boolean;
     } = {
       gardenState: null,
       entities: [],
@@ -168,6 +171,7 @@ if (!API_URL) {
       health: null,
       lastTickTime: null,
       hasLoadedOnce: false,
+      isStatsOverlayOpen: false,
     };
 
     constructor() {
@@ -212,6 +216,8 @@ if (!API_URL) {
         this.uiTimeout = null;
       }
       this.removeEventListener('entity-selected', this.handleEntitySelected as EventListener);
+      this.removeEventListener('stats-overlay-open-requested', this.handleStatsOverlayOpen as EventListener);
+      this.removeEventListener('stats-overlay-closed', this.handleStatsOverlayClosed as EventListener);
       window.removeEventListener('mousemove', this.resetUIOverlayOpacity);
       window.removeEventListener('click', this.resetUIOverlayOpacity);
       window.removeEventListener('pointerdown', this.resetUIOverlayOpacity);
@@ -234,6 +240,10 @@ if (!API_URL) {
         this.uiTimeout = null;
       }
 
+      if (this.state.isStatsOverlayOpen) {
+        return;
+      }
+
       if (this.isMobileUiMode()) {
         return;
       }
@@ -254,6 +264,8 @@ if (!API_URL) {
 
     private setupEventListeners() {
       this.addEventListener('entity-selected', this.handleEntitySelected as EventListener);
+      this.addEventListener('stats-overlay-open-requested', this.handleStatsOverlayOpen as EventListener);
+      this.addEventListener('stats-overlay-closed', this.handleStatsOverlayClosed as EventListener);
       window.addEventListener('mousemove', this.resetUIOverlayOpacity);
       window.addEventListener('click', this.resetUIOverlayOpacity);
       window.addEventListener('pointerdown', this.resetUIOverlayOpacity);
@@ -262,6 +274,27 @@ if (!API_URL) {
       this.mobileViewportMediaQuery.addEventListener('change', this.handleViewportModeChange);
       this.resetUIOverlayOpacity();
     }
+
+    private readonly handleStatsOverlayOpen = () => {
+      const overlay = this.querySelector('stats-overlay') as HTMLElement & { openOverlay?: () => void };
+      if (overlay && typeof overlay.openOverlay === 'function') {
+        overlay.openOverlay();
+        this.state.isStatsOverlayOpen = true;
+        const overlayLayer = this.querySelector('#ui-overlay');
+        if (overlayLayer) {
+          overlayLayer.classList.add('opacity-0');
+        }
+      }
+    };
+
+    private readonly handleStatsOverlayClosed = () => {
+      this.state.isStatsOverlayOpen = false;
+      const overlayLayer = this.querySelector('#ui-overlay');
+      if (overlayLayer) {
+        overlayLayer.classList.remove('opacity-0');
+      }
+      this.resetUIOverlayOpacity();
+    };
 
     private async loadGardenData() {
       console.log('[GardenApp] loadGardenData starting');

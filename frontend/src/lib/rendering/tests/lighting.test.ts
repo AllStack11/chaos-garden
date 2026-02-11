@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLightingContext, getTimePhaseFromSunlight } from './lighting.ts';
+import { createLightingContext, getTimePhaseFromSunlight } from '../lighting.ts';
 
 describe('rendering/lighting', () => {
   it('maps sunlight thresholds to the expected time phases', () => {

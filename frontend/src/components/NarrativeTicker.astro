@@ -15,14 +15,60 @@
 
 <style>
   .ambient-log {
-    animation-name: ambient-log-float, ambient-log-flicker;
-    animation-duration: var(--ambient-duration), 1200ms;
-    animation-delay: var(--ambient-delay), 0ms;
-    animation-timing-function: cubic-bezier(0.25, 0.7, 0.2, 1), ease-in-out;
-    animation-fill-mode: forwards, both;
-    animation-iteration-count: 1, infinite;
+    position: absolute;
+    border: 1px solid rgba(156, 246, 236, 0.2);
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 20% 14%, rgba(126, 255, 232, 0.2), transparent 56%),
+      linear-gradient(120deg, rgba(8, 26, 34, 0.48), rgba(9, 23, 31, 0.2));
+    box-shadow:
+      inset 0 0 0 1px rgba(189, 255, 236, 0.08),
+      0 10px 28px rgba(0, 0, 0, 0.32),
+      0 0 18px rgba(106, 236, 220, 0.22);
+    animation-name: ambient-log-float, ambient-log-flicker, ambient-log-chroma;
+    animation-duration: var(--ambient-duration), 1200ms, 2600ms;
+    animation-delay: var(--ambient-delay), 0ms, 0ms;
+    animation-timing-function: cubic-bezier(0.25, 0.7, 0.2, 1), ease-in-out, ease-in-out;
+    animation-fill-mode: forwards, both, both;
+    animation-iteration-count: 1, infinite, infinite;
     transform: translateX(-50%);
-    will-change: transform, opacity, filter;
+    overflow: hidden;
+    will-change: transform, opacity, filter, box-shadow;
+  }
+
+  .ambient-log::before {
+    content: '';
+    position: absolute;
+    inset: -25%;
+    background: linear-gradient(110deg, transparent 35%, rgba(212, 255, 247, 0.28) 48%, transparent 60%);
+    opacity: 0.42;
+    transform: translateX(-42%) rotate(-8deg);
+    animation: ambient-log-sheen var(--ambient-sheen-duration) linear infinite;
+    pointer-events: none;
+  }
+
+  .ambient-log::after {
+    content: '';
+    position: absolute;
+    inset: auto 12% -55% 12%;
+    height: 70%;
+    border-radius: 999px;
+    background: radial-gradient(circle at 50% 0%, rgba(158, 255, 236, 0.5), rgba(103, 217, 255, 0));
+    filter: blur(10px);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .ambient-log-text {
+    position: relative;
+    z-index: 1;
+    display: inline-block;
+    background: linear-gradient(90deg, rgba(225, 255, 248, 0.93), rgba(201, 253, 255, 0.98), rgba(223, 254, 245, 0.93));
+    background-size: 220% 100%;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: ambient-log-text-shimmer 2600ms ease-in-out infinite;
   }
 
   @keyframes ambient-log-float {
@@ -63,18 +109,140 @@
     }
   }
 
+  @keyframes ambient-log-chroma {
+    0%, 100% {
+      box-shadow:
+        inset 0 0 0 1px rgba(189, 255, 236, 0.08),
+        0 10px 28px rgba(0, 0, 0, 0.32),
+        0 0 18px rgba(106, 236, 220, 0.22);
+    }
+
+    50% {
+      box-shadow:
+        inset 0 0 0 1px rgba(189, 255, 236, 0.12),
+        0 10px 28px rgba(0, 0, 0, 0.36),
+        0 0 24px rgba(145, 249, 255, 0.36);
+    }
+  }
+
+  @keyframes ambient-log-sheen {
+    0% {
+      transform: translateX(-42%) rotate(-8deg);
+    }
+
+    100% {
+      transform: translateX(42%) rotate(-8deg);
+    }
+  }
+
+  @keyframes ambient-log-text-shimmer {
+    0%, 100% {
+      background-position: 0% 50%;
+      opacity: 0.92;
+    }
+
+    50% {
+      background-position: 100% 50%;
+      opacity: 1;
+    }
+  }
+
   .lifecycle-popup {
+    --popup-core: rgba(232, 255, 246, 0.94);
+    --popup-accent: rgba(176, 255, 233, 0.65);
+    --popup-border: rgba(179, 255, 237, 0.24);
+    --popup-shadow: rgba(111, 241, 219, 0.25);
+    position: absolute;
+    padding: 0.7rem 1rem 0.75rem;
+    border: 1px solid var(--popup-border);
+    border-radius: 1.05rem;
+    background:
+      radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.16), transparent 52%),
+      linear-gradient(130deg, rgba(15, 19, 26, 0.48), rgba(19, 13, 20, 0.34));
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+      0 10px 34px rgba(0, 0, 0, 0.28),
+      0 0 22px var(--popup-shadow);
+    backdrop-filter: blur(6px);
     animation-fill-mode: forwards;
-    will-change: transform, opacity, filter;
+    overflow: hidden;
+    will-change: transform, opacity, filter, box-shadow;
     text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
   }
 
+  .lifecycle-popup::before {
+    content: '';
+    position: absolute;
+    inset: -20%;
+    background: linear-gradient(100deg, transparent 36%, rgba(255, 255, 255, 0.23) 49%, transparent 62%);
+    transform: translateX(-35%) rotate(-9deg);
+    animation: lifecycle-sheen 3000ms linear infinite;
+    pointer-events: none;
+  }
+
+  .lifecycle-popup::after {
+    content: '';
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: -52%;
+    height: 74%;
+    border-radius: 999px;
+    background: radial-gradient(circle at 50% 0%, var(--popup-accent), rgba(255, 255, 255, 0));
+    filter: blur(12px);
+    opacity: 0.62;
+    pointer-events: none;
+  }
+
+  .lifecycle-popup--birth {
+    --popup-core: rgba(228, 255, 240, 0.96);
+    --popup-accent: rgba(126, 255, 198, 0.62);
+    --popup-border: rgba(145, 255, 202, 0.26);
+    --popup-shadow: rgba(89, 243, 162, 0.25);
+  }
+
+  .lifecycle-popup--death {
+    --popup-core: rgba(255, 230, 240, 0.96);
+    --popup-accent: rgba(255, 136, 183, 0.58);
+    --popup-border: rgba(255, 163, 196, 0.28);
+    --popup-shadow: rgba(255, 104, 156, 0.28);
+  }
+
   .lifecycle-popup-birth {
-    animation: birth-popup-rise 5000ms cubic-bezier(0.16, 0.84, 0.18, 1) forwards;
+    animation: birth-popup-rise 5000ms cubic-bezier(0.16, 0.84, 0.18, 1) forwards, lifecycle-aura-pulse 1800ms ease-in-out infinite;
   }
 
   .lifecycle-popup-death {
-    animation: death-popup-fall 5000ms cubic-bezier(0.14, 0.8, 0.2, 1) forwards;
+    animation: death-popup-fall 5000ms cubic-bezier(0.14, 0.8, 0.2, 1) forwards, lifecycle-aura-pulse 1800ms ease-in-out infinite;
+  }
+
+  .lifecycle-tick {
+    position: relative;
+    z-index: 1;
+    letter-spacing: 0.32em;
+    color: color-mix(in srgb, var(--popup-core) 62%, #fff 38%);
+    opacity: 0.82;
+    animation: lifecycle-tick-fade 1500ms ease-in-out infinite;
+  }
+
+  .lifecycle-headline {
+    position: relative;
+    z-index: 1;
+    margin-top: 0.2rem;
+    background: linear-gradient(95deg, rgba(255, 255, 255, 0.75), var(--popup-core), rgba(255, 255, 255, 0.74));
+    background-size: 210% 100%;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: lifecycle-headline-wave 2400ms ease-in-out infinite;
+  }
+
+  .lifecycle-narrative {
+    position: relative;
+    z-index: 1;
+    margin-top: 0.24rem;
+    color: rgba(250, 253, 255, 0.8);
+    animation: lifecycle-subtext-glow 2000ms ease-in-out infinite;
   }
 
   @keyframes birth-popup-rise {
@@ -124,18 +292,85 @@
       transform: translate(-50%, 24px) scale(1.02);
     }
   }
+
+  @keyframes lifecycle-aura-pulse {
+    0%, 100% {
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 10px 34px rgba(0, 0, 0, 0.28),
+        0 0 22px var(--popup-shadow);
+    }
+
+    50% {
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 12px 38px rgba(0, 0, 0, 0.31),
+        0 0 32px var(--popup-shadow);
+    }
+  }
+
+  @keyframes lifecycle-sheen {
+    0% {
+      transform: translateX(-35%) rotate(-9deg);
+    }
+
+    100% {
+      transform: translateX(36%) rotate(-9deg);
+    }
+  }
+
+  @keyframes lifecycle-tick-fade {
+    0%, 100% {
+      opacity: 0.74;
+    }
+
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes lifecycle-headline-wave {
+    0%, 100% {
+      background-position: 0% 50%;
+      letter-spacing: 0.08em;
+    }
+
+    50% {
+      background-position: 100% 50%;
+      letter-spacing: 0.1em;
+    }
+  }
+
+  @keyframes lifecycle-subtext-glow {
+    0%, 100% {
+      text-shadow: 0 0 0 rgba(255, 255, 255, 0);
+      opacity: 0.78;
+    }
+
+    50% {
+      text-shadow: 0 0 14px rgba(232, 251, 255, 0.24);
+      opacity: 0.95;
+    }
+  }
 </style>
 
 <script>
   import type { SimulationEvent } from '../env.d.ts';
 
-  const AMBIENT_MIN_INTERVAL_MS = 1800;
-  const AMBIENT_MAX_INTERVAL_MS = 5200;
+  const AMBIENT_MIN_INTERVAL_MS = 12000;
+  const AMBIENT_MAX_INTERVAL_MS = 24000;
   const AMBIENT_MIN_DURATION_MS = 4200;
   const AMBIENT_MAX_DURATION_MS = 7000;
-  const MAX_AMBIENT_QUEUE_SIZE = 18;
+  const MAX_AMBIENT_QUEUE_SIZE = 12;
+  const MAX_CONCURRENT_AMBIENT_LOGS = 1;
+  const AMBIENT_MIN_HORIZONTAL_GAP_PERCENT = 20;
+  const AMBIENT_MIN_VERTICAL_GAP_PERCENT = 16;
   const MAX_EVENT_MEMORY = 250;
   const LIFECYCLE_POPUP_DURATION_MS = 5000;
+  const LIFECYCLE_POPUP_COOLDOWN_MS = 3200;
+  const LIFECYCLE_SECONDARY_POPUP_DELAY_MS = 1250;
+  const NARRATIVE_MIN_GLOBAL_INTERVAL_MS = 120000;
+  const NARRATIVE_MAX_GLOBAL_INTERVAL_MS = 240000;
 
   function randomBetween(min: number, max: number): number {
     return Math.random() * (max - min) + min;
@@ -156,6 +391,9 @@
 
     private ambientSpawnTimer: ReturnType<typeof setTimeout> | null = null;
     private lastLifecycleTick: number | null = null;
+    private lastLifecyclePopupAt = 0;
+    private pendingSecondaryLifecyclePopupTimer: number | null = null;
+    private nextNarrativeAllowedAt = 0;
 
     connectedCallback() {
       this.ambientLayer = this.querySelector('[data-ambient-layer]');
@@ -164,6 +402,10 @@
 
     disconnectedCallback() {
       this.clearAmbientSpawnTimer();
+      if (this.pendingSecondaryLifecyclePopupTimer) {
+        clearTimeout(this.pendingSecondaryLifecyclePopupTimer);
+        this.pendingSecondaryLifecyclePopupTimer = null;
+      }
     }
 
     public updateNarrativeEvents(events: SimulationEvent[]) {
@@ -227,37 +469,85 @@
         return;
       }
 
+      if (!this.canSpawnNarrativePopup()) {
+        return;
+      }
+
+      if (this.ambientLayer.childElementCount >= MAX_CONCURRENT_AMBIENT_LOGS) {
+        return;
+      }
+
       const event = this.ambientQueue.shift();
       if (!event) {
         return;
       }
 
       const logElement = document.createElement('p');
-      const randomLeft = randomBetween(8, 92);
-      const randomTop = randomBetween(14, 82);
+      const ambientPosition = this.findAmbientPosition();
       const driftX = randomBetween(-40, 40);
       const driftY = randomBetween(-100, -54);
       const rotate = randomBetween(-6, 6);
       const duration = randomBetween(AMBIENT_MIN_DURATION_MS, AMBIENT_MAX_DURATION_MS);
       const delay = randomBetween(0, 260);
+      const sheenDuration = randomBetween(1800, 3600);
 
       logElement.className =
         'ambient-log absolute max-w-[76vw] sm:max-w-[44vw] px-3 text-center text-xs sm:text-sm italic font-light tracking-[0.02em] leading-relaxed text-cyan-50/85';
-      logElement.textContent = event.description;
-      logElement.style.left = `${randomLeft}%`;
-      logElement.style.top = `${randomTop}%`;
+      logElement.style.left = `${ambientPosition.left}%`;
+      logElement.style.top = `${ambientPosition.top}%`;
       logElement.style.setProperty('--ambient-drift-x', `${driftX}px`);
       logElement.style.setProperty('--ambient-drift-y', `${driftY}px`);
       logElement.style.setProperty('--ambient-rotate', `${rotate}deg`);
       logElement.style.setProperty('--ambient-duration', `${Math.round(duration)}ms`);
       logElement.style.setProperty('--ambient-delay', `${Math.round(delay)}ms`);
+      logElement.style.setProperty('--ambient-sheen-duration', `${Math.round(sheenDuration)}ms`);
+
+      const logTextElement = document.createElement('span');
+      logTextElement.className = 'ambient-log-text';
+      logTextElement.textContent = event.description;
+      logElement.appendChild(logTextElement);
 
       this.ambientLayer.appendChild(logElement);
+      this.markNarrativePopupSpawned();
 
       const removeAfterMs = Math.round(duration + delay + 500);
       window.setTimeout(() => {
         logElement.remove();
       }, removeAfterMs);
+    }
+
+    private findAmbientPosition(): { left: number; top: number } {
+      const activeAnchors = Array.from(this.ambientLayer?.children ?? []).map((child) => {
+        const element = child as HTMLElement;
+        return {
+          left: Number.parseFloat(element.style.left),
+          top: Number.parseFloat(element.style.top),
+        };
+      }).filter((anchor) => Number.isFinite(anchor.left) && Number.isFinite(anchor.top));
+
+      let fallback = {
+        left: randomBetween(8, 92),
+        top: randomBetween(14, 82),
+      };
+
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const candidate = {
+          left: randomBetween(8, 92),
+          top: randomBetween(14, 82),
+        };
+        fallback = candidate;
+
+        const isSeparated = activeAnchors.every((anchor) => {
+          return Math.abs(anchor.left - candidate.left) >= AMBIENT_MIN_HORIZONTAL_GAP_PERCENT
+            || Math.abs(anchor.top - candidate.top) >= AMBIENT_MIN_VERTICAL_GAP_PERCENT;
+        });
+
+        if (isSeparated) {
+          return candidate;
+        }
+      }
+
+      return fallback;
     }
 
     private updateLifecycleBanner(events: SimulationEvent[]) {
@@ -284,12 +574,46 @@
         return;
       }
 
-      if (birthEvents.length > 0) {
-        this.spawnLifecyclePopup('birth', tick, birthEvents);
+      if (!this.canSpawnNarrativePopup()) {
+        return;
       }
 
-      if (deathEvents.length > 0) {
-        this.spawnLifecyclePopup('death', tick, deathEvents);
+      const now = Date.now();
+      if (now - this.lastLifecyclePopupAt < LIFECYCLE_POPUP_COOLDOWN_MS) {
+        return;
+      }
+
+      if (this.pendingSecondaryLifecyclePopupTimer) {
+        clearTimeout(this.pendingSecondaryLifecyclePopupTimer);
+        this.pendingSecondaryLifecyclePopupTimer = null;
+      }
+
+      const popupRequests: Array<{ type: 'birth' | 'death'; events: SimulationEvent[] }> = [];
+      if (birthEvents.length > 0) popupRequests.push({ type: 'birth', events: birthEvents });
+      if (deathEvents.length > 0) popupRequests.push({ type: 'death', events: deathEvents });
+      popupRequests.sort((a, b) => b.events.length - a.events.length);
+
+      const primaryPopup = popupRequests[0];
+      if (!primaryPopup) {
+        return;
+      }
+
+      this.spawnLifecyclePopup(primaryPopup.type, tick, primaryPopup.events);
+      this.lastLifecyclePopupAt = Date.now();
+      this.markNarrativePopupSpawned();
+
+      const secondaryPopup = popupRequests[1];
+      if (secondaryPopup) {
+        this.pendingSecondaryLifecyclePopupTimer = window.setTimeout(() => {
+          if (!this.canSpawnNarrativePopup()) {
+            this.pendingSecondaryLifecyclePopupTimer = null;
+            return;
+          }
+          this.spawnLifecyclePopup(secondaryPopup.type, tick, secondaryPopup.events);
+          this.lastLifecyclePopupAt = Date.now();
+          this.markNarrativePopupSpawned();
+          this.pendingSecondaryLifecyclePopupTimer = null;
+        }, LIFECYCLE_SECONDARY_POPUP_DELAY_MS);
       }
     }
 
@@ -303,32 +627,30 @@
       const headlineLabel = type === 'birth' ? (count === 1 ? 'Birth' : 'Births') : (count === 1 ? 'Death' : 'Deaths');
       const narrative = events[Math.floor(randomBetween(0, events.length))]?.description ?? '';
 
-      const baseY = type === 'birth' ? 42 : 57;
-      const jitterX = randomBetween(-8, 8);
-      const colorClasses = type === 'birth'
-        ? 'text-emerald-100/95'
-        : 'text-rose-100/95';
-      const accentClasses = type === 'birth'
-        ? 'text-emerald-200/70'
-        : 'text-rose-200/70';
+      const baseY = type === 'birth' ? 35 : 65;
+      const jitterX = randomBetween(-14, 14);
+      const jitterY = randomBetween(-2, 2);
       const animationClass = type === 'birth'
         ? 'lifecycle-popup-birth'
         : 'lifecycle-popup-death';
+      const typeClass = type === 'birth'
+        ? 'lifecycle-popup--birth'
+        : 'lifecycle-popup--death';
 
-      popup.className = `lifecycle-popup ${animationClass} absolute max-w-[88vw] sm:max-w-[42rem] text-center`;
+      popup.className = `lifecycle-popup ${animationClass} ${typeClass} absolute max-w-[88vw] sm:max-w-[42rem] text-center`;
       popup.style.left = `calc(50% + ${jitterX}px)`;
-      popup.style.top = `${baseY}%`;
+      popup.style.top = `${baseY + jitterY}%`;
 
       const tickElement = document.createElement('div');
-      tickElement.className = `text-[9px] font-mono uppercase tracking-[0.32em] ${accentClasses}`;
+      tickElement.className = 'lifecycle-tick text-[9px] font-mono uppercase';
       tickElement.textContent = `Tick #${tick}`;
 
       const headlineElement = document.createElement('div');
-      headlineElement.className = `mt-1 text-lg sm:text-xl font-light tracking-[0.08em] uppercase ${colorClasses}`;
+      headlineElement.className = 'lifecycle-headline text-lg sm:text-xl font-light uppercase';
       headlineElement.textContent = `${count} ${headlineLabel}`;
 
       const narrativeElement = document.createElement('div');
-      narrativeElement.className = 'mt-1 text-xs sm:text-sm italic font-light tracking-[0.02em] text-white/78';
+      narrativeElement.className = 'lifecycle-narrative text-xs sm:text-sm italic font-light tracking-[0.02em]';
       narrativeElement.textContent = narrative;
 
       popup.appendChild(tickElement);
@@ -347,6 +669,21 @@
         clearTimeout(this.ambientSpawnTimer);
         this.ambientSpawnTimer = null;
       }
+    }
+
+    private canSpawnNarrativePopup(): boolean {
+      return !this.hasActiveNarrativePopup() && Date.now() >= this.nextNarrativeAllowedAt;
+    }
+
+    private hasActiveNarrativePopup(): boolean {
+      return (this.ambientLayer?.childElementCount ?? 0) > 0 || (this.lifecycleLayer?.childElementCount ?? 0) > 0;
+    }
+
+    private markNarrativePopupSpawned() {
+      this.nextNarrativeAllowedAt = Date.now() + randomBetween(
+        NARRATIVE_MIN_GLOBAL_INTERVAL_MS,
+        NARRATIVE_MAX_GLOBAL_INTERVAL_MS,
+      );
     }
   }
 

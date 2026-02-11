@@ -6,7 +6,13 @@
  */
 
 import { ApiClient } from './api-client';
-import type { GardenState, Entity, SimulationEvent, HealthStatus } from '../env.d.ts';
+import type {
+  GardenState,
+  Entity,
+  SimulationEvent,
+  HealthStatus,
+  GardenStatsResponse
+} from '../env.d.ts';
 
 export interface GardenData {
   gardenState: GardenState;
@@ -46,6 +52,17 @@ export class GardenService {
    */
   async checkHealth(): Promise<HealthStatus | null> {
     const response = await this.client.get<HealthStatus>('/api/health');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  }
+
+  /**
+   * Fetch aggregated and historical statistics for the dashboard.
+   */
+  async fetchGardenStats(windowTicks: number = 120): Promise<GardenStatsResponse | null> {
+    const response = await this.client.get<GardenStatsResponse>(`/api/garden/stats?windowTicks=${windowTicks}`);
     if (response.success && response.data) {
       return response.data;
     }

@@ -4,7 +4,7 @@ import {
   hasAllTokens,
   hasAnyToken,
   pickDeterministicType,
-} from './visualTypeClassifier.ts';
+} from '../visualTypeClassifier.ts';
 
 describe('rendering/visualTypeClassifier', () => {
   it('creates normalized word token sets from mixed input strings', () => {

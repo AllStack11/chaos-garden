@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearVisualGenomeCache, getVisualGenome } from './VisualGenome.ts';
+import { clearVisualGenomeCache, getVisualGenome } from '../VisualGenome.ts';
 
 describe('rendering/VisualGenome', () => {
   beforeEach(() => {

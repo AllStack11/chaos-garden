@@ -1,0 +1,352 @@
+---
+/**
+ * Detailed analytics panel used inside the fullscreen stats overlay.
+ */
+
+export interface Props {
+  apiUrl: string;
+}
+
+const { apiUrl } = Astro.props;
+---
+
+<detailed-stats-panel data-api-url={apiUrl} class="block">
+  <div class="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
+    <header class="sticky top-0 z-20 mb-6 rounded-2xl border border-white/10 bg-black/28 p-4 backdrop-blur-xl">
+      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p class="inline-flex items-center text-[11px] uppercase tracking-[0.24em] text-garden-green-200/80">Live Overlay Analytics</p>
+          <h1 class="mt-2 text-2xl font-semibold text-white sm:text-3xl">Ecosystem Intelligence</h1>
+          <p class="mt-1 text-sm text-white/65">Live analytics across populations, environment, events, and ecosystem stability signals.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="text-[11px] uppercase tracking-[0.18em] text-white/70" for="window-select">Window</label>
+          <select id="window-select" class="rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-garden-green-300">
+            <option value="60">60 ticks</option>
+            <option value="120" selected>120 ticks</option>
+            <option value="300">300 ticks</option>
+          </select>
+          <button id="manual-refresh" type="button" class="rounded-lg border border-garden-green-400/50 bg-garden-green-500/15 px-3 py-2 text-sm font-medium text-garden-green-100 transition-colors hover:bg-garden-green-500/25">Refresh</button>
+          <span id="auto-refresh-status" class="text-xs font-mono tracking-wide text-white/60">Auto refresh in --:--</span>
+          <button id="close-overlay" type="button" class="rounded-lg border border-white/25 bg-white/5 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15">Close</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="stats-loading" class="mb-6 rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white/80">
+      Loading garden analytics...
+    </div>
+    <div id="stats-error" class="mb-6 hidden rounded-2xl border border-red-300/40 bg-red-950/30 px-4 py-3 text-sm text-red-100"></div>
+
+    <section id="kpi-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"></section>
+
+    <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-8">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Population Trends</h2>
+        <div id="population-lines" class="mt-3 min-h-[280px]"></div>
+      </article>
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-4">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Current Species Share</h2>
+        <div id="species-share" class="mt-4 min-h-[280px]"></div>
+      </article>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-6">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Living Vs Dead Matter</h2>
+        <div id="living-dead-area" class="mt-3 min-h-[220px]"></div>
+      </article>
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-6">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Environmental Signals</h2>
+        <div id="environment-lines" class="mt-3 min-h-[220px]"></div>
+      </article>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-5">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Event Intensity By Type</h2>
+        <div id="event-breakdown" class="mt-3 space-y-2"></div>
+        <h3 class="mt-5 text-xs uppercase tracking-[0.2em] text-white/50">Severity Mix</h3>
+        <div id="severity-breakdown" class="mt-2 flex flex-wrap gap-2"></div>
+      </article>
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-7">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Vital Snapshot</h2>
+        <div id="vitals-grid" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"></div>
+      </article>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-7">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Deterministic Insights</h2>
+        <div id="insights-list" class="mt-3 space-y-3"></div>
+      </article>
+      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-5">
+        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Top Movers</h2>
+        <div id="movers-table" class="mt-3"></div>
+      </article>
+    </section>
+  </div>
+</detailed-stats-panel>
+
+<script>
+  import type { GardenStatsResponse } from '../env.d.ts';
+  import { GardenService } from '../services/garden-service';
+  import {
+    renderKpisMarkup,
+    renderPopulationLinesMarkup,
+    renderSpeciesShareMarkup,
+    renderLivingDeadAreaMarkup,
+    renderEnvironmentLinesMarkup,
+    renderEventBreakdownMarkup,
+    renderSeverityBreakdownMarkup,
+    renderVitalsMarkup,
+    renderInsightsMarkup,
+    renderMoversMarkup,
+  } from '../lib/stats';
+
+  interface PanelElementRefs {
+    windowSelect: HTMLSelectElement | null;
+    manualRefreshButton: HTMLButtonElement | null;
+    closeOverlayButton: HTMLButtonElement | null;
+    autoRefreshStatus: HTMLElement | null;
+    statsLoading: HTMLElement | null;
+    statsError: HTMLElement | null;
+    kpiGrid: HTMLElement | null;
+    populationLines: HTMLElement | null;
+    speciesShare: HTMLElement | null;
+    livingDeadArea: HTMLElement | null;
+    environmentLines: HTMLElement | null;
+    eventBreakdown: HTMLElement | null;
+    severityBreakdown: HTMLElement | null;
+    vitalsGrid: HTMLElement | null;
+    insightsList: HTMLElement | null;
+    moversTable: HTMLElement | null;
+  }
+
+  class DetailedStatsPanel extends HTMLElement {
+    private gardenService: GardenService;
+    private selectedWindowTicks = 120;
+    private autoRefreshIntervalMs = 15 * 60 * 1000;
+    private refreshTimer: number | null = null;
+    private countdownTimer: number | null = null;
+    private nextRefreshAtMs: number | null = null;
+    private hasFetchedOnce = false;
+    private isActive = false;
+
+    private refs: PanelElementRefs = {
+      windowSelect: null,
+      manualRefreshButton: null,
+      closeOverlayButton: null,
+      autoRefreshStatus: null,
+      statsLoading: null,
+      statsError: null,
+      kpiGrid: null,
+      populationLines: null,
+      speciesShare: null,
+      livingDeadArea: null,
+      environmentLines: null,
+      eventBreakdown: null,
+      severityBreakdown: null,
+      vitalsGrid: null,
+      insightsList: null,
+      moversTable: null,
+    };
+
+    private readonly handleWindowSelectionChange = () => {
+      const selectedValue = this.refs.windowSelect?.value;
+      if (!selectedValue) {
+        return;
+      }
+      this.selectedWindowTicks = Number.parseInt(selectedValue, 10);
+      this.loadStatsData();
+    };
+
+    private readonly handleManualRefresh = () => {
+      this.loadStatsData();
+    };
+
+    private readonly handleCloseRequest = () => {
+      this.dispatchEvent(new CustomEvent('stats-overlay-close-requested', { bubbles: true, composed: true }));
+    };
+
+    constructor() {
+      super();
+      const apiUrl = this.dataset.apiUrl;
+      if (!apiUrl) {
+        throw new Error('Missing data-api-url on <detailed-stats-panel>. Set PUBLIC_API_URL in your .env file.');
+      }
+      this.gardenService = GardenService.getInstance(apiUrl);
+    }
+
+    connectedCallback() {
+      this.cacheElementReferences();
+      this.setupControls();
+    }
+
+    disconnectedCallback() {
+      this.stopAutoRefreshLoop();
+      this.teardownControls();
+    }
+
+    public activatePanel() {
+      this.isActive = true;
+      if (!this.hasFetchedOnce) {
+        this.loadStatsData();
+      }
+      this.startAutoRefreshLoop();
+    }
+
+    public deactivatePanel() {
+      this.isActive = false;
+      this.stopAutoRefreshLoop();
+    }
+
+    private cacheElementReferences() {
+      this.refs.windowSelect = this.querySelector('#window-select') as HTMLSelectElement | null;
+      this.refs.manualRefreshButton = this.querySelector('#manual-refresh') as HTMLButtonElement | null;
+      this.refs.closeOverlayButton = this.querySelector('#close-overlay') as HTMLButtonElement | null;
+      this.refs.autoRefreshStatus = this.querySelector('#auto-refresh-status') as HTMLElement | null;
+      this.refs.statsLoading = this.querySelector('#stats-loading') as HTMLElement | null;
+      this.refs.statsError = this.querySelector('#stats-error') as HTMLElement | null;
+      this.refs.kpiGrid = this.querySelector('#kpi-grid') as HTMLElement | null;
+      this.refs.populationLines = this.querySelector('#population-lines') as HTMLElement | null;
+      this.refs.speciesShare = this.querySelector('#species-share') as HTMLElement | null;
+      this.refs.livingDeadArea = this.querySelector('#living-dead-area') as HTMLElement | null;
+      this.refs.environmentLines = this.querySelector('#environment-lines') as HTMLElement | null;
+      this.refs.eventBreakdown = this.querySelector('#event-breakdown') as HTMLElement | null;
+      this.refs.severityBreakdown = this.querySelector('#severity-breakdown') as HTMLElement | null;
+      this.refs.vitalsGrid = this.querySelector('#vitals-grid') as HTMLElement | null;
+      this.refs.insightsList = this.querySelector('#insights-list') as HTMLElement | null;
+      this.refs.moversTable = this.querySelector('#movers-table') as HTMLElement | null;
+    }
+
+    private setupControls() {
+      this.refs.windowSelect?.addEventListener('change', this.handleWindowSelectionChange);
+      this.refs.manualRefreshButton?.addEventListener('click', this.handleManualRefresh);
+      this.refs.closeOverlayButton?.addEventListener('click', this.handleCloseRequest);
+    }
+
+    private teardownControls() {
+      this.refs.windowSelect?.removeEventListener('change', this.handleWindowSelectionChange);
+      this.refs.manualRefreshButton?.removeEventListener('click', this.handleManualRefresh);
+      this.refs.closeOverlayButton?.removeEventListener('click', this.handleCloseRequest);
+    }
+
+    private startAutoRefreshLoop() {
+      this.stopAutoRefreshLoop();
+      this.nextRefreshAtMs = Date.now() + this.autoRefreshIntervalMs;
+      this.updateAutoRefreshLabel();
+
+      this.refreshTimer = window.setInterval(() => {
+        if (this.isActive) {
+          this.loadStatsData();
+        }
+      }, this.autoRefreshIntervalMs);
+
+      this.countdownTimer = window.setInterval(() => {
+        this.updateAutoRefreshLabel();
+      }, 1000);
+    }
+
+    private stopAutoRefreshLoop() {
+      if (this.refreshTimer) {
+        clearInterval(this.refreshTimer);
+        this.refreshTimer = null;
+      }
+      if (this.countdownTimer) {
+        clearInterval(this.countdownTimer);
+        this.countdownTimer = null;
+      }
+    }
+
+    private updateAutoRefreshLabel() {
+      if (!this.refs.autoRefreshStatus || !this.nextRefreshAtMs) {
+        return;
+      }
+
+      const remainingMs = Math.max(0, this.nextRefreshAtMs - Date.now());
+      const remainingSeconds = Math.floor(remainingMs / 1000);
+      const minutes = Math.floor(remainingSeconds / 60).toString().padStart(2, '0');
+      const seconds = (remainingSeconds % 60).toString().padStart(2, '0');
+      this.refs.autoRefreshStatus.textContent = `Auto refresh in ${minutes}:${seconds}`;
+    }
+
+    private async loadStatsData() {
+      this.refs.statsLoading?.classList.remove('hidden');
+      this.refs.statsError?.classList.add('hidden');
+
+      try {
+        const stats = await this.gardenService.fetchGardenStats(this.selectedWindowTicks);
+        if (!stats) {
+          throw new Error('No data returned from /api/garden/stats');
+        }
+        this.hasFetchedOnce = true;
+        this.nextRefreshAtMs = Date.now() + this.autoRefreshIntervalMs;
+        this.renderStats(stats);
+      } catch (error) {
+        if (this.refs.statsError) {
+          this.refs.statsError.classList.remove('hidden');
+          this.refs.statsError.textContent = `Failed to load stats: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      } finally {
+        this.refs.statsLoading?.classList.add('hidden');
+        this.updateAutoRefreshLabel();
+      }
+    }
+
+    private renderStats(stats: GardenStatsResponse) {
+      if (this.refs.kpiGrid) {
+        this.refs.kpiGrid.innerHTML = renderKpisMarkup(stats);
+      }
+      if (this.refs.populationLines) {
+        this.refs.populationLines.innerHTML = renderPopulationLinesMarkup(stats.history);
+      }
+      if (this.refs.speciesShare) {
+        this.refs.speciesShare.innerHTML = renderSpeciesShareMarkup(stats.history[stats.history.length - 1] ?? null);
+      }
+      if (this.refs.livingDeadArea) {
+        this.refs.livingDeadArea.innerHTML = renderLivingDeadAreaMarkup(stats.history);
+      }
+      if (this.refs.environmentLines) {
+        this.refs.environmentLines.innerHTML = renderEnvironmentLinesMarkup(stats.history);
+      }
+      if (this.refs.eventBreakdown) {
+        this.refs.eventBreakdown.innerHTML = renderEventBreakdownMarkup(stats.eventBreakdown);
+      }
+      if (this.refs.severityBreakdown) {
+        this.refs.severityBreakdown.innerHTML = renderSeverityBreakdownMarkup(stats.severityBreakdown);
+      }
+      if (this.refs.vitalsGrid) {
+        this.refs.vitalsGrid.innerHTML = renderVitalsMarkup(stats);
+      }
+      if (this.refs.insightsList) {
+        this.refs.insightsList.innerHTML = renderInsightsMarkup(stats);
+      }
+      if (this.refs.moversTable) {
+        this.refs.moversTable.innerHTML = renderMoversMarkup(stats.history);
+      }
+    }
+  }
+
+  if (!customElements.get('detailed-stats-panel')) {
+    customElements.define('detailed-stats-panel', DetailedStatsPanel);
+  }
+</script>
+
+<style>
+  .kpi-card {
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+    transition: transform 180ms ease, border-color 180ms ease;
+  }
+
+  .kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(187, 247, 208, 0.4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kpi-card {
+      transition: none;
+    }
+  }
+</style>

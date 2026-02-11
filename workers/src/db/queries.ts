@@ -13,6 +13,10 @@ import type {
   GardenState,
   Entity,
   SimulationEvent,
+  SimulationEventType,
+  EventSeverity,
+  EventTypeBreakdown,
+  EventSeverityBreakdown,
   GardenStateRow,
   EntityRow,
   SimulationEventRow,
@@ -452,6 +456,92 @@ export async function getSimulationEventsByTickRangeFromDatabase(
   );
 
   return rows.map(mapRowToSimulationEvent);
+}
+
+/**
+ * Retrieve historical garden states ending at the provided tick.
+ * Returns rows in ascending tick order for chart rendering.
+ */
+export async function getGardenStateHistoryFromDatabase(
+  db: D1Database,
+  windowTicks: number,
+  endTick?: number
+): Promise<GardenState[]> {
+  const normalizedWindowTicks = Math.max(1, windowTicks);
+
+  const query = typeof endTick === 'number'
+    ? `SELECT id, tick, timestamp, temperature, sunlight, moisture, weather_state,
+              plants, herbivores, carnivores, fungi,
+              dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
+              all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
+              total_living, total_dead, all_time_dead, total
+       FROM garden_state
+       WHERE tick <= ?
+       ORDER BY tick DESC
+       LIMIT ?`
+    : `SELECT id, tick, timestamp, temperature, sunlight, moisture, weather_state,
+              plants, herbivores, carnivores, fungi,
+              dead_plants, dead_herbivores, dead_carnivores, dead_fungi,
+              all_time_dead_plants, all_time_dead_herbivores, all_time_dead_carnivores, all_time_dead_fungi,
+              total_living, total_dead, all_time_dead, total
+       FROM garden_state
+       ORDER BY tick DESC
+       LIMIT ?`;
+
+  const params = typeof endTick === 'number'
+    ? [endTick, normalizedWindowTicks]
+    : [normalizedWindowTicks];
+
+  const rows = await queryAll<GardenStateRow>(db, query, params);
+  return rows.map(mapRowToGardenState).reverse();
+}
+
+/**
+ * Retrieve event counts grouped by event type for a tick window.
+ */
+export async function getSimulationEventCountsByTypeFromDatabase(
+  db: D1Database,
+  startTick: number,
+  endTick: number
+): Promise<EventTypeBreakdown[]> {
+  const rows = await queryAll<{ event_type: string; count: number }>(
+    db,
+    `SELECT event_type, CAST(COUNT(*) AS INTEGER) AS count
+     FROM simulation_events
+     WHERE tick >= ? AND tick <= ?
+     GROUP BY event_type
+     ORDER BY count DESC, event_type ASC`,
+    [startTick, endTick]
+  );
+
+  return rows.map((row) => ({
+    eventType: row.event_type as SimulationEventType,
+    count: row.count,
+  }));
+}
+
+/**
+ * Retrieve event counts grouped by severity for a tick window.
+ */
+export async function getSimulationEventSeverityBreakdownFromDatabase(
+  db: D1Database,
+  startTick: number,
+  endTick: number
+): Promise<EventSeverityBreakdown[]> {
+  const rows = await queryAll<{ severity: string; count: number }>(
+    db,
+    `SELECT severity, CAST(COUNT(*) AS INTEGER) AS count
+     FROM simulation_events
+     WHERE tick >= ? AND tick <= ?
+     GROUP BY severity
+     ORDER BY count DESC, severity ASC`,
+    [startTick, endTick]
+  );
+
+  return rows.map((row) => ({
+    severity: row.severity as EventSeverity,
+    count: row.count,
+  }));
 }
 
 export async function deleteSimulationEventsByTickFromDatabase(

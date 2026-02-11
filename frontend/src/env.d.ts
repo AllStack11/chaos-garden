@@ -6,7 +6,14 @@ import type {
   Entity as SharedEntity, 
   SimulationEvent as SharedSimulationEvent,
   PopulationSummary as SharedPopulationSummary,
-  HealthStatus as SharedHealthStatus
+  HealthStatus as SharedHealthStatus,
+  GardenStatsResponse as SharedGardenStatsResponse,
+  GardenStatsPoint as SharedGardenStatsPoint,
+  GardenStatsAggregate as SharedGardenStatsAggregate,
+  GardenInsight as SharedGardenInsight,
+  EventTypeBreakdown as SharedEventTypeBreakdown,
+  EventSeverityBreakdown as SharedEventSeverityBreakdown,
+  GardenEntityVitals as SharedGardenEntityVitals
 } from '../../shared/types';
 
 /**
@@ -32,6 +39,13 @@ export type Entity = SharedEntity;
 export type SimulationEvent = SharedSimulationEvent;
 export type PopulationSummary = SharedPopulationSummary;
 export type HealthStatus = SharedHealthStatus;
+export type GardenStatsResponse = SharedGardenStatsResponse;
+export type GardenStatsPoint = SharedGardenStatsPoint;
+export type GardenStatsAggregate = SharedGardenStatsAggregate;
+export type GardenInsight = SharedGardenInsight;
+export type EventTypeBreakdown = SharedEventTypeBreakdown;
+export type EventSeverityBreakdown = SharedEventSeverityBreakdown;
+export type GardenEntityVitals = SharedGardenEntityVitals;
 
 export interface GardenResponse {
   success: boolean;

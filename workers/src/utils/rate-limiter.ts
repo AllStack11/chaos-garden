@@ -28,6 +28,10 @@ const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
     maxRequestsPerWindow: 60,  // 60 requests per minute
     windowSizeMs: 60_000,
   },
+  'GET:/api/garden/stats': {
+    maxRequestsPerWindow: 45,  // 45 requests per minute
+    windowSizeMs: 60_000,
+  },
   'GET:/api/health': {
     maxRequestsPerWindow: 120, // 120 requests per minute
     windowSizeMs: 60_000,

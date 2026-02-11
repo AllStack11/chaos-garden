@@ -15,45 +15,48 @@ export interface Props {
 ---
 
 <stats-panel class="block">
-  <!-- Population Stats Bar -->
-  <div class="flex space-x-8 px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl transition-all duration-300">
-    <!-- Minimal Species Markers -->
-    <div class="flex items-center space-x-8">
-      <div class="flex flex-col items-center group cursor-default">
-         <div class="w-2 h-2 rounded-full bg-garden-green-400 mb-1 shadow-[0_0_10px_rgba(74,222,128,0.5)]"></div>
-         <span id="stat-plants" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
-      </div>
-      
-      <div class="flex flex-col items-center group cursor-default">
-         <div class="w-2 h-2 rounded-full bg-yellow-400 mb-1 shadow-[0_0_10px_rgba(250,204,21,0.5)]"></div>
-         <span id="stat-herbivores" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
-      </div>
+  <button
+    type="button"
+    data-stats-link
+    aria-label="Open full garden analytics"
+    class="w-full text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-garden-green-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-full"
+  >
+    <!-- Population Stats Bar -->
+    <div class="flex space-x-8 px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl transition-all duration-300 group-hover:bg-white/15 group-hover:border-white/35 group-hover:scale-[1.015]">
+      <!-- Minimal Species Markers -->
+      <div class="flex items-center space-x-8">
+        <div class="flex flex-col items-center cursor-pointer">
+          <div class="w-2 h-2 rounded-full bg-garden-green-400 mb-1 shadow-[0_0_10px_rgba(74,222,128,0.5)]"></div>
+          <span id="stat-plants" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
+        </div>
 
-      <div class="flex flex-col items-center group cursor-default">
-         <div class="w-2 h-2 rounded-full bg-purple-400 mb-1 shadow-[0_0_10px_rgba(192,132,252,0.5)]"></div>
-         <span id="stat-fungi" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
-      </div>
+        <div class="flex flex-col items-center cursor-pointer">
+          <div class="w-2 h-2 rounded-full bg-yellow-400 mb-1 shadow-[0_0_10px_rgba(250,204,21,0.5)]"></div>
+          <span id="stat-herbivores" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
+        </div>
 
-      <div class="flex flex-col items-center group cursor-default">
-         <div class="w-2 h-2 rounded-full bg-red-400 mb-1 shadow-[0_0_10px_rgba(248,113,113,0.5)]"></div>
-         <span id="stat-carnivores" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
+        <div class="flex flex-col items-center cursor-pointer">
+          <div class="w-2 h-2 rounded-full bg-purple-400 mb-1 shadow-[0_0_10px_rgba(192,132,252,0.5)]"></div>
+          <span id="stat-fungi" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
+        </div>
+
+        <div class="flex flex-col items-center cursor-pointer">
+          <div class="w-2 h-2 rounded-full bg-red-400 mb-1 shadow-[0_0_10px_rgba(248,113,113,0.5)]"></div>
+          <span id="stat-carnivores" class="text-xs font-mono font-medium text-white/80 group-hover:text-white transition-colors">0</span>
+        </div>
       </div>
     </div>
-
-    <!-- Population Health Bar (Integrated) -->
-    <div class="flex items-center space-x-3 border-l border-white/10 pl-8">
-       <div class="w-24 h-[3px] bg-white/10 rounded-full relative overflow-hidden">
-          <div id="bar-living" class="absolute inset-y-0 left-0 bg-white/60 transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)]"></div>
-       </div>
-       <span id="stat-living" class="text-[10px] font-mono font-bold text-white/60 uppercase tracking-widest">Living</span>
-    </div>
-  </div>
+  </button>
 </stats-panel>
 
 <script>
   import type { GardenState } from '../env.d.ts';
 
   class StatsPanel extends HTMLElement {
+    private readonly handleStatsNavigation = () => {
+      this.dispatchEvent(new CustomEvent('stats-overlay-open-requested', { bubbles: true, composed: true }));
+    };
+
     constructor() {
       super();
     }
@@ -66,17 +69,21 @@ export interface Props {
       this.updateText('stat-herbivores', summary.herbivores.toString());
       this.updateText('stat-fungi', summary.fungi.toString());
       this.updateText('stat-carnivores', summary.carnivores.toString());
-      this.updateText('stat-living', `${Math.round((summary.totalLiving / (summary.total || 1)) * 100)}%`);
-
-      const bar = this.querySelector('#bar-living') as HTMLElement;
-      if (bar) {
-        bar.style.width = `${(summary.totalLiving / (summary.total || 1)) * 100}%`;
-      }
     }
 
     private updateText(id: string, value: string) {
       const el = this.querySelector(`#${id}`);
       if (el) el.textContent = value;
+    }
+
+    connectedCallback() {
+      const link = this.querySelector('[data-stats-link]');
+      link?.addEventListener('click', this.handleStatsNavigation);
+    }
+
+    disconnectedCallback() {
+      const link = this.querySelector('[data-stats-link]');
+      link?.removeEventListener('click', this.handleStatsNavigation);
     }
 
   }

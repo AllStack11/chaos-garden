@@ -3,8 +3,8 @@ import {
   clearFungusVisualCache,
   generateFungusVisual,
   getFungusVisual,
-} from './FungusVisualSystem.ts';
-import { clearVisualGenomeCache } from './VisualGenome.ts';
+} from '../FungusVisualSystem.ts';
+import { clearVisualGenomeCache } from '../VisualGenome.ts';
 
 interface TestEntity {
   id: string;

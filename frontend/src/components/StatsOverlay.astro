@@ -1,0 +1,118 @@
+---
+/**
+ * Fullscreen stats overlay shell.
+ * Handles open/close lifecycle, backdrop, and motion.
+ */
+
+import DetailedStatsPanel from './DetailedStatsPanel.astro';
+
+export interface Props {
+  apiUrl: string;
+}
+
+const { apiUrl } = Astro.props;
+---
+
+<stats-overlay data-overlay-state="closed" class="fixed inset-0 z-40 hidden pointer-events-none opacity-0 transition-opacity duration-300 ease-out">
+  <div data-overlay-backdrop class="absolute inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity duration-300"></div>
+
+  <div data-panel-shell class="relative h-full overflow-y-auto opacity-0 translate-y-4 scale-[0.985] transition-all duration-300 ease-out">
+    <DetailedStatsPanel apiUrl={apiUrl} />
+  </div>
+</stats-overlay>
+
+<script>
+  class StatsOverlay extends HTMLElement {
+    private readonly closeTransitionMs = 300;
+    private closeTimer: number | null = null;
+    private isOpen = false;
+
+    private readonly handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && this.isOpen) {
+        this.closeOverlay();
+      }
+    };
+
+    private readonly handleCloseRequested = () => {
+      this.closeOverlay();
+    };
+
+    connectedCallback() {
+      const backdrop = this.querySelector('[data-overlay-backdrop]') as HTMLElement | null;
+      backdrop?.addEventListener('click', this.handleCloseRequested);
+      this.addEventListener('stats-overlay-close-requested', this.handleCloseRequested as EventListener);
+      window.addEventListener('keydown', this.handleEscape);
+    }
+
+    disconnectedCallback() {
+      const backdrop = this.querySelector('[data-overlay-backdrop]') as HTMLElement | null;
+      backdrop?.removeEventListener('click', this.handleCloseRequested);
+      this.removeEventListener('stats-overlay-close-requested', this.handleCloseRequested as EventListener);
+      window.removeEventListener('keydown', this.handleEscape);
+      if (this.closeTimer) {
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+      }
+    }
+
+    public openOverlay() {
+      if (this.closeTimer) {
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+      }
+
+      this.isOpen = true;
+      this.dataset.overlayState = 'opening';
+      this.classList.remove('hidden', 'pointer-events-none', 'opacity-0');
+      this.classList.add('pointer-events-auto', 'opacity-100');
+
+      const panelShell = this.querySelector('[data-panel-shell]') as HTMLElement | null;
+      requestAnimationFrame(() => {
+        panelShell?.classList.remove('opacity-0', 'translate-y-4', 'scale-[0.985]');
+      });
+
+      const detailedPanel = this.querySelector('detailed-stats-panel') as HTMLElement & { activatePanel?: () => void };
+      if (detailedPanel && typeof detailedPanel.activatePanel === 'function') {
+        detailedPanel.activatePanel();
+      }
+
+      this.dataset.overlayState = 'open';
+      this.dispatchEvent(new CustomEvent('stats-overlay-opened', { bubbles: true, composed: true }));
+    }
+
+    public closeOverlay() {
+      if (!this.isOpen && !this.classList.contains('opacity-100')) {
+        return;
+      }
+
+      this.isOpen = false;
+      this.dataset.overlayState = 'closing';
+      this.classList.remove('opacity-100');
+      this.classList.add('opacity-0');
+
+      const panelShell = this.querySelector('[data-panel-shell]') as HTMLElement | null;
+      panelShell?.classList.add('opacity-0', 'translate-y-4', 'scale-[0.985]');
+
+      const detailedPanel = this.querySelector('detailed-stats-panel') as HTMLElement & { deactivatePanel?: () => void };
+      if (detailedPanel && typeof detailedPanel.deactivatePanel === 'function') {
+        detailedPanel.deactivatePanel();
+      }
+
+      if (this.closeTimer) {
+        clearTimeout(this.closeTimer);
+      }
+
+      this.closeTimer = window.setTimeout(() => {
+        this.classList.add('hidden', 'pointer-events-none');
+        this.classList.remove('pointer-events-auto');
+        this.dataset.overlayState = 'closed';
+        this.dispatchEvent(new CustomEvent('stats-overlay-closed', { bubbles: true, composed: true }));
+        this.closeTimer = null;
+      }, this.closeTransitionMs);
+    }
+  }
+
+  if (!customElements.get('stats-overlay')) {
+    customElements.define('stats-overlay', StatsOverlay);
+  }
+</script>

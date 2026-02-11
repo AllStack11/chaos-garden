@@ -297,6 +297,119 @@ export interface SimulationEvent {
   metadata?: string;              // JSON for additional context
 }
 
+export interface GardenStatsPoint {
+  tick: number;
+  timestamp: string;
+  populations: {
+    plants: number;
+    herbivores: number;
+    carnivores: number;
+    fungi: number;
+    living: number;
+    dead: number;
+  };
+  environment: {
+    temperature: number;
+    sunlight: number;
+    moisture: number;
+    weatherState: WeatherStateName | null;
+  };
+}
+
+export interface EventTypeBreakdown {
+  eventType: SimulationEventType;
+  count: number;
+}
+
+export interface EventSeverityBreakdown {
+  severity: EventSeverity;
+  count: number;
+}
+
+export interface GardenStatsAggregate {
+  tickSpan: number;
+  deltas: {
+    plants: number;
+    herbivores: number;
+    carnivores: number;
+    fungi: number;
+    living: number;
+    dead: number;
+  };
+  growthRates: {
+    livingPerTick: number;
+    deadPerTick: number;
+  };
+  mortalityPressure: number;
+  populationVolatility: number;
+  biodiversityIndex: number;
+  predatorPreyRatio: number;
+  decompositionPressure: number;
+  averageEnvironment: {
+    temperature: number;
+    sunlight: number;
+    moisture: number;
+  };
+  trendSlopes: {
+    temperature: number;
+    sunlight: number;
+    moisture: number;
+  };
+}
+
+export interface GardenInsight {
+  id: string;
+  title: string;
+  description: string;
+  severity: EventSeverity;
+  kind:
+    | 'POPULATION_SURGE'
+    | 'COLLAPSE_RISK'
+    | 'PREDATOR_PREY_IMBALANCE'
+    | 'DECOMPOSITION_BACKLOG'
+    | 'ENVIRONMENTAL_STRESS'
+    | 'STABILITY_WINDOW';
+  confidence: number;
+  relatedMetrics: string[];
+  tickRange: {
+    start: number;
+    end: number;
+  };
+}
+
+export interface GardenTypeVitalSummary {
+  count: number;
+  averageEnergy: number;
+  averageHealth: number;
+}
+
+export interface GardenEntityVitals {
+  totalLiving: number;
+  oldestLivingAge: number;
+  youngestLivingAge: number;
+  youngestCohortCount: number;
+  averageEnergyAcrossLiving: number;
+  averageHealthAcrossLiving: number;
+  byType: {
+    plant: GardenTypeVitalSummary;
+    herbivore: GardenTypeVitalSummary;
+    carnivore: GardenTypeVitalSummary;
+    fungus: GardenTypeVitalSummary;
+  };
+}
+
+export interface GardenStatsResponse {
+  current: GardenState;
+  history: GardenStatsPoint[];
+  eventBreakdown: EventTypeBreakdown[];
+  severityBreakdown: EventSeverityBreakdown[];
+  derived: GardenStatsAggregate;
+  insights: GardenInsight[];
+  entityVitals: GardenEntityVitals;
+  windowTicks: number;
+  generatedAt: string;
+}
+
 // ==========================================
 // API Types - Communication Protocols
 // ==========================================
