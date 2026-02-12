@@ -86,6 +86,9 @@ export class HerbivoreRenderer {
       case 'moth':
         this.renderMoth(x, y - bobOffset, size, visual, time, healthFactor);
         break;
+      case 'centipede':
+        this.renderCentipede(x, y - bobOffset, size, visual, time, healthFactor);
+        break;
     }
     
     // Glow effect for some creatures
@@ -732,6 +735,70 @@ export class HerbivoreRenderer {
     }
   }
   
+  // ==========================================
+  // CENTIPEDE - Long segmented multi-legged crawlers
+  // ==========================================
+  private renderCentipede(
+    x: number,
+    y: number,
+    size: number,
+    visual: HerbivoreVisual,
+    time: number,
+    healthFactor: number
+  ): void {
+    if (!this.ctx || !this.rng) return;
+
+    const segmentCount = 8;
+    const segmentSpacing = size * 0.25;
+    const movementWave = Math.sin(time * 5) * 0.15;
+    
+    // Draw body segments from back to front
+    for (let i = segmentCount - 1; i >= 0; i--) {
+      const segmentPhase = time * 6 - i * 0.4;
+      const offsetX = -i * segmentSpacing;
+      const waveY = Math.sin(segmentPhase) * (size * 0.1) * healthFactor;
+      
+      const segX = x + offsetX;
+      const segY = y + waveY;
+      
+      // Legs for this segment (2 pairs per segment for centipede look)
+      const legPhase = time * 10 - i * 0.8;
+      this.ctx.strokeStyle = visual.bodyColor;
+      this.ctx.lineWidth = 1.5;
+      
+      for (let side = -1; side <= 1; side += 2) {
+        if (side === 0) continue;
+        
+        const legExtension = (Math.sin(legPhase + (side > 0 ? Math.PI : 0)) * 0.2 + 0.8) * size * visual.legLength;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(segX, segY);
+        this.ctx.lineTo(segX + side * legExtension, segY + size * 0.2);
+        this.ctx.stroke();
+      }
+      
+      // Segment body
+      this.ctx.fillStyle = i % 2 === 0 ? visual.bodyColor : visual.patternColor;
+      this.ctx.beginPath();
+      this.ctx.ellipse(segX, segY, size * 0.2, size * 0.15, movementWave, 0, Math.PI * 2);
+      this.ctx.fill();
+      
+      // Head features (on first segment)
+      if (i === 0) {
+        // Eyes
+        this.ctx.fillStyle = '#000';
+        this.ctx.beginPath();
+        this.ctx.arc(segX + size * 0.1, segY - size * 0.05, 1.5, 0, Math.PI * 2);
+        this.ctx.arc(segX + size * 0.1, segY + size * 0.05, 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Antenna
+        this.renderAntenna(segX + size * 0.15, segY, size * visual.antennaLength, -0.4, visual.patternColor);
+        this.renderAntenna(segX + size * 0.15, segY, size * visual.antennaLength, 0.4, visual.patternColor);
+      }
+    }
+  }
+
   // ==========================================
   // HELPER: Render antenna
   // ==========================================

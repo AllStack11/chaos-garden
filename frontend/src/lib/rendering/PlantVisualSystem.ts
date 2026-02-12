@@ -39,7 +39,11 @@ export type PlantType =
   | 'moss'
   | 'cactus'
   | 'bush'
-  | 'herb';
+  | 'herb'
+  | 'crystal'
+  | 'coral'
+  | 'kelp'
+  | 'draconic';
 
 /**
  * Leaf shape variations
@@ -140,6 +144,10 @@ const PLANT_COLOR_OFFSET_SCHEMES: Record<PlantType, CreatureOffsetScheme> = {
   cactus: { hueOffset: [4, 32], saturationOffset: [-18, 10], lightnessOffset: [-10, 8] },
   bush: { hueOffset: [-15, 12], saturationOffset: [-10, 16], lightnessOffset: [-8, 10] },
   herb: { hueOffset: [-10, 18], saturationOffset: [-6, 18], lightnessOffset: [-8, 12] },
+  crystal: { hueOffset: [120, 240], saturationOffset: [10, 40], lightnessOffset: [10, 30] },
+  coral: { hueOffset: [-60, 40], saturationOffset: [10, 30], lightnessOffset: [-5, 15] },
+  kelp: { hueOffset: [-40, -10], saturationOffset: [-10, 20], lightnessOffset: [-15, 5] },
+  draconic: { hueOffset: [0, 360], saturationOffset: [-20, 10], lightnessOffset: [-30, -10] },
 };
 
 function determinePlantType(name: string, species: string): PlantType {
@@ -155,6 +163,10 @@ function determinePlantType(name: string, species: string): PlantType {
   if (hasAnyToken(tokens, ['moss', 'creep', 'carpet'])) return 'moss';
   if (hasAnyToken(tokens, ['bush', 'shrub', 'bushy'])) return 'bush';
   if (hasAnyToken(tokens, ['herb', 'mint', 'thyme', 'basil'])) return 'herb';
+  if (hasAnyToken(tokens, ['crystal', 'prism', 'shard', 'gem', 'facet', 'glitter'])) return 'crystal';
+  if (hasAnyToken(tokens, ['coral', 'reef', 'fan', 'poly'])) return 'coral';
+  if (hasAnyToken(tokens, ['kelp', 'seaweed', 'tangle', 'ribbon'])) return 'kelp';
+  if (hasAnyToken(tokens, ['drake', 'dragon', 'spike', 'void', 'scale', 'dark'])) return 'draconic';
 
   const fallbackOrder: PlantType[] = [
     'fern',
@@ -209,7 +221,11 @@ export function generatePlantVisual(entity: Entity): PlantVisual {
     moss: { leafCount: [8, 20], leafShape: ['round', 'fern'], hasBloom: false, petalCount: [0, 0], stemThickness: [0.2, 0.4], height: [0.2, 0.5], glowsAtNight: true },
     cactus: { leafCount: [1, 5], leafShape: ['succulent'], hasBloom: false, petalCount: [0, 0], stemThickness: [1.0, 2.0], height: [0.6, 1.5], glowsAtNight: false },
     bush: { leafCount: [6, 15], leafShape: ['round', 'pointed'], hasBloom: true, petalCount: [4, 8], stemThickness: [1.0, 2.0], height: [0.8, 1.5], glowsAtNight: false },
-    herb: { leafCount: [4, 12], leafShape: ['round', 'pointed'], hasBloom: false, petalCount: [0, 0], stemThickness: [0.4, 0.8], height: [0.4, 0.9], glowsAtNight: false }
+    herb: { leafCount: [4, 12], leafShape: ['round', 'pointed'], hasBloom: false, petalCount: [0, 0], stemThickness: [0.4, 0.8], height: [0.4, 0.9], glowsAtNight: false },
+    crystal: { leafCount: [3, 7], leafShape: ['pointed'], hasBloom: false, petalCount: [0, 0], stemThickness: [1.2, 2.2], height: [0.6, 1.4], glowsAtNight: true },
+    coral: { leafCount: [5, 12], leafShape: ['round'], hasBloom: false, petalCount: [0, 0], stemThickness: [1.5, 3.0], height: [0.5, 1.2], glowsAtNight: false },
+    kelp: { leafCount: [1, 3], leafShape: ['blade'], hasBloom: false, petalCount: [0, 0], stemThickness: [0.6, 1.2], height: [1.5, 3.0], glowsAtNight: false },
+    draconic: { leafCount: [4, 10], leafShape: ['pointed'], hasBloom: false, petalCount: [0, 0], stemThickness: [2.0, 4.0], height: [1.0, 2.2], glowsAtNight: true }
   };
   
   const config = typeConfigs[plantType];

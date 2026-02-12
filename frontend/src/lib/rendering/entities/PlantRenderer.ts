@@ -99,6 +99,18 @@ export class PlantRenderer {
       case 'herb':
         this.renderHerb(x, y, size, sway, visual, healthFactor, time);
         break;
+      case 'crystal':
+        this.renderCrystal(x, y, size, sway, visual, healthFactor, time);
+        break;
+      case 'coral':
+        this.renderCoral(x, y, size, sway, visual, healthFactor, time);
+        break;
+      case 'kelp':
+        this.renderKelp(x, y, size, sway, visual, healthFactor, time);
+        break;
+      case 'draconic':
+        this.renderDraconic(x, y, size, sway, visual, healthFactor, time);
+        break;
     }
     
     // Energy glow for healthy plants
@@ -754,6 +766,253 @@ export class PlantRenderer {
       this.ctx.beginPath();
       this.ctx.arc(bloomX, bloomY, 4, 0, Math.PI * 2);
       this.ctx.fill();
+    }
+  }
+
+  // ==========================================
+  // CRYSTAL - Geometric glowing formations
+  // ==========================================
+  private renderCrystal(
+    x: number,
+    y: number,
+    size: number,
+    _sway: number,
+    visual: PlantVisual,
+    _healthFactor: number,
+    time: number
+  ): void {
+    if (!this.ctx || !this.rng) return;
+
+    const crystalCount = visual.leafCount;
+    const baseHue = (200 + visual.baseHue + 360) % 360;
+    
+    for (let i = 0; i < crystalCount; i++) {
+      const crystalHeight = size * (0.8 + this.rng.range(0, 1.2));
+      const crystalWidth = size * 0.3 * visual.stemThickness;
+      const angle = (i / crystalCount) * Math.PI - Math.PI / 2 + (this.rng.range(-0.2, 0.2));
+      const pulse = Math.sin(time * 0.5 + i) * 10;
+      
+      this.ctx.save();
+      this.ctx.translate(x, y);
+      this.ctx.rotate(angle);
+      
+      // Outer glow
+      const glow = this.ctx.createLinearGradient(0, 0, 0, -crystalHeight);
+      glow.addColorStop(0, `hsla(${baseHue}, 80%, 70%, 0.3)`);
+      glow.addColorStop(1, `hsla(${baseHue + 30}, 90%, 80%, 0)`);
+      this.ctx.fillStyle = glow;
+      this.ctx.beginPath();
+      this.ctx.moveTo(-crystalWidth * 1.5, 0);
+      this.ctx.lineTo(0, -crystalHeight * 1.1);
+      this.ctx.lineTo(crystalWidth * 1.5, 0);
+      this.ctx.fill();
+
+      // Main crystal body
+      const gradient = this.ctx.createLinearGradient(0, 0, 0, -crystalHeight);
+      gradient.addColorStop(0, `hsl(${baseHue}, 70%, ${40 + pulse}%)`);
+      gradient.addColorStop(0.5, `hsl(${baseHue + 20}, 80%, ${60 + pulse}%)`);
+      gradient.addColorStop(1, `hsl(${baseHue + 40}, 90%, ${85 + pulse}%)`);
+      
+      this.ctx.fillStyle = gradient;
+      this.ctx.beginPath();
+      this.ctx.moveTo(-crystalWidth, 0);
+      this.ctx.lineTo(-crystalWidth * 0.8, -crystalHeight * 0.8);
+      this.ctx.lineTo(0, -crystalHeight);
+      this.ctx.lineTo(crystalWidth * 0.8, -crystalHeight * 0.8);
+      this.ctx.lineTo(crystalWidth, 0);
+      this.ctx.closePath();
+      this.ctx.fill();
+
+      // Facet highlight
+      this.ctx.fillStyle = `hsla(${baseHue + 40}, 100%, 95%, 0.5)`;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, -crystalHeight);
+      this.ctx.lineTo(crystalWidth * 0.8, -crystalHeight * 0.8);
+      this.ctx.lineTo(0, -crystalHeight * 0.2);
+      this.ctx.fill();
+
+      this.ctx.restore();
+    }
+  }
+
+  // ==========================================
+  // CORAL - Branching reef structures
+  // ==========================================
+  private renderCoral(
+    x: number,
+    y: number,
+    size: number,
+    sway: number,
+    visual: PlantVisual,
+    _healthFactor: number,
+    time: number
+  ): void {
+    if (!this.ctx || !this.rng) return;
+
+    const baseColor = this.getBrownPlantColor(visual, 0, 60, 50);
+    const tipColor = this.getBrownPlantColor(visual, 30, 80, 70);
+    
+    const renderBranch = (bx: number, by: number, len: number, angle: number, depth: number) => {
+      if (depth <= 0 || !this.ctx) return;
+
+      const ex = bx + Math.cos(angle) * len;
+      const ey = by + Math.sin(angle) * len;
+
+      const grad = this.ctx.createLinearGradient(bx, by, ex, ey);
+      grad.addColorStop(0, baseColor);
+      grad.addColorStop(1, tipColor);
+
+      this.ctx.strokeStyle = grad;
+      this.ctx.lineWidth = depth * 2 * visual.stemThickness;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(bx, by);
+      this.ctx.lineTo(ex, ey);
+      this.ctx.stroke();
+
+      // Polyps
+      if (depth < 3) {
+        this.ctx.fillStyle = tipColor;
+        this.ctx.beginPath();
+        this.ctx.arc(ex, ey, 2, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+
+      const branches = 2;
+      for (let i = 0; i < branches; i++) {
+        const nextAngle = angle + (i - 0.5) * 1.2 + Math.sin(time + depth) * 0.1;
+        renderBranch(ex, ey, len * 0.7, nextAngle, depth - 1);
+      }
+    };
+
+    renderBranch(x, y, size * 0.8, -Math.PI / 2 + sway * 0.05, 4);
+  }
+
+  // ==========================================
+  // KELP - Long flowing ribbon blades
+  // ==========================================
+  private renderKelp(
+    x: number,
+    y: number,
+    size: number,
+    sway: number,
+    visual: PlantVisual,
+    _healthFactor: number,
+    time: number
+  ): void {
+    if (!this.ctx || !this.rng) return;
+
+    const bladeCount = visual.leafCount;
+    const kelpColor = this.getBluePlantColor(visual, -20, 30, 35);
+    
+    for (let i = 0; i < bladeCount; i++) {
+      const offsetX = (i - bladeCount / 2) * 10;
+      const bladeHeight = size * 3;
+      const bladeWidth = size * 0.8;
+      
+      this.ctx.save();
+      this.ctx.translate(x + offsetX, y);
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, 0);
+      
+      const segments = 8;
+      for (let s = 1; s <= segments; s++) {
+        const t = s / segments;
+        const curve = Math.sin(time * 1.5 + t * 3 + i) * sway * 2;
+        const px = curve * t * 2;
+        const py = -bladeHeight * t;
+        
+        // Render ribbon width
+        this.ctx.lineTo(px, py);
+      }
+      
+      this.ctx.strokeStyle = kelpColor;
+      this.ctx.lineWidth = bladeWidth;
+      this.ctx.lineCap = 'round';
+      this.ctx.lineJoin = 'round';
+      this.ctx.stroke();
+      
+      // Air bladders
+      this.ctx.fillStyle = this.getBrownPlantColor(visual, -10, 40, 45);
+      for (let s = 2; s < segments; s += 2) {
+        const t = s / segments;
+        const curve = Math.sin(time * 1.5 + t * 3 + i) * sway * 2;
+        const bx = curve * t * 2;
+        const by = -bladeHeight * t;
+        this.ctx.beginPath();
+        this.ctx.ellipse(bx, by, 4, 6, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+
+      this.ctx.restore();
+    }
+  }
+
+  // ==========================================
+  // DRACONIC - Spiky dark formations
+  // ==========================================
+  private renderDraconic(
+    x: number,
+    y: number,
+    size: number,
+    sway: number,
+    visual: PlantVisual,
+    _healthFactor: number,
+    time: number
+  ): void {
+    if (!this.ctx || !this.rng) return;
+
+    const stalkCount = Math.floor(visual.leafCount / 2);
+    const mainColor = `hsl(${visual.baseHue}, 30%, 15%)`;
+    const edgeColor = `hsl(${visual.baseHue}, 60%, 40%)`;
+    
+    for (let i = 0; i < stalkCount; i++) {
+      const angle = (i / stalkCount) * Math.PI - Math.PI / 2 + sway * 0.02;
+      const len = size * 2;
+      
+      this.ctx.save();
+      this.ctx.translate(x, y);
+      this.ctx.rotate(angle);
+      
+      // Spiky Stalk
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, 0);
+      this.ctx.quadraticCurveTo(size * 0.5, -len / 2, 0, -len);
+      this.ctx.lineTo(-size * 0.2, -len * 0.8);
+      this.ctx.closePath();
+      
+      this.ctx.fillStyle = mainColor;
+      this.ctx.fill();
+      this.ctx.strokeStyle = edgeColor;
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
+
+      // Thorns
+      const thornCount = 6;
+      for (let j = 0; j < thornCount; j++) {
+        const t = j / thornCount;
+        const tx = Math.sin(t * Math.PI) * size * 0.2;
+        const ty = -len * t;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(tx, ty);
+        this.ctx.lineTo(tx + 10, ty - 5);
+        this.ctx.lineTo(tx + 2, ty + 2);
+        this.ctx.fillStyle = edgeColor;
+        this.ctx.fill();
+      }
+
+      // Eye/Core
+      if (visual.glowsAtNight) {
+        const eyePulse = Math.abs(Math.sin(time + i)) * 0.5 + 0.5;
+        this.ctx.fillStyle = `rgba(255, 50, 0, ${eyePulse})`;
+        this.ctx.beginPath();
+        this.ctx.arc(0, -len * 0.7, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+
+      this.ctx.restore();
     }
   }
   

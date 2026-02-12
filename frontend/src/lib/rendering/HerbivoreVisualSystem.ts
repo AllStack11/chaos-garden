@@ -41,7 +41,8 @@ export type HerbivoreType =
   | 'grasshopper'
   | 'ant'
   | 'bee'
-  | 'moth';
+  | 'moth'
+  | 'centipede';
 
 /**
  * Body shape variations
@@ -148,6 +149,7 @@ function generateVisualSeed(entity: Entity): number {
 function determineHerbivoreType(name: string, species: string): HerbivoreType {
   const tokens = createWordTokenSet(name, species);
 
+  if (hasAnyToken(tokens, ['centipede', 'crawler', 'leggy', 'multileg', 'pedi'])) return 'centipede';
   if (hasAnyToken(tokens, ['butterfly', 'flutter', 'wing'])) return 'butterfly';
   if (hasAnyToken(tokens, ['beetle', 'armor', 'carapace', 'elytra'])) return 'beetle';
   if (
@@ -167,6 +169,7 @@ function determineHerbivoreType(name: string, species: string): HerbivoreType {
   const fallbackOrder: HerbivoreType[] = [
     'rabbit',
     'beetle',
+    'centipede',
     'grasshopper',
     'ant',
     'cricket',
@@ -395,6 +398,21 @@ export function generateHerbivoreVisual(entity: Entity): HerbivoreVisual {
       hasSpots: true,
       hasStripes: false,
       glowIntensity: 0.25
+    },
+    centipede: {
+      bodyShape: ['segmented', 'elongated'],
+      hasWings: false,
+      wingCount: 0,
+      wingType: [],
+      hasAntenna: true,
+      antennaLength: 0.6,
+      legCount: 16,
+      legLength: 0.3,
+      hasShell: false,
+      hasFur: false,
+      hasSpots: false,
+      hasStripes: true,
+      glowIntensity: 0.1
     }
   };
   

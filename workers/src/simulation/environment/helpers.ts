@@ -483,11 +483,12 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
   const prefixes: Record<EntityType, string[]> = {
     plant: [
       'Fern', 'Flower', 'Grass', 'Vine', 'Succulent', 'Lily', 'Moss', 'Cactus', 'Bush', 'Herb',
-      'Rose', 'Tulip', 'Mint', 'Thyme', 'Shrub', 'Jade', 'Blossom', 'Willow', 'Clover', 'Bramble'
+      'Rose', 'Tulip', 'Mint', 'Thyme', 'Shrub', 'Jade', 'Blossom', 'Willow', 'Clover', 'Bramble',
+      'Crystal', 'Prism', 'Shard', 'Coral', 'Reef', 'Kelp', 'Seaweed', 'Drake', 'Spike', 'Void'
     ],
     herbivore: [
       'Butterfly', 'Beetle', 'Rabbit', 'Snail', 'Cricket', 'Ladybug', 'Grasshopper', 'Ant', 'Bee', 'Moth',
-      'Mouse', 'Hare', 'Bunny', 'Locust', 'Caterpillar', 'Mite', 'Weevil', 'Firefly', 'Wren', 'Finch'
+      'Centipede', 'Crawler', 'Mouse', 'Hare', 'Bunny', 'Locust', 'Caterpillar', 'Mite', 'Weevil', 'Firefly', 'Wren', 'Finch'
     ],
     carnivore: [
       'Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Raptor', 'Rend', 
@@ -504,7 +505,8 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
   const suffixes: Record<EntityType, string[]> = {
     plant: [
       'whisper', 'glow', 'heart', 'reach', 'shade', 'burst', 'thorn', 'bud', 'leaf', 'petal',
-      'sprout', 'bloom', 'frond', 'tangle', 'briar', 'root', 'breeze', 'dew', 'canopy', 'verdant'
+      'sprout', 'bloom', 'frond', 'tangle', 'briar', 'root', 'breeze', 'dew', 'canopy', 'verdant',
+      'facet', 'cluster', 'reef', 'frond', 'spire', 'spine', 'scale'
     ],
     herbivore: [
       'stride', 'dash', 'leap', 'bound', 'graze', 'fleet', 'fur', 'step', 'breeze', 'song',
@@ -534,6 +536,16 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
     Jade: 1.1,
     Blossom: 1.1,
     Clover: 1.05,
+    Crystal: 0.6,
+    Prism: 0.5,
+    Shard: 0.5,
+    Coral: 0.7,
+    Reef: 0.7,
+    Kelp: 0.7,
+    Seaweed: 0.6,
+    Drake: 0.4,
+    Spike: 0.6,
+    Void: 0.3,
   };
 
   const pickTypePrefix = (): string => {
