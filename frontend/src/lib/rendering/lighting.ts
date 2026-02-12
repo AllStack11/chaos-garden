@@ -21,23 +21,27 @@ export function createLightingContext(sunlight: number, tick: number, weatherSta
   if (weatherStateName) {
     switch (weatherStateName) {
       case 'STORM':
-        fogDensity += 0.15;
-        shadowStrength += 0.2;
-        bloomFactor *= 0.5;
+        fogDensity += 0.25;
+        shadowStrength += 0.35;
+        bloomFactor *= 0.3;
         break;
       case 'FOG':
-        fogDensity += 0.25;
-        bloomFactor *= 0.7;
+        fogDensity += 0.45;
+        bloomFactor *= 0.4;
         break;
       case 'RAIN':
-        fogDensity += 0.08;
-        shadowStrength += 0.1;
+        fogDensity += 0.15;
+        shadowStrength += 0.2;
+        bloomFactor *= 0.6;
         break;
       case 'OVERCAST':
-        fogDensity += 0.05;
+        fogDensity += 0.12;
+        shadowStrength += 0.1;
+        bloomFactor *= 0.8;
         break;
       case 'DROUGHT':
-        bloomFactor += 0.05;
+        bloomFactor += 0.15;
+        shadowStrength -= 0.1;
         break;
     }
   }

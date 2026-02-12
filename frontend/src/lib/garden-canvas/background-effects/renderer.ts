@@ -41,6 +41,7 @@ export interface BackgroundRenderInput {
   timePhase: TimePhase;
   worldState: BackgroundWorldState;
   pass: BackgroundPass;
+  lightningOpacity?: number;
 }
 
 export function renderBackgroundPass(input: BackgroundRenderInput): void {
@@ -412,14 +413,15 @@ function drawMemoryRings(
 // ==========================================
 
 function drawWeatherAtmosphereEffects(input: BackgroundRenderInput): void {
-  const { ctx, viewport, lighting, worldState, fogPatches } = input;
+  const { ctx, viewport, lighting, worldState, fogPatches, lightningOpacity } = input;
   const weather = worldState.weatherStateName;
 
   // Cloud shadow overlay for overcast/rain/storm
   if (weather === 'OVERCAST' || weather === 'RAIN' || weather === 'STORM') {
-    const cloudDensity = weather === 'STORM' ? 0.18 : weather === 'RAIN' ? 0.12 : 0.06;
-    const cloudGradient = ctx.createLinearGradient(0, 0, 0, viewport.height * 0.5);
-    cloudGradient.addColorStop(0, `rgba(8, 12, 18, ${cloudDensity + lighting.fogDensity * 0.05})`);
+    const cloudDensity = weather === 'STORM' ? 0.28 : weather === 'RAIN' ? 0.18 : 0.12;
+    const cloudGradient = ctx.createLinearGradient(0, 0, 0, viewport.height * 0.7);
+    cloudGradient.addColorStop(0, `rgba(5, 8, 14, ${cloudDensity + lighting.fogDensity * 0.1})`);
+    cloudGradient.addColorStop(0.4, `rgba(8, 12, 18, ${cloudDensity * 0.6})`);
     cloudGradient.addColorStop(1, 'rgba(8, 12, 18, 0)');
     ctx.fillStyle = cloudGradient;
     ctx.fillRect(0, 0, viewport.width, viewport.height);
@@ -432,15 +434,22 @@ function drawWeatherAtmosphereEffects(input: BackgroundRenderInput): void {
         patch.x, patch.y, 0,
         patch.x, patch.y, patch.radius,
       );
-      fogGradient.addColorStop(0, `rgba(180, 200, 180, ${patch.opacity})`);
-      fogGradient.addColorStop(0.6, `rgba(160, 180, 160, ${patch.opacity * 0.4})`);
-      fogGradient.addColorStop(1, 'rgba(160, 180, 160, 0)');
+      const alphaScale = weather === 'FOG' ? 1.5 : 1.0;
+      fogGradient.addColorStop(0, `rgba(200, 210, 200, ${patch.opacity * alphaScale})`);
+      fogGradient.addColorStop(0.6, `rgba(180, 190, 180, ${patch.opacity * 0.6 * alphaScale})`);
+      fogGradient.addColorStop(1, 'rgba(180, 190, 180, 0)');
       ctx.fillStyle = fogGradient;
       ctx.fillRect(
         patch.x - patch.radius, patch.y - patch.radius,
         patch.radius * 2, patch.radius * 2,
       );
     });
+  }
+
+  // Lightning Flash
+  if (lightningOpacity && lightningOpacity > 0) {
+    ctx.fillStyle = `rgba(230, 240, 255, ${lightningOpacity})`;
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
   }
 }
 
@@ -451,9 +460,9 @@ function drawRainDrops(
 ): void {
   if (rainDrops.length === 0) return;
 
-  const baseAlpha = 0.15 + lighting.ambientLevel * 0.1;
-  ctx.strokeStyle = `rgba(170, 200, 220, ${baseAlpha})`;
-  ctx.lineWidth = 1;
+  const baseAlpha = 0.25 + lighting.ambientLevel * 0.1;
+  ctx.strokeStyle = `rgba(180, 210, 235, ${baseAlpha})`;
+  ctx.lineWidth = 1.2;
   ctx.lineCap = 'round';
 
   rainDrops.forEach((drop) => {
@@ -462,6 +471,13 @@ function drawRainDrops(
     ctx.moveTo(drop.x, drop.y);
     ctx.lineTo(drop.x + drop.windOffset * 2, drop.y + drop.length);
     ctx.stroke();
+
+    // Occasional splash at bottom
+    if (drop.y > 550 && Math.random() > 0.98) {
+      ctx.beginPath();
+      ctx.arc(drop.x, drop.y, 2, 0, Math.PI, true);
+      ctx.stroke();
+    }
   });
 
   ctx.globalAlpha = 1;
@@ -471,19 +487,36 @@ function drawWeatherPostVeilEffects(input: BackgroundRenderInput): void {
   const { ctx, viewport, worldState } = input;
   const weather = worldState.weatherStateName;
 
-  // Drought warm tint
+  // Drought warm tint + heat haze
   if (weather === 'DROUGHT') {
     const heatGradient = ctx.createLinearGradient(0, 0, 0, viewport.height);
-    heatGradient.addColorStop(0, 'rgba(180, 120, 40, 0.06)');
-    heatGradient.addColorStop(0.5, 'rgba(200, 140, 50, 0.04)');
-    heatGradient.addColorStop(1, 'rgba(160, 100, 30, 0.02)');
+    heatGradient.addColorStop(0, 'rgba(210, 140, 30, 0.12)');
+    heatGradient.addColorStop(0.5, 'rgba(230, 160, 40, 0.08)');
+    heatGradient.addColorStop(1, 'rgba(190, 110, 20, 0.04)');
     ctx.fillStyle = heatGradient;
     ctx.fillRect(0, 0, viewport.width, viewport.height);
+
+    // Subtle heat haze shimmer
+    const shimmer = Math.sin((worldState.tick || 0) * 0.1) * 2;
+    ctx.save();
+    ctx.globalAlpha = 0.05;
+    ctx.translate(0, shimmer);
+    ctx.fillStyle = 'rgba(255, 230, 180, 0.1)';
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(0, (viewport.height / 5) * i, viewport.width, 2);
+    }
+    ctx.restore();
   }
 
   // Storm extra darkness
   if (weather === 'STORM') {
-    ctx.fillStyle = 'rgba(5, 8, 15, 0.08)';
+    ctx.fillStyle = 'rgba(2, 4, 10, 0.15)';
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
+  }
+
+  // Heavy Fog veil
+  if (weather === 'FOG') {
+    ctx.fillStyle = 'rgba(180, 190, 180, 0.15)';
     ctx.fillRect(0, 0, viewport.width, viewport.height);
   }
 }
@@ -515,7 +548,12 @@ function drawCanopyGraph(
     const controlX = (from.x + to.x) * 0.5 + edge.curve * (0.6 + from.depth * 0.4);
     const controlY = (from.y + to.y) * 0.5 - Math.abs(edge.curve) * 0.2;
 
-    ctx.strokeStyle = `hsla(${88 + from.depth * 44}, 42%, 62%, ${baseAlpha * edge.weight})`;
+    const weather = worldState.weatherStateName;
+    const baseHue = weather === 'DROUGHT' ? 60 : weather === 'STORM' ? 100 : 88;
+    const saturation = weather === 'DROUGHT' ? 25 : weather === 'RAIN' || weather === 'STORM' ? 50 : 42;
+    const lightness = weather === 'DROUGHT' ? 45 : weather === 'STORM' ? 40 : 62;
+
+    ctx.strokeStyle = `hsla(${baseHue + from.depth * 44}, ${saturation}%, ${lightness}%, ${baseAlpha * edge.weight})`;
     ctx.lineWidth = edge.thickness * (0.9 + from.depth * 0.55);
     ctx.lineCap = 'round';
     ctx.beginPath();

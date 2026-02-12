@@ -49,6 +49,8 @@ export interface BackgroundAnimationState {
   biomeDriftX: number;
   biomeDriftY: number;
   lastGlitchTime: number;
+  lastLightningTime: number;
+  lightningOpacity: number;
   randomSeed: number;
   qualityTier: QualityTier;
   lastEventFingerprint: string;
@@ -84,6 +86,8 @@ export function createBackgroundAnimationState(
     biomeDriftX: 0,
     biomeDriftY: 0,
     lastGlitchTime: 0,
+    lastLightningTime: 0,
+    lightningOpacity: 0,
     randomSeed: ((viewport.width * 73856093) ^ (viewport.height * 19349663)) >>> 0,
     qualityTier,
     lastEventFingerprint: '',
@@ -238,6 +242,19 @@ export function updateBackgroundAnimationState(
     ring.radius += 0.85;
     ring.opacity *= ring.ringType === 'population' ? 0.992 : 0.989;
   });
+
+  // Weather-specific state updates
+  if (state.currentWeatherStateName === 'STORM') {
+    if (now - state.lastLightningTime > 3000 + nextRandom(state) * 8000) {
+      state.lightningOpacity = 0.4 + nextRandom(state) * 0.4;
+      state.lastLightningTime = now;
+    }
+  }
+
+  if (state.lightningOpacity > 0) {
+    state.lightningOpacity *= 0.88;
+    if (state.lightningOpacity < 0.01) state.lightningOpacity = 0;
+  }
 }
 
 function createSporeParticles(state: BackgroundAnimationState, viewport: ViewportSize): SporeParticle[] {
@@ -436,18 +453,18 @@ export function syncWeatherParticlesToBackgroundState(
 
   // Rebuild rain drops based on weather
   if (weatherStateName === 'STORM') {
-    state.rainDrops = createRainDropParticles(state, viewport, pickCount(200, state.qualityTier));
+    state.rainDrops = createRainDropParticles(state, viewport, pickCount(600, state.qualityTier));
   } else if (weatherStateName === 'RAIN') {
-    state.rainDrops = createRainDropParticles(state, viewport, pickCount(80, state.qualityTier));
+    state.rainDrops = createRainDropParticles(state, viewport, pickCount(250, state.qualityTier));
   } else {
     state.rainDrops = [];
   }
 
   // Rebuild fog patches based on weather
   if (weatherStateName === 'FOG') {
-    state.fogPatches = createFogPatches(state, viewport, pickCount(12, state.qualityTier));
+    state.fogPatches = createFogPatches(state, viewport, pickCount(24, state.qualityTier));
   } else if (weatherStateName === 'STORM') {
-    state.fogPatches = createFogPatches(state, viewport, pickCount(5, state.qualityTier));
+    state.fogPatches = createFogPatches(state, viewport, pickCount(12, state.qualityTier));
   } else {
     state.fogPatches = [];
   }
