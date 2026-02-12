@@ -27,7 +27,7 @@ interface CarnivoreTraits {
   perceptionRadius: number;
 }
 
-export type CarnivoreType = 'wolf' | 'fox' | 'bigCat';
+export type CarnivoreType = 'wolf' | 'raptor' | 'serpent';
 export type CarnivorePatternType = 'solid' | 'striped' | 'spotted' | 'banded';
 
 export interface CarnivoreVisual {
@@ -94,45 +94,48 @@ function determineCarnivoreType(entity: Entity): CarnivoreType {
   const tokens = createWordTokenSet(entity.name, entity.species);
 
   if (
-    hasAnyToken(tokens, ['wolf', 'hound', 'night', 'shadow', 'hunt', 'stalk'])
+    hasAnyToken(tokens, ['wolf', 'hound', 'night', 'shadow', 'hunt', 'stalk', 'howl'])
   ) {
     return 'wolf';
   }
 
   if (
-    hasAnyToken(tokens, ['fox', 'vulp', 'claw', 'sharp', 'pounce'])
+    hasAnyToken(tokens, ['raptor', 'hawk', 'eagle', 'vulture', 'talon', 'sky', 'beak', 'dive', 'soar', 'glide'])
   ) {
-    return 'fox';
+    return 'raptor';
   }
 
   if (
-    hasAnyToken(tokens, ['cat', 'lynx', 'tiger', 'panther', 'fang', 'blood', 'roar'])
+    hasAnyToken(tokens, ['serpent', 'snake', 'cobra', 'viper', 'coil', 'slither', 'venom', 'hiss', 'drake', 'scourge'])
   ) {
-    return 'bigCat';
+    return 'serpent';
   }
 
-  const fallbackOrder: CarnivoreType[] = ['wolf', 'fox', 'bigCat'];
+  const fallbackOrder: CarnivoreType[] = ['wolf', 'raptor', 'serpent'];
   return pickDeterministicType(fallbackOrder, entity.species, entity.name);
 }
 
 const CARNIVORE_COLOR_SCHEMES: Record<CarnivoreType, CreatureColorScheme> = {
   wolf: {
-    base: { hue: [208, 226], saturation: [10, 24], lightness: [30, 46] },
-    accent: { hue: [28, 40], saturation: [32, 52], lightness: [66, 82] },
-    pattern: { hue: [214, 236], saturation: [8, 20], lightness: [8, 20] },
-    detail: { hue: [200, 225], saturation: [8, 20], lightness: [12, 26] },
+    // Crimson Wolf - deep desaturated reds to charcoal
+    base: { hue: [345, 10], saturation: [10, 30], lightness: [20, 40] },
+    accent: { hue: [0, 20], saturation: [40, 60], lightness: [40, 55] },
+    pattern: { hue: [340, 360], saturation: [10, 25], lightness: [10, 20] },
+    detail: { hue: [0, 15], saturation: [30, 50], lightness: [15, 30] },
   },
-  fox: {
-    base: { hue: [14, 26], saturation: [58, 80], lightness: [46, 62] },
-    accent: { hue: [26, 38], saturation: [40, 66], lightness: [82, 94] },
-    pattern: { hue: [14, 22], saturation: [44, 64], lightness: [16, 30] },
-    detail: { hue: [16, 30], saturation: [44, 66], lightness: [22, 38] },
+  raptor: {
+    // Scarlet Raptor - intense reds to dark plumes
+    base: { hue: [350, 20], saturation: [60, 90], lightness: [30, 55] },
+    accent: { hue: [340, 15], saturation: [70, 100], lightness: [50, 70] },
+    pattern: { hue: [330, 10], saturation: [30, 60], lightness: [10, 25] },
+    detail: { hue: [355, 25], saturation: [50, 90], lightness: [20, 40] },
   },
-  bigCat: {
-    base: { hue: [34, 48], saturation: [44, 68], lightness: [46, 62] },
-    accent: { hue: [40, 54], saturation: [56, 80], lightness: [74, 88] },
-    pattern: { hue: [22, 36], saturation: [34, 56], lightness: [10, 24] },
-    detail: { hue: [28, 44], saturation: [34, 54], lightness: [20, 34] },
+  serpent: {
+    // Maroon Serpent - deep, dark, glossy reds to iridescent scales
+    base: { hue: [330, 355], saturation: [30, 65], lightness: [15, 40] },
+    accent: { hue: [345, 15], saturation: [50, 90], lightness: [40, 65] },
+    pattern: { hue: [320, 350], saturation: [20, 55], lightness: [5, 20] },
+    detail: { hue: [350, 20], saturation: [60, 100], lightness: [10, 30] },
   },
 };
 
@@ -193,23 +196,23 @@ export function generateCarnivoreVisual(entity: Entity): CarnivoreVisual {
       stingerLength: [0, 0],
       shimmer: [0.03, 0.12],
     },
-    fox: {
-      legCount: 4,
-      bodyLengthRatio: [1.2, 1.6],
-      tailLength: [1.2, 1.8],
-      fangSize: [0.2, 0.38],
-      clawSize: [0.2, 0.38],
+    raptor: {
+      legCount: 2,
+      bodyLengthRatio: [0.8, 1.2],
+      tailLength: [0.6, 1.1],
+      fangSize: [0.4, 0.6], // Beak size
+      clawSize: [0.5, 0.75], // Talon size
       stingerLength: [0, 0],
-      shimmer: [0.08, 0.2],
+      shimmer: [0.05, 0.18],
     },
-    bigCat: {
-      legCount: 4,
-      bodyLengthRatio: [1.35, 1.75],
-      tailLength: [0.9, 1.4],
-      fangSize: [0.32, 0.52],
-      clawSize: [0.3, 0.5],
-      stingerLength: [0, 0],
-      shimmer: [0.04, 0.15],
+    serpent: {
+      legCount: 0,
+      bodyLengthRatio: [2.5, 4.0],
+      tailLength: [0.5, 1.0],
+      fangSize: [0.45, 0.65],
+      clawSize: [0, 0],
+      stingerLength: [0.3, 0.6], // Rattle or tail spike
+      shimmer: [0.1, 0.25],
     },
   };
 

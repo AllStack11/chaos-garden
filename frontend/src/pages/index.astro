@@ -58,40 +58,40 @@ if (!API_URL) {
 
       <!-- Center: Selection Tooltip (Floating Contextual) -->
       <div data-selection-info class="hidden pointer-events-none absolute transition-all duration-300">
-        <div class="pointer-events-auto flex translate-y-0 sm:translate-y-8 flex-col items-center space-y-2 sm:space-y-3 rounded-2xl bg-garden-green-900/20 px-4 sm:px-6 py-3 sm:py-4 backdrop-blur-md border border-garden-green-500/10 shadow-2xl min-w-[150px] sm:min-w-[180px]">
-          <div class="flex items-center space-x-3 sm:space-x-4">
-             <div data-selection-icon class="text-xl sm:text-2xl"></div>
+        <div class="pointer-events-auto flex translate-y-0 sm:translate-y-6 flex-col items-center space-y-1.5 sm:space-y-2 rounded-xl bg-[#03180f]/90 px-3 sm:px-4 py-2.5 sm:py-3 backdrop-blur-sm border border-garden-green-500/20 shadow-2xl min-w-[132px] sm:min-w-[158px]">
+          <div class="flex items-center space-x-2.5 sm:space-x-3">
+             <div data-selection-icon class="text-lg sm:text-xl"></div>
              <div class="flex flex-col">
-               <div data-selection-name class="text-sm font-medium text-white/90 tracking-tight"></div>
-               <div data-selection-species class="text-[8px] sm:text-[9px] text-white/40 uppercase tracking-widest"></div>
+               <div data-selection-name class="text-xs sm:text-sm font-medium text-white/90 tracking-tight leading-tight"></div>
+               <div data-selection-species class="text-[7px] sm:text-[8px] text-white/45 uppercase tracking-[0.18em] leading-tight"></div>
              </div>
           </div>
           
           <!-- Vital Indicators -->
-          <div class="w-full space-y-2 pt-1 border-t border-white/5">
+          <div class="w-full space-y-1.5 pt-1 border-t border-white/10">
             <!-- Health Bar -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-[8px] font-mono text-white/30 uppercase tracking-tighter">
+            <div class="space-y-0.5">
+              <div class="flex justify-between text-[7px] font-mono text-white/40 uppercase tracking-[0.08em]">
                 <span>Vigor</span>
                 <span data-selection-health-text>--%</span>
               </div>
-              <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                 <div data-selection-health-bar class="h-full bg-green-400 transition-all duration-500"></div>
               </div>
             </div>
             <!-- Energy Bar -->
-            <div class="space-y-1">
-              <div class="flex justify-between text-[8px] font-mono text-white/30 uppercase tracking-tighter">
+            <div class="space-y-0.5">
+              <div class="flex justify-between text-[7px] font-mono text-white/40 uppercase tracking-[0.08em]">
                 <span>Essence</span>
                 <span data-selection-energy-text>--%</span>
               </div>
-              <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                 <div data-selection-energy-bar class="h-full bg-yellow-400 transition-all duration-500"></div>
               </div>
             </div>
           </div>
 
-          <div data-selection-stats class="text-[8px] sm:text-[9px] text-white/30 font-mono text-center pt-1"></div>
+          <div data-selection-stats class="text-[7px] sm:text-[8px] text-white/40 font-mono text-center pt-0.5 leading-tight"></div>
         </div>
       </div>
 

@@ -490,8 +490,9 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
       'Mouse', 'Hare', 'Bunny', 'Locust', 'Caterpillar', 'Mite', 'Weevil', 'Firefly', 'Wren', 'Finch'
     ],
     carnivore: [
-      'Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Pounce', 'Roar',
-      'Wolf', 'Fox', 'Lynx', 'Tiger', 'Panther', 'Raptor', 'Rend', 'Howl', 'Strike', 'Raze'
+      'Fang', 'Claw', 'Night', 'Shadow', 'Sharp', 'Hunt', 'Stalk', 'Blood', 'Raptor', 'Rend', 
+      'Howl', 'Strike', 'Raze', 'Hawk', 'Eagle', 'Viper', 'Serpent', 'Cobra', 'Vulture', 
+      'Drake', 'Talon', 'Slither', 'Coil', 'Wolf', 'Bane', 'Grim', 'Dire', 'Savage'
     ],
     fungus: [
       'Spore', 'Cap', 'Mycel', 'Mold', 'Glow', 'Damp', 'Shroom', 'Puff', 'Web', 'Rot',
@@ -510,8 +511,9 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
       'flutter', 'forage', 'skip', 'scurry', 'nibble', 'drift', 'glide', 'hum', 'trill', 'meadow'
     ],
     carnivore: [
-      'strike', 'rip', 'tear', 'kill', 'fang', 'pounce', 'shade', 'hunter', 'stalker', 'howl',
-      'ambush', 'prowl', 'maul', 'snare', 'ravenous', 'chase', 'snarl', 'grim', 'rush', 'fury'
+      'strike', 'rip', 'tear', 'kill', 'fang', 'shade', 'hunter', 'stalker', 'howl',
+      'ambush', 'prowl', 'snare', 'ravenous', 'chase', 'snarl', 'grim', 'rush', 'fury',
+      'dive', 'beak', 'glide', 'soar', 'hiss', 'venom', 'snap', 'scourge', 'bane'
     ],
     fungus: [
       'pulse', 'spread', 'bloom', 'rot', 'puff', 'creep', 'glow', 'web', 'drift', 'spore',

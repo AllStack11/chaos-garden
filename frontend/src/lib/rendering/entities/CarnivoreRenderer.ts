@@ -44,11 +44,11 @@ export class CarnivoreRenderer {
       case 'wolf':
         this.renderWolf(bodyX, bodyY, size, visual, time);
         break;
-      case 'fox':
-        this.renderFox(bodyX, bodyY, size, visual, time);
+      case 'raptor':
+        this.renderRaptor(bodyX, bodyY, size, visual, time);
         break;
-      case 'bigCat':
-        this.renderBigCat(bodyX, bodyY, size, visual, time);
+      case 'serpent':
+        this.renderSerpent(bodyX, bodyY, size, visual, time);
         break;
     }
 
@@ -70,24 +70,132 @@ export class CarnivoreRenderer {
     this.renderMammalBody(x, y, size, visual, time, 0.9);
   }
 
-  private renderFox(
+  private renderRaptor(
     x: number,
     y: number,
     size: number,
     visual: CarnivoreVisual,
     time: number,
   ): void {
-    this.renderMammalBody(x, y, size, visual, time, 1.2);
+    if (!this.ctx) return;
+
+    const bodyWidth = size * 0.45;
+    const bodyLength = size * visual.bodyLengthRatio;
+    const headRadius = size * 0.22 * visual.headSize;
+    const wingSwing = Math.sin(time * 5 + x * 0.02) * size * 0.2;
+    const legLength = size * (0.3 + visual.legLength * 0.4);
+
+    // Wings (background)
+    this.ctx.fillStyle = visual.patternColor;
+    this.ctx.beginPath();
+    this.ctx.ellipse(x - bodyLength * 0.1, y - wingSwing, bodyLength * 0.6, bodyWidth * 1.2, -0.4, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Legs
+    this.ctx.strokeStyle = visual.patternColor;
+    this.ctx.lineWidth = Math.max(1.5, size * 0.08);
+    this.ctx.beginPath();
+    this.ctx.moveTo(x - bodyLength * 0.1, y + bodyWidth * 0.5);
+    this.ctx.lineTo(x - bodyLength * 0.2, y + bodyWidth * 0.5 + legLength);
+    this.ctx.stroke();
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + bodyLength * 0.1, y + bodyWidth * 0.5);
+    this.ctx.lineTo(x, y + bodyWidth * 0.5 + legLength);
+    this.ctx.stroke();
+
+    // Talons
+    this.ctx.strokeStyle = visual.accentColor;
+    this.ctx.lineWidth = 2;
+    const talonX = x - bodyLength * 0.2;
+    const talonY = y + bodyWidth * 0.5 + legLength;
+    this.ctx.beginPath();
+    this.ctx.moveTo(talonX, talonY);
+    this.ctx.lineTo(talonX - visual.clawSize * 5, talonY + 4);
+    this.ctx.moveTo(talonX, talonY);
+    this.ctx.lineTo(talonX + visual.clawSize * 5, talonY + 4);
+    this.ctx.stroke();
+
+    // Body
+    this.ctx.fillStyle = visual.baseColor;
+    this.ctx.beginPath();
+    this.ctx.ellipse(x, y, bodyLength * 0.5, bodyWidth, -0.2, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.renderPattern(x, y, bodyLength, bodyWidth, visual);
+
+    // Head
+    this.ctx.fillStyle = visual.baseColor;
+    this.ctx.beginPath();
+    this.ctx.arc(x + bodyLength * 0.4, y - bodyWidth * 0.5, headRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Beak
+    this.ctx.fillStyle = visual.accentColor;
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + bodyLength * 0.4 + headRadius * 0.7, y - bodyWidth * 0.5 - headRadius * 0.3);
+    this.ctx.lineTo(x + bodyLength * 0.4 + headRadius * 1.5, y - bodyWidth * 0.5 + headRadius * 0.2);
+    this.ctx.lineTo(x + bodyLength * 0.4 + headRadius * 0.5, y - bodyWidth * 0.5 + headRadius * 0.8);
+    this.ctx.fill();
   }
 
-  private renderBigCat(
+  private renderSerpent(
     x: number,
     y: number,
     size: number,
     visual: CarnivoreVisual,
     time: number,
   ): void {
-    this.renderMammalBody(x, y, size, visual, time, 0.75);
+    if (!this.ctx) return;
+
+    const segmentCount = 8;
+    const bodyWidth = size * 0.35;
+    const waveFreq = 2.5 + visual.visualSeed % 2;
+    const waveAmp = size * 0.4;
+
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+
+    // Tail spike / Rattle
+    if (visual.stingerLength > 0.2) {
+      const tailX = x - size * visual.bodyLengthRatio * 0.55;
+      const tailY = y + Math.sin(time * waveFreq - segmentCount * 0.5) * waveAmp;
+      this.ctx.fillStyle = visual.accentColor;
+      this.ctx.beginPath();
+      this.ctx.arc(tailX, tailY, bodyWidth * 0.8, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    // Body segments (back to front)
+    for (let i = segmentCount; i >= 0; i--) {
+      const t = i / segmentCount;
+      const segmentX = x + (0.5 - t) * size * visual.bodyLengthRatio;
+      const segmentY = y + Math.sin(time * waveFreq - t * 4) * waveAmp;
+      const segmentRadius = bodyWidth * (1 - t * 0.5);
+
+      this.ctx.fillStyle = i % 2 === 0 ? visual.baseColor : visual.patternColor;
+      this.ctx.beginPath();
+      this.ctx.arc(segmentX, segmentY, segmentRadius, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      if (i === 0) {
+        // Head
+        this.ctx.fillStyle = visual.baseColor;
+        this.ctx.beginPath();
+        this.ctx.ellipse(segmentX + segmentRadius * 0.5, segmentY, segmentRadius * 1.4, segmentRadius * 1.1, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Tongue (flickering)
+        if (Math.sin(time * 15) > 0.7) {
+          this.ctx.strokeStyle = '#ff4d4d';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.moveTo(segmentX + segmentRadius * 1.8, segmentY);
+          this.ctx.lineTo(segmentX + segmentRadius * 2.5, segmentY);
+          this.ctx.stroke();
+        }
+      }
+    }
   }
 
   private renderMammalBody(

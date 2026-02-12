@@ -81,7 +81,7 @@ function updateSelectionTooltip(root: HTMLElement, state: GardenAppState, isMobi
 
   if (nameEl) nameEl.textContent = entity.name;
   if (speciesEl) speciesEl.textContent = entity.species;
-  if (statsEl) statsEl.textContent = `Age: ${entity.age} Evolution Ticks`;
+  if (statsEl) statsEl.textContent = `Age ${entity.age} • Evol Ticks`;
   if (iconEl) iconEl.textContent = ENTITY_ICON_BY_TYPE[entity.type] || '❓';
 
   if (healthBar) {
