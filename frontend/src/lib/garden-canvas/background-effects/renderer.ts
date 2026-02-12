@@ -113,17 +113,17 @@ function drawFarBackground(input: BackgroundRenderInput): void {
   let topColor, middleColor, bottomColor;
 
   if (timePhase === 'dawn') {
-    // Dawn: Pink/orange horizon transitioning to blue-green
+    // Dawn: Pink/orange horizon transitioning to blue-green (reduced intensity by 50%)
     const dawnProgress = Math.max(0, Math.min(1, (worldState.sunlight - 0.2) / 0.25)); // 0-1 through dawn phase
-    topColor = `rgba(${15 + dawnProgress * 30}, ${20 + dawnProgress * 40}, ${40 + dawnProgress * 20}, 0.98)`;
-    middleColor = `rgba(${140 + dawnProgress * 20}, ${80 + dawnProgress * 40}, ${50 - dawnProgress * 15}, ${0.92 + dawnProgress * 0.06})`;
-    bottomColor = `rgba(${160 + dawnProgress * 20}, ${110 + dawnProgress * 30}, ${60 + dawnProgress * 15}, 0.95)`;
+    topColor = `rgba(${15 + dawnProgress * 15}, ${20 + dawnProgress * 20}, ${40 + dawnProgress * 10}, 0.98)`;
+    middleColor = `rgba(${140 + dawnProgress * 10}, ${80 + dawnProgress * 20}, ${50 - dawnProgress * 7.5}, ${0.92 + dawnProgress * 0.06})`;
+    bottomColor = `rgba(${160 + dawnProgress * 10}, ${110 + dawnProgress * 15}, ${60 + dawnProgress * 7.5}, 0.95)`;
   } else if (timePhase === 'dusk') {
-    // Dusk: Orange/red/purple horizon fading to dark
+    // Dusk: Orange/red/purple horizon fading to dark (reduced intensity by 50%)
     const duskProgress = Math.max(0, Math.min(1, 1 - ((worldState.sunlight - 0.45) / 0.3))); // 1 at start, 0 at end
-    topColor = `rgba(${30 - duskProgress * 20}, ${27 - duskProgress * 10}, ${20 - duskProgress * 5}, 0.98)`;
-    middleColor = `rgba(${140 + duskProgress * 50}, ${70 + duskProgress * 40}, ${40 + duskProgress * 20}, ${0.90 + duskProgress * 0.05})`;
-    bottomColor = `rgba(${60 + duskProgress * 100}, ${40 + duskProgress * 70}, ${20 + duskProgress * 30}, 0.95)`;
+    topColor = `rgba(${30 - duskProgress * 10}, ${27 - duskProgress * 5}, ${20 - duskProgress * 2.5}, 0.98)`;
+    middleColor = `rgba(${140 + duskProgress * 25}, ${70 + duskProgress * 20}, ${40 + duskProgress * 10}, ${0.90 + duskProgress * 0.05})`;
+    bottomColor = `rgba(${60 + duskProgress * 50}, ${40 + duskProgress * 35}, ${20 + duskProgress * 15}, 0.95)`;
   } else if (timePhase === 'night') {
     // Night: Deep blues
     topColor = `rgba(5, 14, 28, ${0.95 + lighting.fogDensity * 0.1})`;
