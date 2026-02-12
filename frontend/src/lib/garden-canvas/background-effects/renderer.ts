@@ -731,7 +731,8 @@ function drawCanopyGraph(
   const livingFactor = Math.max(0, Math.min(1, worldState.totalLiving / 400));
   const densityFactor = Math.max(0.28, Math.min(1, 0.26 + plantDensity * 0.72 + livingFactor * 0.4));
   const visibleEdges = Math.max(1, Math.floor(canopyEdges.length * densityFactor));
-  const baseAlpha = 0.045 + densityFactor * 0.08 + (1 - lighting.sunlight) * 0.03;
+  // Reduced baseAlpha to make roots more subtle (0.045 -> 0.02, 0.08 -> 0.04)
+  const baseAlpha = 0.02 + densityFactor * 0.04 + (1 - lighting.sunlight) * 0.02;
 
   const nodeById = new Map<number, CanopyNode>();
   canopyNodes.forEach((node) => nodeById.set(node.id, node));

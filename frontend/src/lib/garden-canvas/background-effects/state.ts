@@ -159,7 +159,7 @@ export function createBackgroundAnimationState(
 
   // Initialize new visual effects
   state.stars = createStars(state, viewport);
-  state.windLeaves = createWindLeaves(state, viewport, 1.0);
+  state.windLeaves = []; // Start empty, will spawn occasionally
   state.godRays = createGodRays(state, viewport, state.lastSunDirection);
 
   return state;
@@ -170,15 +170,141 @@ export function resizeBackgroundAnimationState(
   viewport: ViewportSize,
   qualityTier: QualityTier,
 ): void {
+  const oldWidth = state.spores.length > 0 ? viewport.width : 0;
+  const oldHeight = state.spores.length > 0 ? viewport.height : 0;
+  
   state.qualityTier = qualityTier;
-  state.spores = createSporeParticles(state, viewport);
-  state.shadows = createShadowBlobs(state, viewport);
-  state.biomeCells = createBiomeCells(state, viewport);
-  state.rootPressureCells = createRootPressureCells(state, viewport);
-  state.parallaxBands = createParallaxBands(state, viewport);
-  const canopyGraph = createCanopyGraph(state, viewport);
-  state.canopyNodes = canopyGraph.nodes;
-  state.canopyEdges = canopyGraph.edges;
+
+  // If we have existing state, try to scale/preserve it instead of regenerating
+  if (state.spores.length > 0 && oldWidth > 0 && oldHeight > 0) {
+    const scaleX = viewport.width / oldWidth;
+    const scaleY = viewport.height / oldHeight;
+
+    // Scale spores
+    state.spores.forEach(s => {
+      s.x *= scaleX;
+      s.y *= scaleY;
+    });
+
+    // Scale shadows
+    state.shadows.forEach(s => {
+      s.x *= scaleX;
+      s.y *= scaleY;
+    });
+
+    // Scale canopy nodes
+    state.canopyNodes.forEach(n => {
+      n.x *= scaleX;
+      n.y *= scaleY;
+    });
+
+    // Scale stars
+    state.stars.forEach(s => {
+      s.x *= scaleX;
+      s.y *= scaleY;
+    });
+
+    // Scale fireflies
+    state.fireflies.forEach(f => {
+      f.x *= scaleX;
+      f.y *= scaleY;
+    });
+
+    // Scale wind leaves
+    state.windLeaves.forEach(l => {
+      l.x *= scaleX;
+      l.y *= scaleY;
+    });
+
+    // Scale pollen
+    state.pollen.forEach(p => {
+      p.x *= scaleX;
+      p.y *= scaleY;
+    });
+
+    // Scale mist layers
+    state.mistLayers.forEach(m => {
+      m.x *= scaleX;
+      m.y *= scaleY;
+      m.width *= scaleX;
+      m.height *= scaleY;
+    });
+
+    // Scale dewdrops
+    state.dewdrops.forEach(d => {
+      d.x *= scaleX;
+      d.y *= scaleY;
+    });
+
+    // Scale glitch sparks
+    state.glitchSparks.forEach(s => {
+      s.x *= scaleX;
+      s.y *= scaleY;
+    });
+
+    // Scale ripples
+    state.ripples.forEach(r => {
+      r.x *= scaleX;
+      r.y *= scaleY;
+    });
+
+    // Scale memory rings
+    state.memoryRings.forEach(r => {
+      r.x *= scaleX;
+      r.y *= scaleY;
+    });
+
+    // Scale fog patches
+    state.fogPatches.forEach(f => {
+      f.x *= scaleX;
+      f.y *= scaleY;
+    });
+
+    // Scale rain drops
+    state.rainDrops.forEach(r => {
+      r.x *= scaleX;
+      r.y *= scaleY;
+    });
+
+    // Scale god rays
+    state.godRays.forEach(r => {
+      r.originX *= scaleX;
+      r.originY *= scaleY;
+    });
+
+    // Scale aurora waves
+    state.auroraWaves.forEach(w => {
+      w.baseY *= scaleY;
+    });
+
+    // Scale dust devils
+    state.dustDevils.forEach(d => {
+      d.x *= scaleX;
+      d.y *= scaleY;
+    });
+
+    // Parallax bands just need their baseY updated
+    state.parallaxBands.forEach(b => {
+      b.baseY *= scaleY;
+    });
+
+    // Note: Grid-based systems (biomes, root pressure) are easier to regenerate 
+    // but they are static relative to their grid coordinates, so it's less jarring.
+    // However, to be fully safe we regenerate them.
+    state.biomeCells = createBiomeCells(state, viewport);
+    state.rootPressureCells = createRootPressureCells(state, viewport);
+  } else {
+    // Initial creation or fallback
+    state.spores = createSporeParticles(state, viewport);
+    state.shadows = createShadowBlobs(state, viewport);
+    state.biomeCells = createBiomeCells(state, viewport);
+    state.rootPressureCells = createRootPressureCells(state, viewport);
+    state.parallaxBands = createParallaxBands(state, viewport);
+    const canopyGraph = createCanopyGraph(state, viewport);
+    state.canopyNodes = canopyGraph.nodes;
+    state.canopyEdges = canopyGraph.edges;
+    state.stars = createStars(state, viewport);
+  }
 }
 
 export function syncBackgroundEventEffects(
@@ -296,10 +422,29 @@ export function updateBackgroundAnimationState(
     state.fireflies = state.fireflies.filter(f => f.baseOpacity > 0.05);
   }
 
-  // Wind leaves
+  // Wind leaves - Spawn occasionally as "gusts" rather than being persistent
+  // Chance per frame to start a small gust of leaves (about 0.2% chance = roughly every 8-10 seconds)
+  const isStormy = state.currentWeatherStateName === 'STORM';
+  const spawnChance = isStormy ? 0.008 : 0.0015;
+
+  if (nextRandom(state) < spawnChance && state.windLeaves.length < 15) {
+    const gustLeaves = createWindLeaves(state, viewport, isStormy ? 2.0 : 1.0);
+    state.windLeaves.push(...gustLeaves);
+  }
+
   if (state.windLeaves.length > 0) {
-    const windStrength = state.currentWeatherStateName === 'STORM' ? 2.5 : state.currentWeatherStateName === 'RAIN' ? 1.5 : 1.0;
+    const windStrength = isStormy ? 2.5 : state.currentWeatherStateName === 'RAIN' ? 1.5 : 1.0;
     updateWindLeaves(state.windLeaves, viewport, windStrength);
+
+    // Fade out leaves that are near the bottom or have been around too long
+    state.windLeaves.forEach(leaf => {
+      if (leaf.y > viewport.height * 0.8) {
+        leaf.opacity *= 0.96;
+      }
+    });
+
+    // Remove invisible leaves
+    state.windLeaves = state.windLeaves.filter(leaf => leaf.opacity > 0.01);
   }
 
   // Pollen - spawn during day with high plant density
@@ -850,9 +995,9 @@ function updateFireflyParticles(fireflies: FireflyParticle[], viewport: Viewport
 
 // Wind Leaves - Drifting foliage particles that fall and tumble with the wind
 // Color varies with temperature: cold = yellow/orange (autumn), warm = green/pink (spring)
-// Reduced to half density for subtler visual effect
+// Small batches for occasional gusts
 function createWindLeaves(state: BackgroundAnimationState, viewport: ViewportSize, windStrength: number): WindLeaf[] {
-  const count = pickCount(30, state.qualityTier); // High: 30, Medium: 21, Low: 13 (reduced from 60)
+  const count = pickCount(6, state.qualityTier); // High: 6, Medium: 4, Low: 2
   const leaves: WindLeaf[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -877,20 +1022,16 @@ function createWindLeaves(state: BackgroundAnimationState, viewport: ViewportSiz
 // Update wind leaves - Rotate and move leaves based on wind strength
 // Wind strength varies by weather: STORM = 2.5x, RAIN = 1.5x, normal = 1.0x
 // Horizontal movement affected by wind, vertical is constant downward drift
-// Wrap around edges and respawn at top when reaching bottom
+// Wrap around sides but do NOT respawn at top (they fade out instead)
 function updateWindLeaves(leaves: WindLeaf[], viewport: ViewportSize, windStrength: number): void {
   leaves.forEach(leaf => {
     leaf.rotation += leaf.rotationSpeed;
     leaf.x += leaf.vx * windStrength;
     leaf.y += leaf.vy;
 
-    // Wrap around
+    // Wrap sides
     if (leaf.x < -20) leaf.x = viewport.width + 20;
     if (leaf.x > viewport.width + 20) leaf.x = -20;
-    if (leaf.y > viewport.height + 20) {
-      leaf.y = -20;
-      leaf.x = nextRandom({ randomSeed: Date.now() } as BackgroundAnimationState) * viewport.width;
-    }
   });
 }
 
