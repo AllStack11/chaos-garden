@@ -254,6 +254,133 @@ function drawPostLightVeil(input: BackgroundRenderInput): void {
   ctx.fillRect(0, 0, viewport.width, viewport.height);
 }
 
+function drawOrganicBiomeShape(
+  ctx: CanvasRenderingContext2D,
+  radiusX: number,
+  radiusY: number,
+  shapeType: number,
+  curveVariation: number,
+): void {
+  ctx.beginPath();
+
+  switch (shapeType) {
+    case 0: {
+      // Simple ellipse
+      ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+      break;
+    }
+    case 1: {
+      // Organic blob with 4 bezier curves
+      const curve = curveVariation * 0.3 + 0.5;
+      ctx.moveTo(radiusX, 0);
+      ctx.bezierCurveTo(
+        radiusX, radiusY * curve,
+        radiusX * curve, radiusY,
+        0, radiusY,
+      );
+      ctx.bezierCurveTo(
+        -radiusX * curve, radiusY,
+        -radiusX, radiusY * curve,
+        -radiusX, 0,
+      );
+      ctx.bezierCurveTo(
+        -radiusX, -radiusY * curve,
+        -radiusX * curve, -radiusY,
+        0, -radiusY,
+      );
+      ctx.bezierCurveTo(
+        radiusX * curve, -radiusY,
+        radiusX, -radiusY * curve,
+        radiusX, 0,
+      );
+      break;
+    }
+    case 2: {
+      // Rounded irregular blob
+      const points = 6;
+      for (let i = 0; i < points; i++) {
+        const angle = (i / points) * Math.PI * 2;
+        const nextAngle = ((i + 1) / points) * Math.PI * 2;
+        const variation = 0.7 + (Math.sin(i + curveVariation * 10) * 0.3);
+        const nextVariation = 0.7 + (Math.sin(i + 1 + curveVariation * 10) * 0.3);
+
+        const x = Math.cos(angle) * radiusX * variation;
+        const y = Math.sin(angle) * radiusY * variation;
+        const nextX = Math.cos(nextAngle) * radiusX * nextVariation;
+        const nextY = Math.sin(nextAngle) * radiusY * nextVariation;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        }
+
+        const cpAngle = (angle + nextAngle) / 2;
+        const cpDist = 1.2 + curveVariation * 0.3;
+        const cpX = Math.cos(cpAngle) * radiusX * cpDist;
+        const cpY = Math.sin(cpAngle) * radiusY * cpDist;
+
+        ctx.quadraticCurveTo(cpX, cpY, nextX, nextY);
+      }
+      break;
+    }
+    case 3: {
+      // Petal-like shape
+      const petals = 5;
+      for (let i = 0; i < petals; i++) {
+        const angle = (i / petals) * Math.PI * 2;
+        const nextAngle = ((i + 1) / petals) * Math.PI * 2;
+        const midAngle = (angle + nextAngle) / 2;
+
+        const r1 = radiusX * (0.5 + curveVariation * 0.3);
+        const r2 = radiusX * (0.9 + curveVariation * 0.2);
+
+        const x1 = Math.cos(angle) * r1;
+        const y1 = Math.sin(angle) * r1;
+        const x2 = Math.cos(midAngle) * r2;
+        const y2 = Math.sin(midAngle) * r2;
+        const x3 = Math.cos(nextAngle) * r1;
+        const y3 = Math.sin(nextAngle) * r1;
+
+        if (i === 0) {
+          ctx.moveTo(x1, y1);
+        }
+
+        ctx.quadraticCurveTo(x2, y2, x3, y3);
+      }
+      break;
+    }
+    case 4: {
+      // Squiggly irregular blob
+      const segments = 8;
+      for (let i = 0; i < segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const nextAngle = ((i + 1) / segments) * Math.PI * 2;
+
+        const wobble1 = Math.sin(i * 2.3 + curveVariation * 20) * 0.25;
+        const wobble2 = Math.sin((i + 1) * 2.3 + curveVariation * 20) * 0.25;
+
+        const r1 = radiusX * (0.8 + wobble1);
+        const r2 = radiusX * (0.8 + wobble2);
+
+        const x = Math.cos(angle) * r1;
+        const y = Math.sin(angle) * radiusY * (0.8 + wobble1);
+        const nextX = Math.cos(nextAngle) * r2;
+        const nextY = Math.sin(nextAngle) * radiusY * (0.8 + wobble2);
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        }
+
+        // Smooth curve to next point
+        const midAngle = (angle + nextAngle) / 2;
+        const cpX = Math.cos(midAngle) * radiusX * 0.9;
+        const cpY = Math.sin(midAngle) * radiusY * 0.9;
+        ctx.quadraticCurveTo(cpX, cpY, nextX, nextY);
+      }
+      break;
+    }
+  }
+}
+
 function drawBiomeField(
   ctx: CanvasRenderingContext2D,
   biomeCells: BiomeCell[],
@@ -274,8 +401,28 @@ function drawBiomeField(
     const lightness = 12 + fertility * 10 + lighting.sunlight * 6 - corruption * 6;
     const alpha = 0.025 + fertility * 0.045 + corruption * 0.03;
 
-    ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-    ctx.fillRect(cell.x + driftX, cell.y + driftY, cell.size + 1, cell.size + 1);
+    // Calculate center position with drift and offset
+    const centerX = cell.x + cell.size * 0.5 + driftX + cell.offsetX;
+    const centerY = cell.y + cell.size * 0.5 + driftY + cell.offsetY;
+
+    // Save context for rotation
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(cell.tilt);
+
+    // Create radial gradient for soft edges
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, cell.radiusX);
+    gradient.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`);
+    gradient.addColorStop(0.7, `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha * 0.6})`);
+    gradient.addColorStop(1, `hsla(${hue}, ${saturation}%, ${lightness}%, 0)`);
+
+    ctx.fillStyle = gradient;
+
+    // Draw organic shape based on shapeType
+    drawOrganicBiomeShape(ctx, cell.radiusX, cell.radiusY, cell.shapeType, cell.curveVariation);
+    ctx.fill();
+
+    ctx.restore();
   });
 }
 

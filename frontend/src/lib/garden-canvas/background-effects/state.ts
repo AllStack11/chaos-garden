@@ -209,8 +209,8 @@ export function updateBackgroundAnimationState(
   mousePos.x += (targetMousePos.x - mousePos.x) * 0.05;
   mousePos.y += (targetMousePos.y - mousePos.y) * 0.05;
 
-  state.biomeDriftX += 0.08 * QUALITY_MULTIPLIERS[qualityTier];
-  state.biomeDriftY += 0.04 * QUALITY_MULTIPLIERS[qualityTier];
+  state.biomeDriftX += 0.015 * QUALITY_MULTIPLIERS[qualityTier];
+  state.biomeDriftY += 0.008 * QUALITY_MULTIPLIERS[qualityTier];
 
   updateSporeParticles(state.spores, viewport);
   updateShadowBlobs(state.shadows, viewport);
@@ -290,13 +290,38 @@ function createBiomeCells(state: BackgroundAnimationState, viewport: ViewportSiz
 
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
+      const baseX = (col - 1) * cellSize;
+      const baseY = (row - 1) * cellSize;
+
+      // Add organic variation
+      const tilt = (nextRandom(state) - 0.5) * 0.8;
+      const offsetX = (nextRandom(state) - 0.5) * cellSize * 0.15;
+      const offsetY = (nextRandom(state) - 0.5) * cellSize * 0.15;
+
+      // Create ellipse with slight variation in aspect ratio
+      const sizeVariation = 0.85 + nextRandom(state) * 0.3;
+      const aspectRatio = 0.6 + nextRandom(state) * 0.5;
+      const radiusX = (cellSize * sizeVariation) * 0.5;
+      const radiusY = radiusX * aspectRatio;
+
+      // Random shape type (0-4) and curve variation for organic blobs
+      const shapeType = Math.floor(nextRandom(state) * 5);
+      const curveVariation = nextRandom(state);
+
       cells.push({
-        x: (col - 1) * cellSize,
-        y: (row - 1) * cellSize,
+        x: baseX,
+        y: baseY,
         size: cellSize,
         moisture: nextRandom(state),
         fertility: nextRandom(state),
         corruption: nextRandom(state) * 0.7,
+        tilt,
+        radiusX,
+        radiusY,
+        offsetX,
+        offsetY,
+        shapeType,
+        curveVariation,
       });
     }
   }

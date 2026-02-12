@@ -45,6 +45,13 @@ export interface BiomeCell {
   moisture: number;
   fertility: number;
   corruption: number;
+  tilt: number;
+  radiusX: number;
+  radiusY: number;
+  offsetX: number;
+  offsetY: number;
+  shapeType: number;
+  curveVariation: number;
 }
 
 export interface RootPressureCell {
