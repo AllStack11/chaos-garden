@@ -15,6 +15,15 @@ import type {
   ViewportSize,
   GlitchSpark,
   RippleEffect,
+  FireflyParticle,
+  Star,
+  GodRay,
+  AuroraWave,
+  DustDevil,
+  WindLeaf,
+  PollenParticle,
+  MistLayer,
+  Dewdrop,
 } from './types.ts';
 import type { LightingContext, QualityTier, TimePhase } from '../../rendering/types.ts';
 
@@ -42,17 +51,33 @@ export interface BackgroundRenderInput {
   worldState: BackgroundWorldState;
   pass: BackgroundPass;
   lightningOpacity?: number;
+  // New visual enhancements
+  fireflies: FireflyParticle[];
+  stars: Star[];
+  godRays: GodRay[];
+  auroraWaves: AuroraWave[];
+  auroraActive: boolean;
+  auroraIntensity: number;
+  dustDevils: DustDevil[];
+  windLeaves: WindLeaf[];
+  pollen: PollenParticle[];
+  mistLayers: MistLayer[];
+  dewdrops: Dewdrop[];
 }
 
 export function renderBackgroundPass(input: BackgroundRenderInput): void {
   switch (input.pass) {
     case 'farBackground':
+      drawStars(input.ctx, input.stars, input.timePhase, input.lighting);
       drawFarBackground(input);
+      drawAurora(input.ctx, input.auroraWaves, input.auroraActive, input.auroraIntensity, input.timePhase, input.viewport);
       break;
     case 'terrain':
       drawTerrain(input);
       break;
     case 'ambientAtmosphere':
+      drawMistLayers(input.ctx, input.mistLayers, input.timePhase, input.worldState);
+      drawGodRays(input.ctx, input.godRays, input.timePhase, input.lighting, input.worldState, input.viewport);
       drawAtmosphere(input);
       drawWeatherAtmosphereEffects(input);
       drawMemoryRings(input.ctx, input.memoryRings, 'ambient');
@@ -64,6 +89,11 @@ export function renderBackgroundPass(input: BackgroundRenderInput): void {
       drawSpores(input.ctx, input.spores, input.qualityTier);
       drawGlitchSparks(input.ctx, input.glitchSparks);
       drawRainDrops(input.ctx, input.rainDrops, input.lighting);
+      drawWindLeaves(input.ctx, input.windLeaves);
+      drawPollen(input.ctx, input.pollen, input.timePhase, input.worldState);
+      drawDustDevils(input.ctx, input.dustDevils);
+      drawFireflies(input.ctx, input.fireflies, input.timePhase);
+      drawDewdrops(input.ctx, input.dewdrops, input.timePhase, input.worldState);
       break;
     case 'postLightVeil':
       drawPostLightVeil(input);
@@ -80,20 +110,40 @@ function drawFarBackground(input: BackgroundRenderInput): void {
   const { ctx, viewport, lighting, timePhase, parallaxBands, mousePos, canopyNodes, canopyEdges, worldState } = input;
   const baseGradient = ctx.createLinearGradient(0, 0, 0, viewport.height);
 
-  const topColor = timePhase === 'night'
-    ? `rgba(5, 14, 28, ${0.95 + lighting.fogDensity * 0.1})`
-    : timePhase === 'dawn'
-      ? 'rgba(28, 38, 22, 0.98)'
-      : timePhase === 'dusk'
-        ? 'rgba(30, 27, 16, 0.98)'
-        : 'rgba(8, 35, 22, 0.98)';
+  let topColor, middleColor, bottomColor;
 
-  const bottomColor = timePhase === 'night'
-    ? 'rgba(2, 26, 14, 1)'
-    : `rgba(4, ${28 + lighting.sunlight * 34}, 16, 1)`;
+  if (timePhase === 'dawn') {
+    // Dawn: Pink/orange horizon transitioning to blue-green
+    const dawnProgress = Math.max(0, Math.min(1, (worldState.sunlight - 0.2) / 0.25)); // 0-1 through dawn phase
+    topColor = `rgba(${15 + dawnProgress * 30}, ${20 + dawnProgress * 40}, ${40 + dawnProgress * 20}, 0.98)`;
+    middleColor = `rgba(${140 + dawnProgress * 20}, ${80 + dawnProgress * 40}, ${50 - dawnProgress * 15}, ${0.92 + dawnProgress * 0.06})`;
+    bottomColor = `rgba(${160 + dawnProgress * 20}, ${110 + dawnProgress * 30}, ${60 + dawnProgress * 15}, 0.95)`;
+  } else if (timePhase === 'dusk') {
+    // Dusk: Orange/red/purple horizon fading to dark
+    const duskProgress = Math.max(0, Math.min(1, 1 - ((worldState.sunlight - 0.45) / 0.3))); // 1 at start, 0 at end
+    topColor = `rgba(${30 - duskProgress * 20}, ${27 - duskProgress * 10}, ${20 - duskProgress * 5}, 0.98)`;
+    middleColor = `rgba(${140 + duskProgress * 50}, ${70 + duskProgress * 40}, ${40 + duskProgress * 20}, ${0.90 + duskProgress * 0.05})`;
+    bottomColor = `rgba(${60 + duskProgress * 100}, ${40 + duskProgress * 70}, ${20 + duskProgress * 30}, 0.95)`;
+  } else if (timePhase === 'night') {
+    // Night: Deep blues
+    topColor = `rgba(5, 14, 28, ${0.95 + lighting.fogDensity * 0.1})`;
+    bottomColor = 'rgba(2, 26, 14, 1)';
+  } else {
+    // Day: Green gradient
+    topColor = 'rgba(8, 35, 22, 0.98)';
+    bottomColor = `rgba(4, ${28 + lighting.sunlight * 34}, 16, 1)`;
+  }
 
-  baseGradient.addColorStop(0, topColor);
-  baseGradient.addColorStop(1, bottomColor);
+  // Apply gradient with 3 stops for dawn/dusk, 2 for day/night
+  if (timePhase === 'dawn' || timePhase === 'dusk') {
+    baseGradient.addColorStop(0, topColor);
+    baseGradient.addColorStop(0.35, middleColor);
+    baseGradient.addColorStop(1, bottomColor);
+  } else {
+    baseGradient.addColorStop(0, topColor);
+    baseGradient.addColorStop(1, bottomColor);
+  }
+
   ctx.fillStyle = baseGradient;
   ctx.fillRect(0, 0, viewport.width, viewport.height);
 
@@ -708,4 +758,299 @@ function drawCanopyGraph(
     ctx.quadraticCurveTo(controlX, controlY, to.x, to.y);
     ctx.stroke();
   }
+}
+
+// ============================================================================
+// New Visual Enhancement Rendering Functions
+// ============================================================================
+
+// Draw stars - Twinkling night sky effect
+// Only visible during night phase, opacity modulated by sine wave for twinkling
+// Larger stars (>1.0) get an additional radial glow for prominence
+// Fog reduces visibility
+function drawStars(
+  ctx: CanvasRenderingContext2D,
+  stars: Star[],
+  timePhase: TimePhase,
+  lighting: LightingContext,
+): void {
+  if (timePhase !== 'night' || stars.length === 0) return;
+
+  stars.forEach(star => {
+    const twinkle = Math.sin(star.twinklePhase) * 0.3 + 0.7; // 0.4-1.0
+    const opacity = star.brightness * twinkle * (1 - lighting.fogDensity * 0.7);
+
+    ctx.fillStyle = `rgba(255, 255, 240, ${opacity})`;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glow for larger stars
+    if (star.size > 1.0) {
+      const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, star.size * 4);
+      gradient.addColorStop(0, `rgba(255, 255, 240, ${opacity * 0.3})`);
+      gradient.addColorStop(1, 'rgba(255, 255, 240, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, star.size * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+// Draw fireflies - Glowing insects with pulsing radial halos
+// Active at dusk and night, each has unique glow phase for natural variation
+// Two-layer rendering: outer glow halo (gradient) + bright core (solid)
+// Yellow-green bioluminescent color palette
+function drawFireflies(
+  ctx: CanvasRenderingContext2D,
+  fireflies: FireflyParticle[],
+  timePhase: TimePhase,
+): void {
+  if ((timePhase !== 'dusk' && timePhase !== 'night') || fireflies.length === 0) return;
+
+  fireflies.forEach(firefly => {
+    const glow = Math.sin(firefly.glowPhase) * 0.5 + 0.5; // 0-1
+    const opacity = firefly.baseOpacity * glow;
+
+    // Glow halo
+    const gradient = ctx.createRadialGradient(firefly.x, firefly.y, 0, firefly.x, firefly.y, firefly.size * 8);
+    gradient.addColorStop(0, `rgba(220, 255, 180, ${opacity * 0.6})`);
+    gradient.addColorStop(0.4, `rgba(200, 240, 140, ${opacity * 0.3})`);
+    gradient.addColorStop(1, 'rgba(200, 240, 140, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(firefly.x - firefly.size * 8, firefly.y - firefly.size * 8, firefly.size * 16, firefly.size * 16);
+
+    // Core
+    ctx.fillStyle = `rgba(255, 255, 200, ${opacity})`;
+    ctx.beginPath();
+    ctx.arc(firefly.x, firefly.y, firefly.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Draw wind leaves - Tumbling foliage particles drifting with the wind
+// Color varies by temperature (cold = autumn colors, warm = spring colors)
+// Depth creates parallax effect (closer leaves more opaque)
+// Simple ellipse shape with rotation for natural leaf appearance
+function drawWindLeaves(ctx: CanvasRenderingContext2D, leaves: WindLeaf[]): void {
+  if (leaves.length === 0) return;
+
+  leaves.forEach(leaf => {
+    ctx.save();
+    ctx.translate(leaf.x, leaf.y);
+    ctx.rotate(leaf.rotation);
+    ctx.globalAlpha = leaf.opacity * (0.6 + leaf.depth * 0.4);
+
+    const colorMap = {
+      green: 'rgba(120, 180, 80, 1)',
+      yellow: 'rgba(220, 200, 80, 1)',
+      orange: 'rgba(230, 140, 60, 1)',
+      pink: 'rgba(240, 160, 180, 1)',
+    };
+
+    ctx.fillStyle = colorMap[leaf.color];
+    ctx.beginPath();
+    ctx.ellipse(0, 0, leaf.size * 1.5, leaf.size, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  });
+}
+
+// Draw pollen - Yellow glowing particles floating from plants
+// Only active during day when plant density > 0.2
+// Two-layer rendering: soft outer glow + brighter core
+// Golden/yellow color suggests plant pollen
+function drawPollen(
+  ctx: CanvasRenderingContext2D,
+  pollen: PollenParticle[],
+  timePhase: TimePhase,
+  worldState: BackgroundWorldState,
+): void {
+  if (timePhase !== 'day' || (worldState.plantDensity ?? 0) < 0.2 || pollen.length === 0) return;
+
+  pollen.forEach(particle => {
+    // Soft glow
+    const gradient = ctx.createRadialGradient(particle.x, particle.y, 0, particle.x, particle.y, particle.size * 3);
+    gradient.addColorStop(0, `rgba(255, 250, 180, ${particle.opacity * 0.3})`);
+    gradient.addColorStop(1, 'rgba(255, 250, 180, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size * 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Core
+    ctx.fillStyle = `rgba(255, 245, 200, ${particle.opacity})`;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Draw mist layers - Ground-hugging fog with radial gradient falloff
+// Active at dawn (burning off) and night when moisture > 0.5
+// Visibility fades during dawn as sunlight increases
+// Blue-grey color suggests morning mist
+function drawMistLayers(
+  ctx: CanvasRenderingContext2D,
+  mist: MistLayer[],
+  timePhase: TimePhase,
+  worldState: BackgroundWorldState,
+): void {
+  if ((timePhase !== 'dawn' && timePhase !== 'night') || (worldState.moisture ?? 0) < 0.5 || mist.length === 0) return;
+
+  const mistVisibility = timePhase === 'night' ? 1.0 : 1.0 - ((worldState.sunlight - 0.2) / 0.25);
+
+  mist.forEach(layer => {
+    const gradient = ctx.createRadialGradient(
+      layer.x + layer.width / 2, layer.y, layer.width * 0.1,
+      layer.x + layer.width / 2, layer.y, layer.width * 0.7,
+    );
+    gradient.addColorStop(0, `rgba(200, 210, 215, ${layer.opacity * mistVisibility * 0.2})`);
+    gradient.addColorStop(0.6, `rgba(190, 200, 205, ${layer.opacity * mistVisibility * 0.12})`);
+    gradient.addColorStop(1, 'rgba(190, 200, 205, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(layer.x, layer.y - layer.height / 2, layer.width, layer.height);
+  });
+}
+
+// Draw dewdrops - Sparkling water droplets catching morning light
+// Only active during dawn when moisture > 0.6, fade as sun rises
+// Radial gradient with white center to blue edge creates rainbow prism effect
+// Sine wave sparkle phase makes them shimmer naturally
+function drawDewdrops(
+  ctx: CanvasRenderingContext2D,
+  dewdrops: Dewdrop[],
+  timePhase: TimePhase,
+  worldState: BackgroundWorldState,
+): void {
+  if (timePhase !== 'dawn' || (worldState.moisture ?? 0) < 0.6 || dewdrops.length === 0) return;
+
+  const dawnProgress = (worldState.sunlight - 0.2) / 0.25;
+  const visibility = 1 - dawnProgress * 0.8; // Fade as sun rises
+
+  dewdrops.forEach(drop => {
+    const sparkle = Math.sin(drop.sparklePhase) * 0.5 + 0.5;
+
+    // Rainbow sparkle
+    const gradient = ctx.createRadialGradient(drop.x, drop.y, 0, drop.x, drop.y, drop.size * 3);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${sparkle * 0.8 * visibility})`);
+    gradient.addColorStop(0.3, `rgba(200, 220, 255, ${sparkle * 0.4 * visibility})`);
+    gradient.addColorStop(1, 'rgba(200, 220, 255, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(drop.x, drop.y, drop.size * 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Draw god rays - Volumetric light shafts emanating from the sun
+// Active during day/dawn/dusk when sun is visible above horizon
+// Intensity modulated by weather (reduced in fog/rain, enhanced in drought)
+// Linear gradient creates beam of light effect
+function drawGodRays(
+  ctx: CanvasRenderingContext2D,
+  godRays: GodRay[],
+  timePhase: TimePhase,
+  lighting: LightingContext,
+  worldState: BackgroundWorldState,
+  viewport: ViewportSize,
+): void {
+  if ((timePhase !== 'day' && timePhase !== 'dawn' && timePhase !== 'dusk') || godRays.length === 0) return;
+
+  const weather = worldState.weatherStateName;
+  const rayIntensity = timePhase === 'day' ? 1.0 : 0.6;
+
+  // Weather modifications
+  let weatherMod = 1.0;
+  if (weather === 'DROUGHT') weatherMod = 1.4;
+  else if (weather === 'RAIN' || weather === 'STORM') weatherMod = 0.3;
+  else if (weather === 'FOG' || weather === 'OVERCAST') weatherMod = 0.5;
+
+  const baseOpacity = (1 - lighting.fogDensity * 0.5) * rayIntensity * lighting.bloomFactor * weatherMod;
+
+  godRays.forEach(ray => {
+    ctx.save();
+    ctx.translate(ray.originX, ray.originY);
+    ctx.rotate(ray.angle);
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, ray.length);
+    gradient.addColorStop(0, `rgba(255, 250, 220, ${ray.opacity * baseOpacity * 0.15})`);
+    gradient.addColorStop(0.3, `rgba(255, 250, 220, ${ray.opacity * baseOpacity * 0.08})`);
+    gradient.addColorStop(1, 'rgba(255, 250, 220, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(-ray.width / 2, 0, ray.width, ray.length);
+    ctx.restore();
+  });
+}
+
+// Draw aurora - Rare atmospheric light show with undulating colored waves
+// Only visible at night during cold temperatures (< 10°C)
+// Uses additive blending for ethereal glow effect
+// Multiple sinusoidal waves with green/blue/purple hues
+function drawAurora(
+  ctx: CanvasRenderingContext2D,
+  auroraWaves: AuroraWave[],
+  auroraActive: boolean,
+  auroraIntensity: number,
+  timePhase: TimePhase,
+  viewport: ViewportSize,
+): void {
+  if (!auroraActive || auroraWaves.length === 0 || timePhase !== 'night') return;
+
+  const intensity = Math.abs(auroraIntensity); // Handle negative (fade out) intensity
+
+  auroraWaves.forEach(wave => {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter'; // Additive blending for ethereal glow
+
+    // Create vertical gradient for wave
+    const gradient = ctx.createLinearGradient(0, wave.baseY - wave.amplitude, 0, wave.baseY + wave.amplitude);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    gradient.addColorStop(0.5, `hsla(${wave.hue}, 70%, 60%, ${wave.opacity * intensity})`);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = wave.thickness;
+    ctx.lineCap = 'round';
+
+    // Draw sinusoidal wave path
+    const steps = 50;
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const x = (viewport.width / steps) * i;
+      const y = wave.baseY + Math.sin((x / wave.wavelength) + wave.phase) * wave.amplitude;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+// Draw dust devils - Swirling desert whirlwinds with rotating particles
+// Active during hot, dry daytime (temp > 28°C, moisture < 0.3)
+// Particles rotate in vortex pattern, fade in/out based on lifetime
+// Brown/tan dust color suggests desert conditions
+function drawDustDevils(ctx: CanvasRenderingContext2D, dustDevils: DustDevil[]): void {
+  if (dustDevils.length === 0) return;
+
+  dustDevils.forEach(devil => {
+    const lifeFactor = 1 - (devil.lifetime / devil.maxLifetime);
+    const alpha = Math.sin(lifeFactor * Math.PI); // Fade in/out
+
+    devil.particles.forEach(particle => {
+      const px = devil.x + Math.cos(particle.angle) * particle.distance;
+      const py = devil.y - particle.height + Math.sin(particle.angle * 2) * 5;
+
+      ctx.fillStyle = `rgba(180, 160, 120, ${alpha * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(px, py, particle.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  });
 }

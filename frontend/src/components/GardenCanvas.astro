@@ -338,6 +338,8 @@ const {
         this.targetMousePos,
         Date.now(),
         this.qualityTier,
+        this.worldState,
+        this.timePhase,
       );
     }
 
@@ -401,6 +403,18 @@ const {
           timePhase: this.timePhase,
           worldState: this.worldState,
           lightningOpacity: this.backgroundState.lightningOpacity,
+          // New visual enhancements
+          fireflies: this.backgroundState.fireflies,
+          stars: this.backgroundState.stars,
+          godRays: this.backgroundState.godRays,
+          auroraWaves: this.backgroundState.auroraWaves,
+          auroraActive: this.backgroundState.auroraActive,
+          auroraIntensity: this.backgroundState.auroraIntensity,
+          dustDevils: this.backgroundState.dustDevils,
+          windLeaves: this.backgroundState.windLeaves,
+          pollen: this.backgroundState.pollen,
+          mistLayers: this.backgroundState.mistLayers,
+          dewdrops: this.backgroundState.dewdrops,
         });
       });
     }

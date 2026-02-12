@@ -13,7 +13,7 @@ const BROWN_PLANT_BASE_HUE = 28;
 
 // Maximum growth constraints to prevent visual "gigantism"
 const MAX_BASE_PLANT_SIZE = 25;
-const MAX_PETAL_RADIUS = 12; // Drastically reduced from 30
+const MAX_PETAL_RADIUS = 6; // Further reduced for smaller, more reasonable flowers
 
 function clampToRange(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -143,7 +143,7 @@ export class PlantRenderer {
     // Linear growth until ~50 energy, then square root growth
     const growthEnergy = energy < 50 ? energy : 50 + Math.sqrt(energy - 50) * 5;
     const baseSize = (8 + growthEnergy / 15) * visual.height * visual.leafSize;
-    return Math.min(baseSize, MAX_BASE_PLANT_SIZE * visual.height);
+    return Math.min(baseSize, MAX_BASE_PLANT_SIZE);
   }
 
   private getBluePlantColor(

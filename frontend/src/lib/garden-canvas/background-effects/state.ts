@@ -14,6 +14,21 @@ import type {
   SporeParticle,
   ViewportSize,
   RippleEffect,
+  FireflyParticle,
+  Star,
+  GodRay,
+  AuroraWave,
+  WindLeaf,
+  PollenParticle,
+  MistLayer,
+  Dewdrop,
+  DustDevil,
+  FlowerBloom,
+  MushroomSprite,
+  SeasonalGroundParticle,
+  Puddle,
+  Footprint,
+  BackgroundWorldState,
 } from './types.ts';
 import type { QualityTier } from '../../rendering/types.ts';
 
@@ -50,10 +65,30 @@ export interface BackgroundAnimationState {
   biomeDriftY: number;
   lastGlitchTime: number;
   lastLightningTime: number;
+  lastDustDevilTime: number;
   lightningOpacity: number;
   randomSeed: number;
   qualityTier: QualityTier;
   lastEventFingerprint: string;
+  // New visual enhancements
+  fireflies: FireflyParticle[];
+  stars: Star[];
+  godRays: GodRay[];
+  auroraWaves: AuroraWave[];
+  auroraActive: boolean;
+  auroraIntensity: number;
+  windLeaves: WindLeaf[];
+  pollen: PollenParticle[];
+  mistLayers: MistLayer[];
+  dewdrops: Dewdrop[];
+  dustDevils: DustDevil[];
+  flowerBlooms: FlowerBloom[];
+  mushrooms: MushroomSprite[];
+  seasonalGround: SeasonalGroundParticle[];
+  puddles: Puddle[];
+  footprints: Footprint[];
+  lastSunDirection: number;
+  lastTemperatureZone: string;
 }
 
 function nextRandom(state: BackgroundAnimationState): number {
@@ -87,10 +122,30 @@ export function createBackgroundAnimationState(
     biomeDriftY: 0,
     lastGlitchTime: 0,
     lastLightningTime: 0,
+    lastDustDevilTime: 0,
     lightningOpacity: 0,
     randomSeed: ((viewport.width * 73856093) ^ (viewport.height * 19349663)) >>> 0,
     qualityTier,
     lastEventFingerprint: '',
+    // New visual enhancements
+    fireflies: [],
+    stars: [],
+    godRays: [],
+    auroraWaves: [],
+    auroraActive: false,
+    auroraIntensity: 0,
+    windLeaves: [],
+    pollen: [],
+    mistLayers: [],
+    dewdrops: [],
+    dustDevils: [],
+    flowerBlooms: [],
+    mushrooms: [],
+    seasonalGround: [],
+    puddles: [],
+    footprints: [],
+    lastSunDirection: 0,
+    lastTemperatureZone: 'normal',
   };
 
   state.spores = createSporeParticles(state, viewport);
@@ -101,6 +156,12 @@ export function createBackgroundAnimationState(
   const canopyGraph = createCanopyGraph(state, viewport);
   state.canopyNodes = canopyGraph.nodes;
   state.canopyEdges = canopyGraph.edges;
+
+  // Initialize new visual effects
+  state.stars = createStars(state, viewport);
+  state.windLeaves = createWindLeaves(state, viewport, 1.0);
+  state.godRays = createGodRays(state, viewport, state.lastSunDirection);
+
   return state;
 }
 
@@ -203,6 +264,8 @@ export function updateBackgroundAnimationState(
   targetMousePos: PointerPosition,
   now: number,
   qualityTier: QualityTier,
+  worldState?: BackgroundWorldState,
+  timePhase?: string,
 ): void {
   state.qualityTier = qualityTier;
 
@@ -217,6 +280,121 @@ export function updateBackgroundAnimationState(
   updateParallaxBands(state.parallaxBands);
   if (state.rainDrops.length > 0) updateRainDropParticles(state.rainDrops, viewport);
   if (state.fogPatches.length > 0) updateFogPatchPositions(state.fogPatches, viewport);
+
+  // Update new visual enhancements
+  if (state.stars.length > 0) updateStars(state.stars);
+
+  // Fireflies - spawn at dusk/night, fade at dawn
+  if (timePhase === 'dusk' && state.fireflies.length === 0) {
+    state.fireflies = createFireflyParticles(state, viewport);
+  } else if (timePhase === 'day' && state.fireflies.length > 0) {
+    state.fireflies = []; // Clear during day
+  }
+  if (state.fireflies.length > 0) {
+    updateFireflyParticles(state.fireflies, viewport, timePhase ?? 'night');
+    // Remove fireflies with very low opacity
+    state.fireflies = state.fireflies.filter(f => f.baseOpacity > 0.05);
+  }
+
+  // Wind leaves
+  if (state.windLeaves.length > 0) {
+    const windStrength = state.currentWeatherStateName === 'STORM' ? 2.5 : state.currentWeatherStateName === 'RAIN' ? 1.5 : 1.0;
+    updateWindLeaves(state.windLeaves, viewport, windStrength);
+  }
+
+  // Pollen - spawn during day with high plant density
+  if (timePhase === 'day' && worldState && (worldState.plantDensity ?? 0) > 0.2) {
+    if (state.pollen.length === 0) {
+      state.pollen = createPollenParticles(state, viewport, worldState.plantDensity ?? 0);
+    }
+  } else if (timePhase !== 'day' && state.pollen.length > 0) {
+    state.pollen = []; // Clear at night
+  }
+  if (state.pollen.length > 0) updatePollenParticles(state.pollen, viewport);
+
+  // Mist layers - spawn at dusk/night with high moisture
+  if ((timePhase === 'dusk' || timePhase === 'night') && worldState && (worldState.moisture ?? 0) > 0.5) {
+    if (state.mistLayers.length === 0) {
+      state.mistLayers = createMistLayers(state, viewport);
+    }
+  } else if (timePhase === 'day' && state.mistLayers.length > 0) {
+    state.mistLayers = []; // Clear during day
+  }
+  if (state.mistLayers.length > 0) updateMistLayers(state.mistLayers, viewport);
+
+  // Dewdrops - spawn at dawn with high moisture
+  if (timePhase === 'dawn' && worldState && (worldState.moisture ?? 0) > 0.6) {
+    if (state.dewdrops.length === 0) {
+      state.dewdrops = createDewdrops(state, viewport);
+    }
+  } else if (timePhase !== 'dawn' && state.dewdrops.length > 0) {
+    state.dewdrops = []; // Clear after dawn
+  }
+  if (state.dewdrops.length > 0) updateDewdrops(state.dewdrops);
+
+  // God rays - recreate when sun direction changes significantly
+  if (worldState) {
+    const sunDirection = Math.PI * 2 * ((worldState.tick % 96) / 96);
+    const directionChange = Math.abs(sunDirection - state.lastSunDirection);
+
+    if (directionChange > 0.3 || state.godRays.length === 0) {
+      state.godRays = createGodRays(state, viewport, sunDirection);
+      state.lastSunDirection = sunDirection;
+    }
+  }
+
+  // Aurora borealis - rare night event in cold temperatures
+  if (worldState && timePhase === 'night' && (worldState.temperature ?? 20) < 10) {
+    // Trigger aurora with 0.02% chance per frame (rare)
+    if (!state.auroraActive && nextRandom(state) < 0.0002) {
+      state.auroraActive = true;
+      state.auroraIntensity = 0;
+      state.auroraWaves = createAuroraWaves(state, viewport);
+    }
+  }
+
+  // Manage aurora fade in/out
+  if (state.auroraActive) {
+    if (state.auroraIntensity >= 0) {
+      // Fading in
+      state.auroraIntensity += 0.005;
+      if (state.auroraIntensity >= 1) {
+        state.auroraIntensity = 1;
+        // 0.1% chance to start fading out after reaching full intensity
+        if (nextRandom(state) < 0.001) {
+          state.auroraIntensity = -0.01; // Negative signals fade out
+        }
+      }
+    } else {
+      // Fading out
+      state.auroraIntensity -= 0.005;
+      if (state.auroraIntensity <= -1) {
+        state.auroraActive = false;
+        state.auroraIntensity = 0;
+        state.auroraWaves = [];
+      }
+    }
+
+    // Animate waves
+    if (state.auroraWaves.length > 0) {
+      updateAuroraWaves(state.auroraWaves);
+    }
+  }
+
+  // Dust devils - spawn during hot, dry daytime conditions
+  if (worldState && timePhase === 'day' && (worldState.temperature ?? 20) > 28 && (worldState.moisture ?? 0.5) < 0.3) {
+    // Rare spawn with cooldown (0.1% chance, 8s cooldown)
+    if (now - state.lastDustDevilTime > 8000 && nextRandom(state) < 0.001) {
+      state.dustDevils.push(createDustDevil(state, viewport));
+      state.lastDustDevilTime = now;
+    }
+  }
+
+  // Update and clean up dust devils
+  if (state.dustDevils.length > 0) {
+    updateDustDevils(state.dustDevils, viewport);
+    state.dustDevils = state.dustDevils.filter(dd => dd.lifetime < dd.maxLifetime);
+  }
 
   const glitchCadenceMs = 2200 / QUALITY_MULTIPLIERS[qualityTier];
   if (now - state.lastGlitchTime > glitchCadenceMs + nextRandom(state) * 5000) {
@@ -568,4 +746,374 @@ function deterministicEventCoordinates(
   const x = ((seed % 100000) / 100000) * viewport.width;
   const y = ((((seed / 101) % 100000) / 100000) * viewport.height * 0.72) + viewport.height * 0.08;
   return { x, y, seed };
+}
+
+// ============================================================================
+// New Visual Enhancement Functions
+// ============================================================================
+
+// Stars - Twinkling night sky effect with fixed seeded positions for consistency
+// Only visible during night time phase, fade out with fog
+// Size distribution: 60% small, 30% medium, 10% large (with glow)
+// Quality tiers: High: 200, Medium: 144, Low: 90
+function createStars(state: BackgroundAnimationState, viewport: ViewportSize): Star[] {
+  const count = pickCount(200, state.qualityTier);
+  const stars: Star[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const sizeRandom = nextRandom(state);
+    stars.push({
+      x: nextRandom(state) * viewport.width,
+      y: nextRandom(state) * viewport.height * 0.4, // Upper 40% only
+      brightness: 0.3 + nextRandom(state) * 0.7,
+      twinklePhase: nextRandom(state) * Math.PI * 2,
+      twinkleSpeed: 0.02 + nextRandom(state) * 0.04,
+      size: sizeRandom < 0.6 ? 0.5 + nextRandom(state) * 0.3 : // 60% small
+            sizeRandom < 0.9 ? 0.8 + nextRandom(state) * 0.4 : // 30% medium
+            1.2 + nextRandom(state) * 0.3, // 10% large
+    });
+  }
+
+  return stars;
+}
+
+// Update stars - Advance twinkle animation phase for each star
+// Simple sine wave makes them appear to twinkle naturally
+function updateStars(stars: Star[]): void {
+  stars.forEach(star => {
+    star.twinklePhase += star.twinkleSpeed;
+    if (star.twinklePhase > Math.PI * 2) star.twinklePhase -= Math.PI * 2;
+  });
+}
+
+// Fireflies - Glowing insects that float gently at dusk and night
+// Spawn at dusk, fade out at dawn. Pulsing sine wave glow effect with radial halo
+// Prefer mid-air heights, gentle floating movement with sine wave bobbing
+// Quality tiers: High: 40, Medium: 28, Low: 18
+function createFireflyParticles(state: BackgroundAnimationState, viewport: ViewportSize): FireflyParticle[] {
+  const count = pickCount(40, state.qualityTier);
+  const fireflies: FireflyParticle[] = [];
+
+  for (let i = 0; i < count; i++) {
+    fireflies.push({
+      x: nextRandom(state) * viewport.width,
+      y: nextRandom(state) * viewport.height,
+      vx: (nextRandom(state) - 0.5) * 0.3,
+      vy: (nextRandom(state) - 0.5) * 0.3,
+      glowPhase: nextRandom(state) * Math.PI * 2,
+      glowSpeed: 0.03 + nextRandom(state) * 0.05,
+      baseOpacity: 0.6 + nextRandom(state) * 0.4,
+      size: 1.5 + nextRandom(state) * 1,
+      height: 0.2 + nextRandom(state) * 0.6, // Prefer mid-air (0.2-0.8)
+    });
+  }
+
+  return fireflies;
+}
+
+// Update fireflies - Handle glow animation, floating movement, and dawn fade-out
+// Glow phase advances for pulsing effect
+// Floating behavior uses sine wave for natural bobbing motion
+// Random velocity changes create erratic flight patterns
+// Fade out gradually at dawn, removed when opacity < 0.05 in main update loop
+function updateFireflyParticles(fireflies: FireflyParticle[], viewport: ViewportSize, timePhase: string): void {
+  fireflies.forEach(firefly => {
+    // Advance glow phase
+    firefly.glowPhase += firefly.glowSpeed;
+    if (firefly.glowPhase > Math.PI * 2) firefly.glowPhase -= Math.PI * 2;
+
+    // Floating behavior with sine wave
+    const floatOffset = Math.sin(firefly.glowPhase * 0.5) * 0.1;
+    firefly.vx += (Math.random() - 0.5) * 0.02;
+    firefly.vy += floatOffset;
+
+    // Clamp velocity
+    firefly.vx = Math.max(-0.15, Math.min(0.15, firefly.vx));
+    firefly.vy = Math.max(-0.15, Math.min(0.15, firefly.vy));
+
+    // Update position
+    firefly.x += firefly.vx;
+    firefly.y += firefly.vy;
+
+    // Wrap around viewport
+    if (firefly.x < 0) firefly.x = viewport.width;
+    if (firefly.x > viewport.width) firefly.x = 0;
+    if (firefly.y < 0) firefly.y = viewport.height;
+    if (firefly.y > viewport.height) firefly.y = 0;
+
+    // Fade out at dawn
+    if (timePhase === 'dawn') {
+      firefly.baseOpacity *= 0.95;
+    }
+  });
+}
+
+// Wind Leaves - Drifting foliage particles that fall and tumble with the wind
+// Color varies with temperature: cold = yellow/orange (autumn), warm = green/pink (spring)
+// Reduced to half density for subtler visual effect
+function createWindLeaves(state: BackgroundAnimationState, viewport: ViewportSize, windStrength: number): WindLeaf[] {
+  const count = pickCount(30, state.qualityTier); // High: 30, Medium: 21, Low: 13 (reduced from 60)
+  const leaves: WindLeaf[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const colors: ('green' | 'yellow' | 'orange' | 'pink')[] = ['green', 'yellow', 'orange', 'pink'];
+    leaves.push({
+      x: nextRandom(state) * viewport.width,
+      y: nextRandom(state) * viewport.height,
+      vx: (nextRandom(state) - 0.3) * 1.5 * windStrength,
+      vy: nextRandom(state) * 0.8 + 0.2,
+      rotation: nextRandom(state) * Math.PI * 2,
+      rotationSpeed: (nextRandom(state) - 0.5) * 0.08,
+      size: 2 + nextRandom(state) * 3,
+      color: colors[Math.floor(nextRandom(state) * colors.length)],
+      opacity: 0.5 + nextRandom(state) * 0.5,
+      depth: nextRandom(state),
+    });
+  }
+
+  return leaves;
+}
+
+// Update wind leaves - Rotate and move leaves based on wind strength
+// Wind strength varies by weather: STORM = 2.5x, RAIN = 1.5x, normal = 1.0x
+// Horizontal movement affected by wind, vertical is constant downward drift
+// Wrap around edges and respawn at top when reaching bottom
+function updateWindLeaves(leaves: WindLeaf[], viewport: ViewportSize, windStrength: number): void {
+  leaves.forEach(leaf => {
+    leaf.rotation += leaf.rotationSpeed;
+    leaf.x += leaf.vx * windStrength;
+    leaf.y += leaf.vy;
+
+    // Wrap around
+    if (leaf.x < -20) leaf.x = viewport.width + 20;
+    if (leaf.x > viewport.width + 20) leaf.x = -20;
+    if (leaf.y > viewport.height + 20) {
+      leaf.y = -20;
+      leaf.x = nextRandom({ randomSeed: Date.now() } as BackgroundAnimationState) * viewport.width;
+    }
+  });
+}
+
+// Pollen - Yellow/golden particles drifting from plants during daytime
+// Only active during day phase when plant density > 0.2
+// Spawns in bottom half (where plants are), gentle upward drift with clustering behavior
+// Count scales dynamically with plant density (higher density = more pollen)
+function createPollenParticles(state: BackgroundAnimationState, viewport: ViewportSize, plantDensity: number): PollenParticle[] {
+  const count = Math.floor(plantDensity * 80 * QUALITY_MULTIPLIERS[state.qualityTier]);
+  const pollen: PollenParticle[] = [];
+
+  for (let i = 0; i < count; i++) {
+    pollen.push({
+      x: nextRandom(state) * viewport.width,
+      y: viewport.height * 0.5 + nextRandom(state) * viewport.height * 0.5, // Bottom half
+      vx: (nextRandom(state) - 0.5) * 0.4,
+      vy: -0.1 - nextRandom(state) * 0.2, // Upward drift
+      size: 0.8 + nextRandom(state) * 0.8,
+      opacity: 0.3 + nextRandom(state) * 0.4,
+      clusterPhase: nextRandom(state) * Math.PI * 2,
+    });
+  }
+
+  return pollen;
+}
+
+// Update pollen particles - Drift upward with gentle horizontal swaying
+// Cluster phase creates sine wave horizontal movement for natural drifting appearance
+// Particles float upward (negative vy) and reset at top, simulating continuous release from plants
+function updatePollenParticles(pollen: PollenParticle[], viewport: ViewportSize): void {
+  pollen.forEach(particle => {
+    particle.clusterPhase += 0.02;
+    particle.x += particle.vx + Math.sin(particle.clusterPhase) * 0.2;
+    particle.y += particle.vy;
+
+    // Reset when out of bounds
+    if (particle.y < -20) {
+      particle.y = viewport.height + 20;
+      particle.x = Math.random() * viewport.width;
+    }
+    if (particle.x < -20) particle.x = viewport.width + 20;
+    if (particle.x > viewport.width + 20) particle.x = -20;
+  });
+}
+
+// Mist Layers - Ground-hugging fog that forms at dawn and night
+// Only active when moisture > 0.5. Burns off gradually during dawn as sunlight increases
+// Low altitude (0-0.3) keeps it near the ground, slow horizontal drift
+// Enhanced during FOG weather state
+// Quality tiers: High: 12, Medium: 8, Low: 5
+function createMistLayers(state: BackgroundAnimationState, viewport: ViewportSize): MistLayer[] {
+  const count = pickCount(12, state.qualityTier);
+  const mist: MistLayer[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const altitude = nextRandom(state) * 0.3; // 0-0.3 (ground level)
+    mist.push({
+      x: nextRandom(state) * viewport.width - 100,
+      y: viewport.height * (0.6 + altitude * 0.3),
+      width: 150 + nextRandom(state) * 250,
+      height: 40 + nextRandom(state) * 60,
+      opacity: 0.15 + nextRandom(state) * 0.15,
+      driftSpeed: 0.05 + nextRandom(state) * 0.1,
+      altitude,
+    });
+  }
+
+  return mist;
+}
+
+// Update mist layers - Slow horizontal drift, wrap around when reaching edge
+// Creates illusion of fog banks moving across the landscape
+function updateMistLayers(mist: MistLayer[], viewport: ViewportSize): void {
+  mist.forEach(layer => {
+    layer.x += layer.driftSpeed;
+    if (layer.x > viewport.width + 100) {
+      layer.x = -layer.width - 100;
+    }
+  });
+}
+
+// Dewdrops - Sparkling water droplets on foliage that catch the morning light
+// Only active during dawn when moisture > 0.6. Fade as sun rises
+// Fixed positions (seeded) in lower 70% of viewport where grass/plants would be
+// Rainbow sparkle effect with pulsing brightness
+// Quality tiers: High: 80, Medium: 57, Low: 36
+function createDewdrops(state: BackgroundAnimationState, viewport: ViewportSize): Dewdrop[] {
+  const count = pickCount(80, state.qualityTier);
+  const dewdrops: Dewdrop[] = [];
+
+  for (let i = 0; i < count; i++) {
+    dewdrops.push({
+      x: nextRandom(state) * viewport.width,
+      y: viewport.height * 0.3 + nextRandom(state) * viewport.height * 0.7, // Lower 70%
+      sparklePhase: nextRandom(state) * Math.PI * 2,
+      sparkleSpeed: 0.03 + nextRandom(state) * 0.05,
+      size: 1 + nextRandom(state) * 1.5,
+    });
+  }
+
+  return dewdrops;
+}
+
+// Update dewdrops - Advance sparkle animation phase for twinkling effect
+// Sine wave creates natural shimmer/glimmer appearance
+function updateDewdrops(dewdrops: Dewdrop[]): void {
+  dewdrops.forEach(drop => {
+    drop.sparklePhase += drop.sparkleSpeed;
+    if (drop.sparklePhase > Math.PI * 2) drop.sparklePhase -= Math.PI * 2;
+  });
+}
+
+// God Rays - Volumetric light shafts emanating from the sun
+// Active during day/dawn/dusk, position follows sun direction from tick cycle
+// Recreate when sun direction changes significantly (> 0.3 radians)
+// Quality tiers: High: 8, Medium: 5, Low: 3
+function createGodRays(state: BackgroundAnimationState, viewport: ViewportSize, sunDirection: number): GodRay[] {
+  const count = pickCount(8, state.qualityTier);
+  const rays: GodRay[] = [];
+
+  // Sun position based on direction (0-2π over 96 ticks)
+  const sunX = viewport.width * (0.5 + Math.cos(sunDirection) * 0.4);
+  const sunY = -100; // Above viewport
+
+  for (let i = 0; i < count; i++) {
+    // Spread rays in a cone from sun position
+    const spread = (nextRandom(state) - 0.5) * Math.PI * 0.4;
+    const baseAngle = Math.PI / 2; // Downward
+    rays.push({
+      originX: sunX + (nextRandom(state) - 0.5) * 200,
+      originY: sunY,
+      angle: baseAngle + spread,
+      width: 40 + nextRandom(state) * 80,
+      length: viewport.height + 200,
+      opacity: 0.6 + nextRandom(state) * 0.4,
+    });
+  }
+
+  return rays;
+}
+
+// Aurora Borealis - Rare atmospheric phenomenon with undulating colored waves
+// Only occurs during night when temperature < 10°C, 0.02% chance per frame
+// Multiple sinusoidal waves with green/blue/purple hues (120-220)
+// Fades in/out gradually for dramatic effect
+// Quality tiers: High: 6, Medium: 4, Low: 2
+function createAuroraWaves(state: BackgroundAnimationState, viewport: ViewportSize): AuroraWave[] {
+  const count = pickCount(6, state.qualityTier);
+  const waves: AuroraWave[] = [];
+
+  for (let i = 0; i < count; i++) {
+    waves.push({
+      baseY: viewport.height * (0.1 + nextRandom(state) * 0.3), // Upper portion of sky
+      amplitude: 20 + nextRandom(state) * 40,
+      wavelength: 80 + nextRandom(state) * 120,
+      phase: nextRandom(state) * Math.PI * 2,
+      speed: 0.01 + nextRandom(state) * 0.02,
+      hue: 120 + nextRandom(state) * 100, // Green to blue/purple (120-220)
+      opacity: 0.4 + nextRandom(state) * 0.4,
+      thickness: 30 + nextRandom(state) * 40,
+    });
+  }
+
+  return waves;
+}
+
+// Update aurora waves - Animate wave motion and handle fade in/out
+function updateAuroraWaves(waves: AuroraWave[]): void {
+  waves.forEach(wave => {
+    wave.phase += wave.speed;
+    if (wave.phase > Math.PI * 2) wave.phase -= Math.PI * 2;
+  });
+}
+
+// Dust Devils - Swirling desert whirlwinds during hot, dry conditions
+// Spawn when temperature > 28°C, moisture < 0.3, during daytime
+// Each contains multiple particles rotating in a vortex pattern
+// Rare spawn with 8s cooldown to prevent spam
+function createDustDevil(state: BackgroundAnimationState, viewport: ViewportSize): DustDevil {
+  const particleCount = 12 + Math.floor(nextRandom(state) * 8);
+  const particles: { angle: number; distance: number; height: number; size: number }[] = [];
+
+  const radius = 20 + nextRandom(state) * 30;
+  for (let i = 0; i < particleCount; i++) {
+    particles.push({
+      angle: nextRandom(state) * Math.PI * 2,
+      distance: nextRandom(state) * radius,
+      height: nextRandom(state) * 60,
+      size: 1 + nextRandom(state) * 2,
+    });
+  }
+
+  return {
+    x: nextRandom(state) * viewport.width,
+    y: viewport.height * 0.7 + nextRandom(state) * viewport.height * 0.2, // Lower portion
+    vx: 0.5 + nextRandom(state) * 1,
+    radius,
+    height: 60 + nextRandom(state) * 40,
+    rotation: 0,
+    rotationSpeed: 0.08 + nextRandom(state) * 0.06,
+    lifetime: 0,
+    maxLifetime: 3000 + nextRandom(state) * 2000,
+    particleCount,
+    particles,
+  };
+}
+
+// Update dust devils - Advance rotation, movement, and lifecycle
+// Particles rotate around center creating vortex effect
+function updateDustDevils(dustDevils: DustDevil[], viewport: ViewportSize): void {
+  dustDevils.forEach(devil => {
+    devil.x += devil.vx;
+    devil.rotation += devil.rotationSpeed;
+    devil.lifetime += 16;
+
+    // Rotate particles around center
+    devil.particles.forEach(p => {
+      p.angle += devil.rotationSpeed;
+    });
+
+    // Remove if out of bounds or expired
+    if (devil.x > viewport.width + 100 || devil.lifetime >= devil.maxLifetime) {
+      devil.lifetime = devil.maxLifetime; // Mark for removal
+    }
+  });
 }

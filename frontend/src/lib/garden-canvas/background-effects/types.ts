@@ -160,3 +160,148 @@ export interface BackgroundWorldState {
   weatherStateName?: string;
   weatherTransitionProgress?: number;
 }
+
+export interface FireflyParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  glowPhase: number;
+  glowSpeed: number;
+  baseOpacity: number;
+  size: number;
+  height: number;
+}
+
+export interface Star {
+  x: number;
+  y: number;
+  brightness: number;
+  twinklePhase: number;
+  twinkleSpeed: number;
+  size: number;
+}
+
+export interface GodRay {
+  originX: number;
+  originY: number;
+  angle: number;
+  width: number;
+  length: number;
+  opacity: number;
+}
+
+export interface AuroraWave {
+  baseY: number;
+  amplitude: number;
+  wavelength: number;
+  phase: number;
+  speed: number;
+  hue: number;
+  opacity: number;
+  thickness: number;
+}
+
+export interface WindLeaf {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  rotationSpeed: number;
+  size: number;
+  color: 'green' | 'yellow' | 'orange' | 'pink';
+  opacity: number;
+  depth: number;
+}
+
+export interface PollenParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  opacity: number;
+  clusterPhase: number;
+}
+
+export interface MistLayer {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  driftSpeed: number;
+  altitude: number;
+}
+
+export interface Dewdrop {
+  x: number;
+  y: number;
+  sparklePhase: number;
+  sparkleSpeed: number;
+  size: number;
+}
+
+export interface DustDevil {
+  x: number;
+  y: number;
+  vx: number;
+  radius: number;
+  height: number;
+  rotation: number;
+  rotationSpeed: number;
+  lifetime: number;
+  maxLifetime: number;
+  particleCount: number;
+  particles: { angle: number; distance: number; height: number; size: number }[];
+}
+
+export interface FlowerBloom {
+  x: number;
+  y: number;
+  bloomProgress: number;
+  hue: number;
+  size: number;
+  petalCount: number;
+}
+
+export interface MushroomSprite {
+  x: number;
+  y: number;
+  growthProgress: number;
+  capRadius: number;
+  stemHeight: number;
+  hue: number;
+  age: number;
+  maxAge: number;
+}
+
+export interface SeasonalGroundParticle {
+  x: number;
+  y: number;
+  size: number;
+  rotation: number;
+  colorVariant: number;
+  type: 'leaf' | 'snow' | 'dust';
+}
+
+export interface Puddle {
+  x: number;
+  y: number;
+  radiusX: number;
+  radiusY: number;
+  opacity: number;
+  ripplePhase: number;
+}
+
+export interface Footprint {
+  x: number;
+  y: number;
+  angle: number;
+  size: number;
+  opacity: number;
+  age: number;
+  maxAge: number;
+  entityType: 'herbivore' | 'carnivore';
+}

@@ -236,17 +236,17 @@ export function generatePlantVisual(entity: Entity): PlantVisual {
     plantType,
     visualSeed: seed,
     genome,
-    
+
     // Structural
     leafCount: rng.int(config.leafCount[0], config.leafCount[1]),
     leafShape: config.leafShape[rng.int(0, config.leafShape.length - 1)],
-    leafSize: rng.range(0.7, 1.3) * traitInfluence,
-    
+    leafSize: Math.min(rng.range(0.7, 1.3) * traitInfluence, 2.0),
+
     // Bloom
     hasBloom: config.hasBloom,
     petalCount: rng.int(config.petalCount[0], config.petalCount[1]),
     petalShape: rng.next() > 0.5 ? 'round' : 'pointed',
-    bloomSize: rng.range(0.7, 1.5) * traitInfluence,
+    bloomSize: Math.min(rng.range(0.7, 1.5) * traitInfluence, 2.5),
     
     // Color
     baseHue: colorOffsets.hueOffset,
