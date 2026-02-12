@@ -15,6 +15,7 @@ const BROWN_PLANT_BASE_HUE = 28;
 // Maximum growth constraints to prevent visual "gigantism"
 const MAX_BASE_PLANT_SIZE = 42;
 const MAX_PETAL_RADIUS = 6.5; // Slightly increased but still strictly capped
+const VINE_SIZE_NORMALIZATION_FACTOR = 0.72;
 
 function clampToRange(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -143,7 +144,14 @@ export class PlantRenderer {
   private calculateSize(energy: number, visual: PlantVisual): number {
     // Linear growth until ~50 energy, then square root growth
     const growthEnergy = energy < 50 ? energy : 50 + Math.sqrt(energy - 50) * 5;
-    const baseSize = (10 + growthEnergy / 12) * visual.height * visual.leafSize;
+    let baseSize = (10 + growthEnergy / 12) * visual.height * visual.leafSize;
+
+    // Vines are rendered with elongated curves and broad lateral spread, so normalize
+    // their base scale to keep them visually aligned with other plant silhouettes.
+    if (visual.plantType === 'vine') {
+      baseSize *= VINE_SIZE_NORMALIZATION_FACTOR;
+    }
+
     return Math.min(baseSize, MAX_BASE_PLANT_SIZE);
   }
 
