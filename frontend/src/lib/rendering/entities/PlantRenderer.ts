@@ -8,6 +8,7 @@
 import type { Entity } from '../../../env.d.ts';
 import type { PlantVisual } from '../PlantVisualSystem.ts';
 
+// blue plant hue
 const BLUE_PLANT_BASE_HUE = 210;
 const BROWN_PLANT_BASE_HUE = 28;
 
