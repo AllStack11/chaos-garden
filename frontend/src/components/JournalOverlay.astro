@@ -305,40 +305,80 @@ export interface Props {}
       const container = this.querySelector('[data-timeline-grid]');
       if (!container) return;
 
+      // Clear existing content
+      container.textContent = '';
+
       if (this.events.length === 0) {
-        container.innerHTML = '<p class="text-white/60 text-sm">No events yet. Let the garden breathe.</p>';
+        const message = document.createElement('p');
+        message.className = 'text-white/60 text-sm';
+        message.textContent = 'No events yet. Let the garden breathe.';
+        container.appendChild(message);
         return;
       }
 
-      container.innerHTML = this.events
-        .slice(0, 30)
-        .map((event) => {
-          const timeLabel = this.buildTimeLabel(event);
-          const severity = event.severity ?? 'LOW';
-          const severityClass = this.severityPillClass(severity);
-          const tags = this.formatTags(event.tags);
-          return `
-            <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-3 shadow-inner">
-              <div class="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/60">
-                <span>Tick ${event.tick}</span>
-                <span class="${severityClass}">${severity}</span>
-              </div>
-              <p class="mt-2 text-white/90 text-sm leading-relaxed">${event.description}</p>
-              <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-white/50">
-                <span class="rounded-full bg-white/5 px-2 py-1">${timeLabel}</span>
-                ${tags}
-              </div>
-            </div>
-          `;
-        })
-        .join('');
+      this.events.slice(0, 30).forEach((event) => {
+        const timeLabel = this.buildTimeLabel(event);
+        const severity = event.severity ?? 'LOW';
+        const severityClass = this.severityPillClass(severity);
+
+        const eventCard = document.createElement('div');
+        eventCard.className = 'rounded-xl border border-white/10 bg-white/5 px-3 py-3 shadow-inner';
+
+        // Header with tick and severity
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/60';
+
+        const tickSpan = document.createElement('span');
+        tickSpan.textContent = `Tick ${event.tick}`;
+
+        const severitySpan = document.createElement('span');
+        severitySpan.className = severityClass;
+        severitySpan.textContent = severity;
+
+        header.appendChild(tickSpan);
+        header.appendChild(severitySpan);
+
+        // Description
+        const description = document.createElement('p');
+        description.className = 'mt-2 text-white/90 text-sm leading-relaxed';
+        description.textContent = event.description;
+
+        // Metadata (time and tags)
+        const metadata = document.createElement('div');
+        metadata.className = 'mt-2 flex flex-wrap gap-2 text-[11px] text-white/50';
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'rounded-full bg-white/5 px-2 py-1';
+        timeSpan.textContent = timeLabel;
+        metadata.appendChild(timeSpan);
+
+        // Add tags
+        const tags = event.tags?.length ? event.tags : [TAG_FALLBACK];
+        tags.slice(0, 4).forEach((tag) => {
+          const tagSpan = document.createElement('span');
+          tagSpan.className = 'rounded-full bg-white/5 px-2 py-1';
+          tagSpan.textContent = tag;
+          metadata.appendChild(tagSpan);
+        });
+
+        eventCard.appendChild(header);
+        eventCard.appendChild(description);
+        eventCard.appendChild(metadata);
+        container.appendChild(eventCard);
+      });
     }
 
     private renderTagCloud() {
       const container = this.querySelector('[data-tag-cloud]');
       if (!container) return;
+
+      container.textContent = '';
+
       if (this.events.length === 0) {
-        container.innerHTML = '<span class="text-white/50">Waiting for stories...</span>';
+        const message = document.createElement('span');
+        message.className = 'text-white/50';
+        message.textContent = 'Waiting for stories...';
+        container.appendChild(message);
         return;
       }
 
@@ -352,16 +392,21 @@ export interface Props {}
       });
 
       const sortedTags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 18);
-      container.innerHTML = sortedTags
-        .map(([tag, count]) => `<span class="rounded-full border border-white/15 px-3 py-1">${tag} · ${count}</span>`)
-        .join('');
+      sortedTags.forEach(([tag, count]) => {
+        const tagSpan = document.createElement('span');
+        tagSpan.className = 'rounded-full border border-white/15 px-3 py-1';
+        tagSpan.textContent = `${tag} · ${count}`;
+        container.appendChild(tagSpan);
+      });
     }
 
     private renderQuickSignals() {
       const container = this.querySelector('[data-quick-signals]');
       if (!container) return;
+
+      container.textContent = '';
+
       if (this.events.length === 0) {
-        container.innerHTML = '';
         return;
       }
 
@@ -370,100 +415,151 @@ export interface Props {}
       const births = this.events.filter((e) => e.eventType === 'BIRTH').length;
       const deaths = this.events.filter((e) => e.eventType === 'DEATH').length;
 
-      container.innerHTML = `
-        <div class="flex justify-between text-sm text-white/80">
-          <span class="text-white/60">Newest</span>
-          <span>${newest.description}</span>
-        </div>
-        <div class="flex justify-between text-sm text-white/80">
-          <span class="text-white/60">Critical</span>
-          <span>${criticalCount}</span>
-        </div>
-        <div class="flex justify-between text-sm text-white/80">
-          <span class="text-white/60">Births</span>
-          <span>${births}</span>
-        </div>
-        <div class="flex justify-between text-sm text-white/80">
-          <span class="text-white/60">Deaths</span>
-          <span>${deaths}</span>
-        </div>
-      `;
+      const signals = [
+        { label: 'Newest', value: newest.description },
+        { label: 'Critical', value: String(criticalCount) },
+        { label: 'Births', value: String(births) },
+        { label: 'Deaths', value: String(deaths) },
+      ];
+
+      signals.forEach(({ label, value }) => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between text-sm text-white/80';
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'text-white/60';
+        labelSpan.textContent = label;
+
+        const valueSpan = document.createElement('span');
+        valueSpan.textContent = value;
+
+        row.appendChild(labelSpan);
+        row.appendChild(valueSpan);
+        container.appendChild(row);
+      });
     }
 
     private renderVignettes() {
       const container = this.querySelector('[data-story-vignettes]');
       if (!container) return;
+
+      container.textContent = '';
+
       if (this.events.length === 0) {
-        container.innerHTML = '<p class="text-white/60 text-sm">No stories yet.</p>';
+        const message = document.createElement('p');
+        message.className = 'text-white/60 text-sm';
+        message.textContent = 'No stories yet.';
+        container.appendChild(message);
         return;
       }
 
       const slices = this.events.slice(0, 12);
-      container.innerHTML = slices
-        .map((event, index) => {
-          const opener = this.buildOpener(event, index);
-          return `
-            <div class="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/3 to-white/0 p-3 text-sm text-white/85 shadow-lg">
-              <div class="text-[11px] uppercase tracking-[0.2em] text-white/55">Tick ${event.tick}</div>
-              <p class="mt-1 font-semibold text-white">${opener}</p>
-              <p class="mt-1 text-white/80 leading-relaxed">${event.description}</p>
-            </div>
-          `;
-        })
-        .join('');
+      slices.forEach((event, index) => {
+        const opener = this.buildOpener(event, index);
+
+        const card = document.createElement('div');
+        card.className = 'rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/3 to-white/0 p-3 text-sm text-white/85 shadow-lg';
+
+        const tickLabel = document.createElement('div');
+        tickLabel.className = 'text-[11px] uppercase tracking-[0.2em] text-white/55';
+        tickLabel.textContent = `Tick ${event.tick}`;
+
+        const openerP = document.createElement('p');
+        openerP.className = 'mt-1 font-semibold text-white';
+        openerP.textContent = opener;
+
+        const descriptionP = document.createElement('p');
+        descriptionP.className = 'mt-1 text-white/80 leading-relaxed';
+        descriptionP.textContent = event.description;
+
+        card.appendChild(tickLabel);
+        card.appendChild(openerP);
+        card.appendChild(descriptionP);
+        container.appendChild(card);
+      });
     }
 
     private renderSpeciesJournals() {
       const container = this.querySelector('[data-species-journals]');
       if (!container) return;
+
+      container.textContent = '';
+
       if (this.events.length === 0) {
-        container.innerHTML = '';
         return;
       }
 
       const byTag = this.groupByPrimaryTag();
-      container.innerHTML = Object.entries(byTag)
-        .slice(0, 6)
-        .map(([tag, events]) => {
-          const focus = events[0];
-          return `
-            <div class="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/85">
-              <div class="text-[11px] uppercase tracking-[0.22em] text-white/60">${tag}</div>
-              <p class="mt-1 text-white">${focus.description}</p>
-              <p class="mt-1 text-white/60 text-xs">${events.length} notes logged</p>
-            </div>
-          `;
-        })
-        .join('');
+      Object.entries(byTag).slice(0, 6).forEach(([tag, events]) => {
+        const focus = events[0];
+
+        const card = document.createElement('div');
+        card.className = 'rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/85';
+
+        const tagLabel = document.createElement('div');
+        tagLabel.className = 'text-[11px] uppercase tracking-[0.22em] text-white/60';
+        tagLabel.textContent = tag;
+
+        const description = document.createElement('p');
+        description.className = 'mt-1 text-white';
+        description.textContent = focus.description;
+
+        const count = document.createElement('p');
+        count.className = 'mt-1 text-white/60 text-xs';
+        count.textContent = `${events.length} notes logged`;
+
+        card.appendChild(tagLabel);
+        card.appendChild(description);
+        card.appendChild(count);
+        container.appendChild(card);
+      });
     }
 
     private renderCriticalFeed() {
       const container = this.querySelector('[data-critical-feed]');
       if (!container) return;
 
+      container.textContent = '';
+
       const criticalEvents = this.events
         .filter((event) => SEVERITY_ORDER[event.severity ?? 'LOW'] >= 3)
         .slice(0, 20);
 
       if (criticalEvents.length === 0) {
-        container.innerHTML = '<p class="text-white/60 text-sm">No high-severity signals right now.</p>';
+        const message = document.createElement('p');
+        message.className = 'text-white/60 text-sm';
+        message.textContent = 'No high-severity signals right now.';
+        container.appendChild(message);
         return;
       }
 
-      container.innerHTML = criticalEvents
-        .map((event) => {
-          const severityClass = this.severityPillClass(event.severity ?? 'LOW');
-          return `
-            <div class="rounded-xl border border-white/10 bg-red-500/5 px-3 py-2">
-              <div class="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/65">
-                <span>${event.eventType}</span>
-                <span class="${severityClass}">${event.severity}</span>
-              </div>
-              <p class="mt-1 text-white/90">${event.description}</p>
-            </div>
-          `;
-        })
-        .join('');
+      criticalEvents.forEach((event) => {
+        const severityClass = this.severityPillClass(event.severity ?? 'LOW');
+
+        const card = document.createElement('div');
+        card.className = 'rounded-xl border border-white/10 bg-red-500/5 px-3 py-2';
+
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/65';
+
+        const typeSpan = document.createElement('span');
+        typeSpan.textContent = event.eventType;
+
+        const severitySpan = document.createElement('span');
+        severitySpan.className = severityClass;
+        severitySpan.textContent = event.severity ?? 'LOW';
+
+        header.appendChild(typeSpan);
+        header.appendChild(severitySpan);
+
+        const description = document.createElement('p');
+        description.className = 'mt-1 text-white/90';
+        description.textContent = event.description;
+
+        card.appendChild(header);
+        card.appendChild(description);
+        container.appendChild(card);
+      });
     }
 
     private renderMeters() {
@@ -474,13 +570,16 @@ export interface Props {}
       const balanceScore = this.computeBalanceScore();
       const tensionScore = this.computeTensionScore();
 
-      balanceMeter.innerHTML = this.buildMeterMarkup('Balance', balanceScore, 'Harmony vs flux');
-      tensionMeter.innerHTML = this.buildMeterMarkup('Tension', tensionScore, 'Risk + drama index');
+      this.buildMeterDom(balanceMeter, 'Balance', balanceScore, 'Harmony vs flux');
+      this.buildMeterDom(tensionMeter, 'Tension', tensionScore, 'Risk + drama index');
     }
 
     private renderSignalSummary() {
       const container = this.querySelector('[data-signal-summary]');
       if (!container) return;
+
+      container.textContent = '';
+
       if (this.events.length === 0) {
         container.textContent = 'No signals to summarize yet.';
         return;
@@ -498,7 +597,12 @@ export interface Props {}
         envChange ? `Environment shift: ${envChange.description}` : 'Environment steady this interval.',
       ];
 
-      container.innerHTML = lines.map((line) => `<p class="mb-1">${line}</p>`).join('');
+      lines.forEach((line) => {
+        const p = document.createElement('p');
+        p.className = 'mb-1';
+        p.textContent = line;
+        container.appendChild(p);
+      });
     }
 
     private buildTimeLabel(event: SimulationEvent): string {
@@ -518,14 +622,6 @@ export interface Props {}
         default:
           return `${base} border-emerald-300/30 text-emerald-100 bg-emerald-500/10`;
       }
-    }
-
-    private formatTags(tags: string[] | undefined): string {
-      const list = tags?.length ? tags : [TAG_FALLBACK];
-      return list
-        .slice(0, 4)
-        .map((tag) => `<span class="rounded-full bg-white/5 px-2 py-1">${tag}</span>`)
-        .join('');
     }
 
     private buildOpener(event: SimulationEvent, index: number): string {
@@ -567,19 +663,43 @@ export interface Props {}
       return Math.min(1, weightedSum / maxPossible);
     }
 
-    private buildMeterMarkup(label: string, value: number, subtitle: string): string {
+    private buildMeterDom(container: Element, label: string, value: number, subtitle: string): void {
+      container.textContent = '';
+
       const percentage = Math.round(value * 100);
       const width = `${percentage}%`;
-      return `
-        <div class="flex justify-between text-[11px] uppercase tracking-[0.2em] text-white/60">
-          <span>${label}</span>
-          <span>${percentage}%</span>
-        </div>
-        <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
-          <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300" style="width:${width}"></div>
-        </div>
-        <p class="mt-2 text-xs text-white/65">${subtitle}</p>
-      `;
+
+      // Header with label and percentage
+      const header = document.createElement('div');
+      header.className = 'flex justify-between text-[11px] uppercase tracking-[0.2em] text-white/60';
+
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = label;
+
+      const percentSpan = document.createElement('span');
+      percentSpan.textContent = `${percentage}%`;
+
+      header.appendChild(labelSpan);
+      header.appendChild(percentSpan);
+
+      // Progress bar container
+      const barContainer = document.createElement('div');
+      barContainer.className = 'mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10';
+
+      const bar = document.createElement('div');
+      bar.className = 'h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300';
+      bar.style.width = width;
+
+      barContainer.appendChild(bar);
+
+      // Subtitle
+      const subtitleP = document.createElement('p');
+      subtitleP.className = 'mt-2 text-xs text-white/65';
+      subtitleP.textContent = subtitle;
+
+      container.appendChild(header);
+      container.appendChild(barContainer);
+      container.appendChild(subtitleP);
     }
   }
 

@@ -36,6 +36,7 @@ import type {
   EventSeverityBreakdown,
 } from '@chaos-garden/shared';
 import { checkRateLimitForRequest, getRateLimitResetTimeForRequest } from './utils/rate-limiter';
+import { validateInteger } from './utils/validation';
 
 // ==========================================
 // Environment Type Definition
@@ -88,13 +89,21 @@ function hasDatabaseBinding(env: Env): boolean {
 // CORS Headers
 // ==========================================
 
-/** Build CORS headers from the configured origin */
+/** Build CORS and security headers from the configured origin */
 function getCorsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin',
+    // Security headers
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   };
 }
 
@@ -154,18 +163,35 @@ function createSuccessResponse(data: unknown, corsOrigin: string, status = 200):
 }
 
 /** Create an error response */
-function createErrorResponse(message: string, corsOrigin: string, status = 500, details?: unknown): Response {
-  return new Response(JSON.stringify({
+function createErrorResponse(
+  message: string,
+  corsOrigin: string,
+  status = 500,
+  details?: unknown,
+  isDevelopment = false
+): Response {
+  const responseBody: {
+    success: false;
+    error: string;
+    details?: unknown;
+    timestamp: string;
+  } = {
     success: false,
     error: message,
-    details,
-    timestamp: new Date().toISOString()
-  }), {
+    timestamp: new Date().toISOString(),
+  };
+
+  // Only include detailed error information in development mode
+  if (isDevelopment && details !== undefined) {
+    responseBody.details = details;
+  }
+
+  return new Response(JSON.stringify(responseBody), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      ...getCorsHeaders(corsOrigin)
-    }
+      ...getCorsHeaders(corsOrigin),
+    },
   });
 }
 
@@ -190,20 +216,17 @@ function parseWindowTicks(searchParams: URLSearchParams): ParsedStatsWindow {
     return { valid: true, value: DEFAULT_STATS_WINDOW_TICKS };
   }
 
-  const parsedValue = Number.parseInt(rawValue, 10);
-  if (!Number.isInteger(parsedValue)) {
-    return { valid: false, value: DEFAULT_STATS_WINDOW_TICKS, error: 'windowTicks must be an integer' };
+  const result = validateInteger(rawValue, {
+    min: MIN_STATS_WINDOW_TICKS,
+    max: MAX_STATS_WINDOW_TICKS,
+    fieldName: 'windowTicks',
+  });
+
+  if (!result.valid) {
+    return { valid: false, value: DEFAULT_STATS_WINDOW_TICKS, error: result.error };
   }
 
-  if (parsedValue < MIN_STATS_WINDOW_TICKS || parsedValue > MAX_STATS_WINDOW_TICKS) {
-    return {
-      valid: false,
-      value: DEFAULT_STATS_WINDOW_TICKS,
-      error: `windowTicks must be between ${MIN_STATS_WINDOW_TICKS} and ${MAX_STATS_WINDOW_TICKS}`
-    };
-  }
-
-  return { valid: true, value: parsedValue };
+  return { valid: true, value: result.value };
 }
 
 function toGardenStatsPoint(gardenState: GardenState | null): GardenStatsPoint | null {
@@ -545,7 +568,8 @@ async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> 
       'Failed to fetch garden state',
       corsOrigin,
       500,
-      error instanceof Error ? error.message : String(error)
+      error instanceof Error ? error.message : String(error),
+      isDevelopment
     );
   }
 }
@@ -562,7 +586,13 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
     const url = new URL(request.url);
     const parsedWindow = parseWindowTicks(url.searchParams);
     if (!parsedWindow.valid) {
-      return createErrorResponse(parsedWindow.error ?? 'Invalid windowTicks parameter', corsOrigin, 400);
+      return createErrorResponse(
+        parsedWindow.error ?? 'Invalid windowTicks parameter',
+        corsOrigin,
+        400,
+        undefined,
+        isDevelopment
+      );
     }
 
     const windowTicks = parsedWindow.value;
@@ -623,7 +653,8 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
       'Failed to fetch garden stats',
       corsOrigin,
       500,
-      error instanceof Error ? error.message : String(error)
+      error instanceof Error ? error.message : String(error),
+      isDevelopment
     );
   }
 }
@@ -662,10 +693,13 @@ async function handleGetHealth(env: Env, corsOrigin: string): Promise<Response> 
       error: error instanceof Error ? error.message : String(error)
     });
 
-    return createErrorResponse('System unhealthy', corsOrigin, 503, {
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
-    });
+    return createErrorResponse(
+      'System unhealthy',
+      corsOrigin,
+      503,
+      error instanceof Error ? error.message : String(error),
+      isDevelopment
+    );
   }
 }
 
@@ -681,13 +715,15 @@ export default {
     const configuredCorsOrigin = env.CORS_ORIGIN ?? '*';
     const corsOrigin = resolveCorsOrigin(request, configuredCorsOrigin);
     const environmentName = env.ENVIRONMENT ?? 'production';
+    const isDevelopment = environmentName !== 'production';
 
     if (!hasDatabaseBinding(env)) {
       return createErrorResponse(
-        'Missing D1 binding `DB`. Ensure workers/wrangler.jsonc has d1_databases[].binding = "DB", then redeploy the Worker.',
+        'Database connection unavailable',
         corsOrigin,
         500,
-        { environment: environmentName }
+        'Missing D1 binding `DB`. Ensure workers/wrangler.jsonc has d1_databases[].binding = "DB", then redeploy the Worker.',
+        isDevelopment
       );
     }
 
@@ -695,10 +731,11 @@ export default {
       await ensureDatabaseReady(env.DB);
     } catch (error) {
       return createErrorResponse(
-        'Database is not initialized. Run `npm run db:init:local` from the project root.',
+        'Database not ready',
         corsOrigin,
         500,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
+        isDevelopment
       );
     }
 
@@ -746,26 +783,6 @@ export default {
 
     if (path === '/api/health' && request.method === 'GET') {
       return handleGetHealth(env, corsOrigin);
-    }
-
-    // Handle manual tick trigger (Development only)
-    if (path === '/api/tick' && request.method === 'POST') {
-      const isDevelopment = env.ENVIRONMENT !== 'production';
-      const logger = createApplicationLogger(env.DB, 'SIMULATION', undefined, isDevelopment);
-
-      try {
-        await logger.info('api_tick_triggered', 'Manual simulation tick starting');
-        const result = await runSimulationTick(env.DB, logger, isDevelopment);
-        await logger.info('api_tick_complete', 'Manual simulation tick completed', result as unknown as Record<string, unknown>);
-        return createSuccessResponse(result, corsOrigin);
-      } catch (error) {
-        return createErrorResponse(
-          'Manual tick failed',
-          corsOrigin,
-          500,
-          error instanceof Error ? error.message : String(error)
-        );
-      }
     }
 
     // Handle root path

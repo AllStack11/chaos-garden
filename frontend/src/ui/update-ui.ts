@@ -20,7 +20,19 @@ export function updateGardenUI(root: HTMLElement, state: GardenAppState, options
 function updatePopulation(root: HTMLElement, gardenState: GardenState | null) {
   const popEl = root.ownerDocument?.getElementById('global-population');
   if (popEl && gardenState) {
-    popEl.innerHTML = `${gardenState.populationSummary.totalLiving} <span class="text-[9px] opacity-40 ml-1 uppercase">Living</span>`;
+    // Clear existing content
+    popEl.textContent = '';
+
+    // Safely add population number
+    const numberNode = document.createTextNode(String(gardenState.populationSummary.totalLiving));
+    popEl.appendChild(numberNode);
+
+    // Add the "Living" label span
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'text-[9px] opacity-40 ml-1 uppercase';
+    labelSpan.textContent = 'Living';
+    popEl.appendChild(document.createTextNode(' '));
+    popEl.appendChild(labelSpan);
   }
 }
 

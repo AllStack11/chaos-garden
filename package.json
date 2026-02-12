@@ -13,6 +13,7 @@
     "backend": "wrangler dev -e dev -w @chaos-garden/workers --config workers/wrangler.local.jsonc --persist-to workers/.wrangler/local-state",
     "frontend": "npm run dev -w @chaos-garden/frontend",
     "db:init:local": "npm run db:init:local -w @chaos-garden/workers",
+    "db:init:chaos": "npm run db:init:chaos -w @chaos-garden/workers",
     "db:init:remote": "npm run db:init:remote -w @chaos-garden/workers",
     "db:init:remote:verify": "npm run db:init:remote:verify -w @chaos-garden/workers",
     "test:all": "npm run test -w @chaos-garden/shared && npm run test:ci -w @chaos-garden/workers && npm run test -w @chaos-garden/frontend",

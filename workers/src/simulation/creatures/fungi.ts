@@ -39,7 +39,7 @@ const BASE_METABOLISM_COST = 0.2; // Fungi have lower metabolism than plants/her
 const REPRODUCTION_THRESHOLD = 70; // Fungi reproduce at lower energy than plants
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 25;
-const DECOMPOSITION_DISTANCE = 10; // pixels - fungi can decompose nearby dead matter
+const DECOMPOSITION_DISTANCE = 30; // pixels - fungi can decompose nearby dead matter
 const MAX_AGE = 300; // Fungi live longer than plants/herbivores
 const ENERGY_FROM_DECOMPOSITION = 20; // energy gained per decomposition
 const SPORE_SPREAD_RADIUS = 40; // how far spores can travel
@@ -78,7 +78,7 @@ export function createNewFungusEntity(
     reproductionRate: traits?.reproductionRate ?? 0.04,
     metabolismEfficiency: traits?.metabolismEfficiency ?? 1.2,
     decompositionRate: traits?.decompositionRate ?? 1.0,
-    perceptionRadius: traits?.perceptionRadius ?? 50,
+    perceptionRadius: traits?.perceptionRadius ?? 80,
     lineage: parentId,
     createdAt: now,
     updatedAt: now
