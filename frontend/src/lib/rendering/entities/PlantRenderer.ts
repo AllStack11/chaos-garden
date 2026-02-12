@@ -13,7 +13,7 @@ const BLUE_PLANT_BASE_HUE = 210;
 const BROWN_PLANT_BASE_HUE = 28;
 
 // Maximum growth constraints to prevent visual "gigantism"
-const MAX_BASE_PLANT_SIZE = 25;
+const MAX_BASE_PLANT_SIZE = 30;
 const MAX_PETAL_RADIUS = 6; // Further reduced for smaller, more reasonable flowers
 
 function clampToRange(value: number, min: number, max: number): number {
@@ -386,19 +386,19 @@ export class PlantRenderer {
   ): void {
     if (!this.ctx || !this.rng) return;
     
-    const stemHeight = size * 2;
+    const stemHeight = size * 1.4;
     const vineColor = this.getBrownPlantColor(visual, -6, 38, 30);
     const leafColor = this.getBluePlantColor(visual, 0, 50, 46);
     
     // Curved vine stem
     this.ctx.strokeStyle = vineColor;
-    this.ctx.lineWidth = 3 * visual.stemThickness;
+    this.ctx.lineWidth = 2 * visual.stemThickness;
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
     this.ctx.bezierCurveTo(
-      x + sway * 2, y - stemHeight * 0.3,
-      x - sway, y - stemHeight * 0.6,
-      x + sway * 0.5, y - stemHeight
+      x + sway * 1.5, y - stemHeight * 0.3,
+      x - sway * 0.8, y - stemHeight * 0.6,
+      x + sway * 0.4, y - stemHeight
     );
     this.ctx.stroke();
     
@@ -406,13 +406,13 @@ export class PlantRenderer {
     const leafPositions = [0.2, 0.4, 0.6, 0.8];
     for (const pos of leafPositions) {
       const t = pos;
-      const vineX = x + Math.sin(t * Math.PI * 2) * sway * 0.5;
+      const vineX = x + Math.sin(t * Math.PI * 2) * sway * 0.4;
       const vineY = y - stemHeight * pos;
       const leafAngle = Math.sin(time * 2 + pos * 10) * 0.3;
       
       this.ctx.fillStyle = leafColor;
       this.ctx.beginPath();
-      this.ctx.ellipse(vineX, vineY, size * 0.3, size * 0.15, leafAngle, 0, Math.PI * 2);
+      this.ctx.ellipse(vineX, vineY, size * 0.18, size * 0.1, leafAngle, 0, Math.PI * 2);
       this.ctx.fill();
     }
   }
