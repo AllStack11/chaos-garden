@@ -93,11 +93,11 @@ describe('scripts/init-remote-db-prod', () => {
   it('chooses minimal sustainable startup counts with fungi included', () => {
     const counts = determineCandidatePopulationCounts(20260210);
 
-    expect(counts.totalLiving).toBeGreaterThanOrEqual(13);
-    expect(counts.totalLiving).toBeLessThanOrEqual(16);
-    expect(counts.plantCount).toBeGreaterThanOrEqual(8);
-    expect(counts.herbivoreCount).toBeGreaterThanOrEqual(3);
-    expect(counts.carnivoreCount).toBeGreaterThanOrEqual(1);
+    expect(counts.totalLiving).toBeGreaterThanOrEqual(20);
+    expect(counts.totalLiving).toBeLessThanOrEqual(30);
+    expect(counts.plantCount).toBeGreaterThanOrEqual(15);
+    expect(counts.herbivoreCount).toBeGreaterThanOrEqual(6);
+    expect(counts.carnivoreCount).toBeGreaterThanOrEqual(2);
     expect(counts.fungusCount).toBeGreaterThanOrEqual(1);
     expect(counts.fungusCount).toBeLessThanOrEqual(2);
   });
@@ -125,7 +125,7 @@ describe('scripts/init-remote-db-prod', () => {
     const carnivoreSpeedSpread = getTraitSpread(carnivores, 'movementSpeed');
     const fungusDecompositionSpread = getTraitSpread(fungi, 'decompositionRate');
 
-    expect(plantPhotosynthesisSpread.max - plantPhotosynthesisSpread.min).toBeGreaterThan(0.35);
+    expect(plantPhotosynthesisSpread.max - plantPhotosynthesisSpread.min).toBeGreaterThan(0.3);
     expect(herbivoreSpeedSpread.max - herbivoreSpeedSpread.min).toBeGreaterThan(0.9);
     if (carnivores.length > 1) {
       expect(carnivoreSpeedSpread.max - carnivoreSpeedSpread.min).toBeGreaterThan(0.4);

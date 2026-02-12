@@ -3,7 +3,7 @@
  * Production D1 initializer for Chaos Garden.
  *
  * Seed strategy:
- * - minimal sustainable baseline for a 120-tick horizon
+ * - minimal sustainable baseline for a 300-tick horizon
  * - 1-2 fungi at tick 0
  * - deterministic natural habitat placement with minimum spacing constraints
  * - high diversity in names/species/traits
@@ -28,7 +28,7 @@ const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
 const GARDEN_WIDTH = 800;
 const GARDEN_HEIGHT = 600;
 
-const SUSTAINABILITY_TICK_WINDOW = 120;
+const SUSTAINABILITY_TICK_WINDOW = 300;
 const SUSTAINABILITY_MINIMUMS = {
   plants: 1,
   herbivores: 1,
@@ -38,17 +38,18 @@ const SUSTAINABILITY_MINIMUMS = {
 };
 
 const CANDIDATE_COUNT_BOUNDS = {
-  minPlants: 8,
-  minHerbivores: 3,
-  minCarnivores: 1,
+  minPlants: 15,
+  minHerbivores: 6,
+  minCarnivores: 2,
   minFungi: 1,
-  maxPlants: 11,
-  maxHerbivores: 5,
-  maxCarnivores: 2,
+  maxPlants: 18,
+  maxHerbivores: 8,
+  maxCarnivores: 3,
   maxFungi: 2
 };
 
-const DEFAULT_COUNT_HEURISTIC_LIMIT = 16;
+const MIN_INITIAL_TOTAL_ENTITIES = 20;
+const DEFAULT_COUNT_HEURISTIC_LIMIT = 30;
 
 const TYPE_ORDER = ['plant', 'herbivore', 'carnivore', 'fungus'];
 
@@ -109,10 +110,10 @@ const TRAIT_RANGES = {
     threatDetectionRadius: [110, 180]
   },
   carnivore: {
-    energy: [52, 72],
-    reproductionRate: [0.014, 0.031],
+    energy: [62, 84],
+    reproductionRate: [0.024, 0.042],
     movementSpeed: [3.0, 4.35],
-    metabolismEfficiency: [0.9, 1.26],
+    metabolismEfficiency: [0.95, 1.3],
     perceptionRadius: [138, 198]
   },
   fungus: {
@@ -348,6 +349,10 @@ function determineCandidatePopulationCounts(seed) {
   });
 
   const viableCandidate = candidateCounts.find((candidate) => {
+    if (candidate.totalLiving < MIN_INITIAL_TOTAL_ENTITIES) {
+      return false;
+    }
+
     if (candidate.totalLiving > DEFAULT_COUNT_HEURISTIC_LIMIT) {
       return false;
     }

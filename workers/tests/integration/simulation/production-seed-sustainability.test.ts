@@ -1,6 +1,7 @@
 import { createRequire } from 'module';
 import { describe, expect, it } from 'vitest';
 import type { Entity } from '@chaos-garden/shared';
+import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import { processEntitiesForTick } from '../../../src/simulation/tick/tickHelpers/processEntitiesForTick';
 import { createFakeEventLogger } from '../../helpers/fake-event-logger';
 import { createFakeApplicationLogger } from '../../helpers/fake-application-logger';
@@ -167,12 +168,26 @@ async function runDeterministicTick(entities: Entity[], tickNumber: number): Pro
   }
 
   const persistentDead = Array.from(deadById.values()).filter((entity) => entity.energy > 0);
+  const livingCombined = [...survivors, ...processingResult.newEntities].filter((entity) => entity.isAlive);
+  const sortedLiving = [...livingCombined].sort((left, right) => left.id.localeCompare(right.id));
+  const sortedDead = [...persistentDead].sort((left, right) => left.id.localeCompare(right.id));
 
-  return [...survivors, ...processingResult.newEntities, ...persistentDead];
+  const livingPlants = sortedLiving.filter((entity) => entity.type === 'plant').slice(0, DEFAULT_SIMULATION_CONFIG.maxPlants);
+  const livingHerbivores = sortedLiving.filter((entity) => entity.type === 'herbivore').slice(0, DEFAULT_SIMULATION_CONFIG.maxHerbivores);
+  const livingCarnivores = sortedLiving.filter((entity) => entity.type === 'carnivore').slice(0, DEFAULT_SIMULATION_CONFIG.maxCarnivores);
+  const livingFungi = sortedLiving
+    .filter((entity) => entity.type === 'fungus')
+    .slice(0, Math.max(50, DEFAULT_SIMULATION_CONFIG.maxTotalEntities - (DEFAULT_SIMULATION_CONFIG.maxPlants + DEFAULT_SIMULATION_CONFIG.maxHerbivores + DEFAULT_SIMULATION_CONFIG.maxCarnivores)));
+
+  const limitedLiving = [...livingPlants, ...livingHerbivores, ...livingCarnivores, ...livingFungi];
+  const availableDeadSlots = Math.max(0, DEFAULT_SIMULATION_CONFIG.maxTotalEntities - limitedLiving.length);
+  const limitedDead = sortedDead.slice(0, availableDeadSlots);
+
+  return [...limitedLiving, ...limitedDead];
 }
 
 describe('integration/simulation production seed sustainability', () => {
-  it('keeps all trophic groups alive through the 120-tick sustainability horizon', async () => {
+  it('keeps all trophic groups alive through the 300-tick sustainability horizon', async () => {
     const seedData = generateEntities(20260210);
     let entities = seedData.entities.map(mapSeedEntityToSimulationEntity);
 
