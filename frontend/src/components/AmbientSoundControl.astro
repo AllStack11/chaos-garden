@@ -1,0 +1,153 @@
+---
+/**
+ * Ambient Sound Control
+ *
+ * Compact bottom-right audio control with mute + volume.
+ */
+---
+
+<ambient-sound-control class="pointer-events-auto fixed bottom-4 right-4 z-30 block select-none">
+  <div
+    data-audio-chip
+    class="flex items-center gap-2 rounded-full border border-emerald-200/20 bg-[#071711]/82 px-3 py-2 text-[11px] text-emerald-50/90 backdrop-blur-md shadow-[0_8px_22px_rgba(0,0,0,0.35)]"
+  >
+    <button
+      type="button"
+      data-audio-toggle
+      aria-label="Toggle ambient sound"
+      class="rounded-full border border-emerald-200/25 bg-emerald-300/10 px-2 py-1 font-mono tracking-wide text-emerald-100/95 transition-colors hover:bg-emerald-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/80"
+    >
+      Muted
+    </button>
+
+    <input
+      data-audio-volume
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value="55"
+      aria-label="Ambient sound volume"
+      class="h-1.5 w-24 cursor-pointer accent-emerald-300"
+    />
+
+    <span data-audio-status class="min-w-[56px] text-right font-mono uppercase tracking-wider text-emerald-50/75">Muted</span>
+  </div>
+</ambient-sound-control>
+
+<script>
+  import type { SoundscapeUiState } from '../lib/audio/types.ts';
+
+  class AmbientSoundControl extends HTMLElement {
+    private toggleButton: HTMLButtonElement | null = null;
+    private volumeInput: HTMLInputElement | null = null;
+    private statusText: HTMLElement | null = null;
+
+    private muted = true;
+    private userEnabled = false;
+
+    connectedCallback() {
+      this.toggleButton = this.querySelector('[data-audio-toggle]');
+      this.volumeInput = this.querySelector('[data-audio-volume]');
+      this.statusText = this.querySelector('[data-audio-status]');
+
+      this.toggleButton?.addEventListener('click', this.handleToggleClick);
+      this.volumeInput?.addEventListener('input', this.handleVolumeInput);
+      this.addEventListener('pointerdown', this.handlePointerGesture);
+      this.addEventListener('keydown', this.handleKeyboardGesture);
+      this.addEventListener('audio-state-changed', this.handleAudioStateChanged as EventListener);
+
+      this.renderState({ isSupported: true, muted: true, volume: 0.55, userEnabled: false });
+    }
+
+    disconnectedCallback() {
+      this.toggleButton?.removeEventListener('click', this.handleToggleClick);
+      this.volumeInput?.removeEventListener('input', this.handleVolumeInput);
+      this.removeEventListener('pointerdown', this.handlePointerGesture);
+      this.removeEventListener('keydown', this.handleKeyboardGesture);
+      this.removeEventListener('audio-state-changed', this.handleAudioStateChanged as EventListener);
+    }
+
+    private readonly handleToggleClick = () => {
+      this.dispatchUserGesture();
+      const nextMuted = !this.muted;
+      this.dispatchEvent(new CustomEvent<{ muted: boolean }>('audio-toggle-requested', {
+        detail: { muted: nextMuted },
+        bubbles: true,
+        composed: true,
+      }));
+    };
+
+    private readonly handleVolumeInput = (event: Event) => {
+      this.dispatchUserGesture();
+      const target = event.target as HTMLInputElement;
+      const normalizedVolume = Number.parseFloat(target.value) / 100;
+      this.dispatchEvent(new CustomEvent<{ volume: number }>('audio-volume-changed', {
+        detail: { volume: normalizedVolume },
+        bubbles: true,
+        composed: true,
+      }));
+    };
+
+    private readonly handlePointerGesture = () => {
+      this.dispatchUserGesture();
+    };
+
+    private readonly handleKeyboardGesture = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        this.dispatchUserGesture();
+      }
+    };
+
+    private readonly handleAudioStateChanged = (event: CustomEvent<SoundscapeUiState>) => {
+      this.renderState(event.detail);
+    };
+
+    private dispatchUserGesture() {
+      if (this.userEnabled) {
+        return;
+      }
+
+      this.dispatchEvent(new CustomEvent('audio-user-gesture', {
+        bubbles: true,
+        composed: true,
+      }));
+    }
+
+    private renderState(state: SoundscapeUiState) {
+      this.muted = state.muted;
+      this.userEnabled = state.userEnabled;
+
+      if (!this.toggleButton || !this.volumeInput || !this.statusText) {
+        return;
+      }
+
+      const volumePercent = Math.round(state.volume * 100);
+
+      if (!state.isSupported) {
+        this.toggleButton.disabled = true;
+        this.volumeInput.disabled = true;
+        this.toggleButton.textContent = 'Audio N/A';
+        this.statusText.textContent = 'Unsupported';
+        return;
+      }
+
+      this.toggleButton.disabled = false;
+      this.volumeInput.disabled = false;
+      this.volumeInput.value = String(volumePercent);
+
+      if (!state.userEnabled) {
+        this.toggleButton.textContent = 'Enable';
+        this.statusText.textContent = 'Tap to enable';
+        return;
+      }
+
+      this.toggleButton.textContent = state.muted ? 'Muted' : 'Sound On';
+      this.statusText.textContent = state.muted ? 'Muted' : `${volumePercent}%`;
+    }
+  }
+
+  if (!customElements.get('ambient-sound-control')) {
+    customElements.define('ambient-sound-control', AmbientSoundControl);
+  }
+</script>

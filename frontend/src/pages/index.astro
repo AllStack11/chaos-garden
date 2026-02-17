@@ -12,6 +12,7 @@ import WeatherPanel from '../components/WeatherPanel.astro';
 import NarrativeTicker from '../components/NarrativeTicker.astro';
 import JournalOverlay from '../components/JournalOverlay.astro';
 import StatsOverlay from '../components/StatsOverlay.astro';
+import AmbientSoundControl from '../components/AmbientSoundControl.astro';
 
 // API URL — required at build time
 const API_URL = import.meta.env.PUBLIC_API_URL?.trim();
@@ -112,6 +113,7 @@ if (!API_URL) {
 
     <!-- Narrative overlays remain visible even when UI overlay fades -->
     <NarrativeTicker />
+    <AmbientSoundControl />
     <JournalOverlay />
     <StatsOverlay apiUrl={API_URL} />
 
