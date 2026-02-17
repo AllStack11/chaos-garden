@@ -2,7 +2,7 @@ import type { GardenStatsPoint } from '@chaos-garden/shared';
 
 export function renderMoversMarkup(history: GardenStatsPoint[]): string {
   if (history.length < 2) {
-    return '';
+    return '<p class="text-sm text-white/60">Not enough history for movers yet.</p>';
   }
 
   const latest = history[history.length - 1];
@@ -21,11 +21,13 @@ export function renderMoversMarkup(history: GardenStatsPoint[]): string {
     { label: 'Dead', key: 'dead' },
   ];
 
-  const movers = metrics.map((metric) => ({
-    label: metric.label,
-    delta10: getDeltaFromWindow(10, metric.key),
-    delta30: getDeltaFromWindow(30, metric.key),
-  })).sort((a, b) => Math.abs(b.delta10) - Math.abs(a.delta10));
+  const movers = metrics
+    .map((metric) => ({
+      label: metric.label,
+      delta10: getDeltaFromWindow(10, metric.key),
+      delta30: getDeltaFromWindow(30, metric.key),
+    }))
+    .sort((firstRow, secondRow) => Math.abs(secondRow.delta10) - Math.abs(firstRow.delta10));
 
   return `
     <table class="w-full text-sm">
@@ -37,13 +39,17 @@ export function renderMoversMarkup(history: GardenStatsPoint[]): string {
         </tr>
       </thead>
       <tbody>
-        ${movers.map((row) => `
-          <tr class="border-t border-white/10 text-white/80">
+        ${movers
+          .map((row) => {
+            return `
+          <tr class="border-t border-white/10 text-white/85">
             <td class="py-2">${row.label}</td>
-            <td class="py-2 ${row.delta10 >= 0 ? 'text-green-300' : 'text-red-300'}">${row.delta10 >= 0 ? '+' : ''}${row.delta10}</td>
-            <td class="py-2 ${row.delta30 >= 0 ? 'text-green-300' : 'text-red-300'}">${row.delta30 >= 0 ? '+' : ''}${row.delta30}</td>
+            <td class="py-2 ${row.delta10 >= 0 ? 'text-[#b9f4bd]' : 'text-[#ffb7b7]'}">${row.delta10 >= 0 ? '+' : ''}${row.delta10}</td>
+            <td class="py-2 ${row.delta30 >= 0 ? 'text-[#b9f4bd]' : 'text-[#ffb7b7]'}">${row.delta30 >= 0 ? '+' : ''}${row.delta30}</td>
           </tr>
-        `).join('')}
+        `;
+          })
+          .join('')}
       </tbody>
     </table>
   `;

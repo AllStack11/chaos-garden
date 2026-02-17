@@ -13,11 +13,11 @@ const { apiUrl } = Astro.props;
 <detailed-stats-panel data-api-url={apiUrl} class="block">
   <div class="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
     <header class="sticky top-0 z-20 mb-6 rounded-2xl border border-white/10 bg-black/28 p-4 backdrop-blur-xl">
-      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="inline-flex items-center text-[11px] uppercase tracking-[0.24em] text-garden-green-200/80">Live Overlay Analytics</p>
           <h1 class="mt-2 text-2xl font-semibold text-white sm:text-3xl">Ecosystem Intelligence</h1>
-          <p class="mt-1 text-sm text-white/65">Live analytics across populations, environment, events, and ecosystem stability signals.</p>
+          <p class="mt-1 text-sm text-white/65">Story snapshots, ecosystem signals, and deep metrics from entities and climate history.</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <label class="text-[11px] uppercase tracking-[0.18em] text-white/70" for="window-select">Window</label>
@@ -27,62 +27,93 @@ const { apiUrl } = Astro.props;
             <option value="300">300 ticks</option>
           </select>
           <button id="manual-refresh" type="button" class="rounded-lg border border-garden-green-400/50 bg-garden-green-500/15 px-3 py-2 text-sm font-medium text-garden-green-100 transition-colors hover:bg-garden-green-500/25">Refresh</button>
-          <span id="auto-refresh-status" class="text-xs font-mono tracking-wide text-white/60">Auto refresh in --:--</span>
+          <span id="auto-refresh-status" class="text-xs font-mono tracking-wide text-white/65">Auto refresh in --:--</span>
           <button id="close-overlay" type="button" class="rounded-lg border border-white/25 bg-white/5 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15">Close</button>
         </div>
       </div>
     </header>
 
-    <div id="stats-loading" class="mb-6 rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white/80">
+    <div id="stats-loading" class="mb-6 rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-sm text-white/80">
       Loading garden analytics...
     </div>
-    <div id="stats-error" class="mb-6 hidden rounded-2xl border border-red-300/40 bg-red-950/30 px-4 py-3 text-sm text-red-100"></div>
+    <div id="stats-error" class="mb-6 hidden rounded-2xl border border-[#ff9f9f]/60 bg-[#7f1818]/35 px-4 py-3 text-sm text-[#ffd7d7]"></div>
 
-    <section id="kpi-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"></section>
+    <section id="story-cards" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"></section>
+
+    <section id="kpi-grid" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"></section>
 
     <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-8">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Population Trends</h2>
+      <article class="panel-block xl:col-span-8">
+        <h2 class="panel-title">Population Trajectories</h2>
         <div id="population-lines" class="mt-3 min-h-[280px]"></div>
       </article>
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-4">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Current Species Share</h2>
+      <article class="panel-block xl:col-span-4">
+        <h2 class="panel-title">Current Species Share</h2>
         <div id="species-share" class="mt-4 min-h-[280px]"></div>
       </article>
     </section>
 
     <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-6">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Living Vs Dead Matter</h2>
+      <article class="panel-block xl:col-span-6">
+        <h2 class="panel-title">Living Vs Dead Matter</h2>
         <div id="living-dead-area" class="mt-3 min-h-[220px]"></div>
       </article>
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-6">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Environmental Signals</h2>
+      <article class="panel-block xl:col-span-6">
+        <h2 class="panel-title">Environmental Signals</h2>
         <div id="environment-lines" class="mt-3 min-h-[220px]"></div>
       </article>
     </section>
 
     <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-5">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Event Intensity By Type</h2>
+      <article class="panel-block xl:col-span-5">
+        <h2 class="panel-title">Event Intensity</h2>
         <div id="event-breakdown" class="mt-3 space-y-2"></div>
-        <h3 class="mt-5 text-xs uppercase tracking-[0.2em] text-white/50">Severity Mix</h3>
+        <h3 class="mt-5 text-xs uppercase tracking-[0.2em] text-white/55">Severity Mix</h3>
         <div id="severity-breakdown" class="mt-2 flex flex-wrap gap-2"></div>
       </article>
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-7">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Vital Snapshot</h2>
+      <article class="panel-block xl:col-span-7">
+        <h2 class="panel-title">Vital Snapshot</h2>
         <div id="vitals-grid" class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2"></div>
       </article>
     </section>
 
     <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-7">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Deterministic Insights</h2>
+      <article class="panel-block xl:col-span-7">
+        <h2 class="panel-title">Deterministic Insights</h2>
         <div id="insights-list" class="mt-3 space-y-3"></div>
       </article>
-      <article class="rounded-2xl border border-white/10 bg-black/30 p-4 xl:col-span-5">
-        <h2 class="text-sm uppercase tracking-[0.2em] text-white/60">Top Movers</h2>
+      <article class="panel-block xl:col-span-5">
+        <h2 class="panel-title">Top Movers</h2>
         <div id="movers-table" class="mt-3"></div>
+      </article>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <article class="panel-block xl:col-span-5">
+        <h2 class="panel-title">Weather Rhythm</h2>
+        <div id="weather-rhythm" class="mt-3 space-y-3"></div>
+      </article>
+      <article class="panel-block xl:col-span-7">
+        <h2 class="panel-title">Trend Digest</h2>
+        <div id="trend-digest" class="mt-3"></div>
+      </article>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+      <article class="panel-block xl:col-span-6">
+        <h2 class="panel-title">Biodiversity Trend</h2>
+        <div id="biodiversity-trend" class="mt-3 min-h-[220px]"></div>
+      </article>
+      <article class="panel-block xl:col-span-6">
+        <h2 class="panel-title">Food Web Pressure</h2>
+        <div id="food-web-pressure" class="mt-3 min-h-[220px]"></div>
+      </article>
+    </section>
+
+    <section class="mt-6">
+      <article class="panel-block">
+        <h2 class="panel-title">Species Momentum</h2>
+        <div id="species-momentum" class="mt-3 space-y-2"></div>
       </article>
     </section>
   </div>
@@ -103,6 +134,12 @@ const { apiUrl } = Astro.props;
     renderVitalsMarkup,
     renderInsightsMarkup,
     renderMoversMarkup,
+    renderStoryCardsMarkup,
+    renderTrendDigestMarkup,
+    renderWeatherRhythmMarkup,
+    renderBiodiversityTrendMarkup,
+    renderFoodWebPressureMarkup,
+    renderSpeciesMomentumMarkup,
   } from '../lib/stats';
 
   interface PanelElementRefs {
@@ -112,6 +149,7 @@ const { apiUrl } = Astro.props;
     autoRefreshStatus: HTMLElement | null;
     statsLoading: HTMLElement | null;
     statsError: HTMLElement | null;
+    storyCards: HTMLElement | null;
     kpiGrid: HTMLElement | null;
     populationLines: HTMLElement | null;
     speciesShare: HTMLElement | null;
@@ -122,6 +160,11 @@ const { apiUrl } = Astro.props;
     vitalsGrid: HTMLElement | null;
     insightsList: HTMLElement | null;
     moversTable: HTMLElement | null;
+    weatherRhythm: HTMLElement | null;
+    trendDigest: HTMLElement | null;
+    biodiversityTrend: HTMLElement | null;
+    foodWebPressure: HTMLElement | null;
+    speciesMomentum: HTMLElement | null;
   }
 
   class DetailedStatsPanel extends HTMLElement {
@@ -132,6 +175,12 @@ const { apiUrl } = Astro.props;
     private countdownTimer: number | null = null;
     private nextRefreshAtMs: number | null = null;
     private isActive = false;
+    private isLoadingStats = false;
+    private queuedRefresh = false;
+    private renderToken = 0;
+    private lastRenderedSignature: string | null = null;
+    private scrollContainer: HTMLElement | null = null;
+    private scrollIdleTimer: number | null = null;
 
     private refs: PanelElementRefs = {
       windowSelect: null,
@@ -140,6 +189,7 @@ const { apiUrl } = Astro.props;
       autoRefreshStatus: null,
       statsLoading: null,
       statsError: null,
+      storyCards: null,
       kpiGrid: null,
       populationLines: null,
       speciesShare: null,
@@ -150,6 +200,11 @@ const { apiUrl } = Astro.props;
       vitalsGrid: null,
       insightsList: null,
       moversTable: null,
+      weatherRhythm: null,
+      trendDigest: null,
+      biodiversityTrend: null,
+      foodWebPressure: null,
+      speciesMomentum: null,
     };
 
     private readonly handleWindowSelectionChange = () => {
@@ -181,11 +236,13 @@ const { apiUrl } = Astro.props;
     connectedCallback() {
       this.cacheElementReferences();
       this.setupControls();
+      this.setupScrollPerformanceMode();
     }
 
     disconnectedCallback() {
       this.stopAutoRefreshLoop();
       this.teardownControls();
+      this.teardownScrollPerformanceMode();
     }
 
     public activatePanel() {
@@ -206,6 +263,7 @@ const { apiUrl } = Astro.props;
       this.refs.autoRefreshStatus = this.querySelector('#auto-refresh-status') as HTMLElement | null;
       this.refs.statsLoading = this.querySelector('#stats-loading') as HTMLElement | null;
       this.refs.statsError = this.querySelector('#stats-error') as HTMLElement | null;
+      this.refs.storyCards = this.querySelector('#story-cards') as HTMLElement | null;
       this.refs.kpiGrid = this.querySelector('#kpi-grid') as HTMLElement | null;
       this.refs.populationLines = this.querySelector('#population-lines') as HTMLElement | null;
       this.refs.speciesShare = this.querySelector('#species-share') as HTMLElement | null;
@@ -216,6 +274,11 @@ const { apiUrl } = Astro.props;
       this.refs.vitalsGrid = this.querySelector('#vitals-grid') as HTMLElement | null;
       this.refs.insightsList = this.querySelector('#insights-list') as HTMLElement | null;
       this.refs.moversTable = this.querySelector('#movers-table') as HTMLElement | null;
+      this.refs.weatherRhythm = this.querySelector('#weather-rhythm') as HTMLElement | null;
+      this.refs.trendDigest = this.querySelector('#trend-digest') as HTMLElement | null;
+      this.refs.biodiversityTrend = this.querySelector('#biodiversity-trend') as HTMLElement | null;
+      this.refs.foodWebPressure = this.querySelector('#food-web-pressure') as HTMLElement | null;
+      this.refs.speciesMomentum = this.querySelector('#species-momentum') as HTMLElement | null;
     }
 
     private setupControls() {
@@ -228,6 +291,42 @@ const { apiUrl } = Astro.props;
       this.refs.windowSelect?.removeEventListener('change', this.handleWindowSelectionChange);
       this.refs.manualRefreshButton?.removeEventListener('click', this.handleManualRefresh);
       this.refs.closeOverlayButton?.removeEventListener('click', this.handleCloseRequest);
+    }
+
+    private readonly handlePanelScroll = () => {
+      this.classList.add('perf-scrolling');
+
+      if (this.scrollIdleTimer) {
+        clearTimeout(this.scrollIdleTimer);
+      }
+
+      this.scrollIdleTimer = window.setTimeout(() => {
+        this.classList.remove('perf-scrolling');
+        this.scrollIdleTimer = null;
+      }, 140);
+    };
+
+    private setupScrollPerformanceMode() {
+      this.scrollContainer = this.closest('[data-panel-shell]') as HTMLElement | null;
+      if (!this.scrollContainer) {
+        return;
+      }
+
+      this.scrollContainer.addEventListener('scroll', this.handlePanelScroll, { passive: true });
+    }
+
+    private teardownScrollPerformanceMode() {
+      if (this.scrollContainer) {
+        this.scrollContainer.removeEventListener('scroll', this.handlePanelScroll);
+      }
+      this.scrollContainer = null;
+
+      if (this.scrollIdleTimer) {
+        clearTimeout(this.scrollIdleTimer);
+        this.scrollIdleTimer = null;
+      }
+
+      this.classList.remove('perf-scrolling');
     }
 
     private startAutoRefreshLoop() {
@@ -272,6 +371,12 @@ const { apiUrl } = Astro.props;
     }
 
     private async loadStatsData() {
+      if (this.isLoadingStats) {
+        this.queuedRefresh = true;
+        return;
+      }
+
+      this.isLoadingStats = true;
       this.refs.statsLoading?.classList.remove('hidden');
       this.refs.statsError?.classList.add('hidden');
 
@@ -281,48 +386,103 @@ const { apiUrl } = Astro.props;
           throw new Error('No data returned from /api/garden/stats');
         }
         this.nextRefreshAtMs = Date.now() + this.autoRefreshIntervalMs;
-        this.renderStats(stats);
+        const statsSignature = `${stats.current.tick}:${stats.windowTicks}:${stats.generatedAt}:${stats.history.length}`;
+        if (statsSignature !== this.lastRenderedSignature) {
+          this.renderToken += 1;
+          await this.renderStatsIncrementally(stats, this.renderToken);
+          this.lastRenderedSignature = statsSignature;
+        }
       } catch (error) {
         if (this.refs.statsError) {
           this.refs.statsError.classList.remove('hidden');
           this.refs.statsError.textContent = `Failed to load stats: ${error instanceof Error ? error.message : String(error)}`;
         }
       } finally {
+        this.isLoadingStats = false;
         this.refs.statsLoading?.classList.add('hidden');
         this.updateAutoRefreshLabel();
+
+        if (this.queuedRefresh && this.isActive) {
+          this.queuedRefresh = false;
+          this.loadStatsData();
+        }
       }
     }
 
-    private renderStats(stats: GardenStatsResponse) {
-      if (this.refs.kpiGrid) {
-        this.refs.kpiGrid.innerHTML = renderKpisMarkup(stats);
-      }
-      if (this.refs.populationLines) {
-        this.refs.populationLines.innerHTML = renderPopulationLinesMarkup(stats.history);
-      }
-      if (this.refs.speciesShare) {
-        this.refs.speciesShare.innerHTML = renderSpeciesShareMarkup(stats.history[stats.history.length - 1] ?? null);
-      }
-      if (this.refs.livingDeadArea) {
-        this.refs.livingDeadArea.innerHTML = renderLivingDeadAreaMarkup(stats.history);
-      }
-      if (this.refs.environmentLines) {
-        this.refs.environmentLines.innerHTML = renderEnvironmentLinesMarkup(stats.history);
-      }
-      if (this.refs.eventBreakdown) {
-        this.refs.eventBreakdown.innerHTML = renderEventBreakdownMarkup(stats.eventBreakdown);
-      }
-      if (this.refs.severityBreakdown) {
-        this.refs.severityBreakdown.innerHTML = renderSeverityBreakdownMarkup(stats.severityBreakdown);
-      }
-      if (this.refs.vitalsGrid) {
-        this.refs.vitalsGrid.innerHTML = renderVitalsMarkup(stats);
-      }
-      if (this.refs.insightsList) {
-        this.refs.insightsList.innerHTML = renderInsightsMarkup(stats);
-      }
-      if (this.refs.moversTable) {
-        this.refs.moversTable.innerHTML = renderMoversMarkup(stats.history);
+    private async renderStatsIncrementally(stats: GardenStatsResponse, renderToken: number) {
+      const renderSteps: Array<() => void> = [
+        () => {
+          if (this.refs.storyCards) {
+            this.refs.storyCards.innerHTML = renderStoryCardsMarkup(stats);
+          }
+          if (this.refs.kpiGrid) {
+            this.refs.kpiGrid.innerHTML = renderKpisMarkup(stats);
+          }
+        },
+        () => {
+          if (this.refs.populationLines) {
+            this.refs.populationLines.innerHTML = renderPopulationLinesMarkup(stats.history);
+          }
+          if (this.refs.speciesShare) {
+            this.refs.speciesShare.innerHTML = renderSpeciesShareMarkup(stats.history[stats.history.length - 1] ?? null);
+          }
+        },
+        () => {
+          if (this.refs.livingDeadArea) {
+            this.refs.livingDeadArea.innerHTML = renderLivingDeadAreaMarkup(stats.history);
+          }
+          if (this.refs.environmentLines) {
+            this.refs.environmentLines.innerHTML = renderEnvironmentLinesMarkup(stats.history);
+          }
+        },
+        () => {
+          if (this.refs.eventBreakdown) {
+            this.refs.eventBreakdown.innerHTML = renderEventBreakdownMarkup(stats.eventBreakdown);
+          }
+          if (this.refs.severityBreakdown) {
+            this.refs.severityBreakdown.innerHTML = renderSeverityBreakdownMarkup(stats.severityBreakdown);
+          }
+          if (this.refs.vitalsGrid) {
+            this.refs.vitalsGrid.innerHTML = renderVitalsMarkup(stats);
+          }
+        },
+        () => {
+          if (this.refs.insightsList) {
+            this.refs.insightsList.innerHTML = renderInsightsMarkup(stats);
+          }
+          if (this.refs.moversTable) {
+            this.refs.moversTable.innerHTML = renderMoversMarkup(stats.history);
+          }
+        },
+        () => {
+          if (this.refs.weatherRhythm) {
+            this.refs.weatherRhythm.innerHTML = renderWeatherRhythmMarkup(stats.history);
+          }
+          if (this.refs.trendDigest) {
+            this.refs.trendDigest.innerHTML = renderTrendDigestMarkup(stats.history);
+          }
+        },
+        () => {
+          if (this.refs.biodiversityTrend) {
+            this.refs.biodiversityTrend.innerHTML = renderBiodiversityTrendMarkup(stats.history);
+          }
+          if (this.refs.foodWebPressure) {
+            this.refs.foodWebPressure.innerHTML = renderFoodWebPressureMarkup(stats.history);
+          }
+          if (this.refs.speciesMomentum) {
+            this.refs.speciesMomentum.innerHTML = renderSpeciesMomentumMarkup(stats.history);
+          }
+        },
+      ];
+
+      for (const renderStep of renderSteps) {
+        if (renderToken !== this.renderToken) {
+          return;
+        }
+        renderStep();
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
       }
     }
   }
@@ -333,14 +493,48 @@ const { apiUrl } = Astro.props;
 </script>
 
 <style>
+  .panel-block {
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 1rem;
+    background: linear-gradient(160deg, rgba(6, 26, 20, 0.6), rgba(5, 16, 14, 0.4));
+    padding: 1rem;
+    contain: layout paint style;
+    content-visibility: auto;
+    contain-intrinsic-size: 260px;
+  }
+
+  .panel-title {
+    font-size: 0.875rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
   .kpi-card {
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
     transition: transform 180ms ease, border-color 180ms ease;
   }
 
   .kpi-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(187, 247, 208, 0.4);
+    border-color: rgba(154, 214, 203, 0.6);
+  }
+
+  detailed-stats-panel.perf-scrolling .kpi-card {
+    transition: none;
+    transform: none;
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  detailed-stats-panel.perf-scrolling .panel-block {
+    background: rgba(7, 18, 14, 0.72);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+  }
+
+  detailed-stats-panel.perf-scrolling header {
+    backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.75);
   }
 
   @media (prefers-reduced-motion: reduce) {

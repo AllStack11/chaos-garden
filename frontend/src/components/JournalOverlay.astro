@@ -1,150 +1,174 @@
 ---
 /**
  * Garden Journal / Storybook overlay.
- * Presents recent simulation events in multiple narrative views.
+ * Simple, readable, interactive narrative explorer.
  */
 
-import type { SimulationEvent } from '../env.d.ts';
-
 export interface Props {}
-
 ---
 
 <journal-overlay data-overlay-state="closed" class="fixed inset-0 z-50 hidden pointer-events-none opacity-0 transition-opacity duration-300 ease-out">
-  <div data-overlay-backdrop class="absolute inset-0 bg-gradient-to-br from-black/70 via-slate-900/70 to-emerald-900/50 backdrop-blur-[3px] transition-opacity duration-300"></div>
+  <div data-overlay-backdrop class="absolute inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity duration-300"></div>
 
-  <div data-panel-shell class="relative h-full overflow-y-auto opacity-0 translate-y-3 scale-[0.99] transition-all duration-300 ease-out">
-    <div class="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-      <header class="sticky top-0 z-10 mb-6 rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-xl shadow-xl">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+  <div data-panel-shell class="relative h-full overflow-y-auto opacity-0 translate-y-4 scale-[0.985] transition-all duration-300 ease-out">
+    <div class="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <header class="sticky top-0 z-20 mb-6 rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p class="inline-flex items-center text-[11px] uppercase tracking-[0.24em] text-emerald-200/80">Garden Chronicle</p>
-            <h1 class="mt-1 text-2xl font-semibold text-white sm:text-3xl">Living Storybook</h1>
-            <p class="mt-1 text-sm text-white/70">Flip through the latest happenings as a timeline, vignette, or signal scan.</p>
+            <p class="text-[11px] uppercase tracking-[0.24em] text-garden-green-200/80">Live Overlay Chronicle</p>
+            <h1 class="mt-2 text-2xl font-semibold text-white sm:text-3xl">Living Storybook</h1>
+            <p class="mt-1 text-sm text-white/70">Simple, goofy, elegant memory lane. Kumbahluklah mode: engaged.</p>
           </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <div class="inline-flex rounded-full border border-white/15 bg-white/5 px-2 py-1 text-[11px] uppercase tracking-[0.2em] text-white/60" data-event-count>-- events</div>
-            <div class="flex rounded-full bg-white/5 p-1 shadow-inner" data-view-switch>
-              <button type="button" data-view-button="timeline" class="view-pill">Timeline</button>
-              <button type="button" data-view-button="storybook" class="view-pill">Storybook</button>
-              <button type="button" data-view-button="signals" class="view-pill">Signals</button>
+          <div class="flex items-center gap-3">
+            <div data-event-count class="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.16em] text-white/75">0 / 0 events</div>
+            <button type="button" data-close-overlay class="rounded-lg border border-white/25 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/15">Close</button>
+          </div>
+        </div>
+
+        <div class="mt-4 grid gap-3 lg:grid-cols-12">
+          <div class="lg:col-span-5">
+            <label for="journal-search" class="text-[10px] uppercase tracking-[0.18em] text-white/60">Search</label>
+            <input id="journal-search" data-search-input type="text" placeholder="description, tag, type..." class="mt-1 w-full rounded-lg border border-white/20 bg-black/35 px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-garden-green-300" />
+          </div>
+          <div class="lg:col-span-7 flex flex-col gap-2">
+            <div class="flex flex-wrap gap-2" data-severity-filters></div>
+            <div class="flex flex-wrap gap-2" data-type-filters></div>
+            <div class="flex flex-wrap gap-2" data-tag-filters></div>
+            <div class="flex items-center gap-2">
+              <button type="button" data-clear-filters class="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs uppercase tracking-[0.14em] text-white/70 hover:bg-white/10">Clear filters</button>
+              <span data-filter-state class="text-xs text-white/55">Showing all events</span>
             </div>
-            <button type="button" data-close-overlay class="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20">Close</button>
           </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2" data-view-switch>
+          <button type="button" data-view-button="feed" class="journal-tab">Feed</button>
+          <button type="button" data-view-button="gallery" class="journal-tab">Gallery</button>
+          <button type="button" data-view-button="signals" class="journal-tab">Signals</button>
         </div>
       </header>
 
-      <div data-view-panel="timeline" class="space-y-4">
-        <div class="grid gap-4 sm:grid-cols-2">
-          <article class="story-card">
-            <h2 class="card-title">Latest Pulse</h2>
-            <div data-timeline-grid class="mt-3 space-y-3"></div>
-          </article>
-          <article class="story-card">
-            <h2 class="card-title">Tags + Themes</h2>
-            <div data-tag-cloud class="mt-3 flex flex-wrap gap-2 text-xs text-white/75"></div>
-            <div class="mt-4 border-t border-white/10 pt-3">
-              <h3 class="text-[11px] uppercase tracking-[0.2em] text-white/50">Quick Signals</h3>
-              <div data-quick-signals class="mt-2 space-y-2"></div>
+      <section data-view-panel="feed" class="space-y-4">
+        <article class="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm uppercase tracking-[0.18em] text-white/60">Garden Bench</h2>
+            <div class="flex items-center gap-2">
+              <button type="button" data-feed-prev class="bench-nav">Prev</button>
+              <span data-feed-page class="text-xs text-white/65">Page 1 / 1</span>
+              <button type="button" data-feed-next class="bench-nav">Next</button>
             </div>
+          </div>
+          <div data-feed-bench class="mt-3 grid gap-4 xl:grid-cols-12">
+            <div data-bench-feature class="xl:col-span-7"></div>
+            <div data-bench-petals class="xl:col-span-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1"></div>
+          </div>
+        </article>
+      </section>
+
+      <section data-view-panel="gallery" class="hidden space-y-4">
+        <article class="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <h2 class="text-sm uppercase tracking-[0.18em] text-white/60">Picture Wall</h2>
+          <div data-gallery-grid class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+        </article>
+      </section>
+
+      <section data-view-panel="signals" class="hidden space-y-4">
+        <div class="grid gap-4 xl:grid-cols-12">
+          <article class="rounded-2xl border border-white/10 bg-black/25 p-4 xl:col-span-6">
+            <h2 class="text-sm uppercase tracking-[0.18em] text-white/60">Severity Mix</h2>
+            <div data-severity-bars class="mt-3 space-y-3"></div>
+          </article>
+          <article class="rounded-2xl border border-white/10 bg-black/25 p-4 xl:col-span-6">
+            <h2 class="text-sm uppercase tracking-[0.18em] text-white/60">Type Mix</h2>
+            <div data-type-bars class="mt-3 space-y-3"></div>
           </article>
         </div>
-      </div>
-
-      <div data-view-panel="storybook" class="space-y-4 hidden">
-        <article class="story-card">
-          <h2 class="card-title">Narrative Vignettes</h2>
-          <div data-story-vignettes class="mt-3 grid gap-3 sm:grid-cols-2"></div>
+        <article class="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <h2 class="text-sm uppercase tracking-[0.18em] text-white/60">Narrative Snapshot</h2>
+          <div data-snapshot class="mt-3 text-sm text-white/82"></div>
         </article>
-        <article class="story-card">
-          <h2 class="card-title">Species Journals</h2>
-          <div data-species-journals class="mt-3 grid gap-3 sm:grid-cols-3"></div>
-        </article>
-      </div>
-
-      <div data-view-panel="signals" class="space-y-4 hidden">
-        <article class="story-card">
-          <h2 class="card-title">Critical + High Severity</h2>
-          <div data-critical-feed class="mt-3 space-y-2"></div>
-        </article>
-        <article class="story-card">
-          <h2 class="card-title">Tempo + Mood</h2>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">
-            <div class="mini-meter" data-meter="balance"></div>
-            <div class="mini-meter" data-meter="tension"></div>
-          </div>
-          <div class="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/80" data-signal-summary></div>
-        </article>
-      </div>
+      </section>
     </div>
   </div>
 </journal-overlay>
 
-<style>
-  .story-card {
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
-    box-shadow: 0 18px 55px rgba(0, 0, 0, 0.3);
-    padding: 16px;
-  }
-
-  .card-title {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.24em;
-    color: rgba(255, 255, 255, 0.64);
-  }
-
-  .view-pill {
-    padding: 0.5rem 0.8rem;
+<style is:global>
+  .journal-tab {
     border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 0.5rem 0.85rem;
     font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.78);
-    transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+    transition: all 140ms ease;
   }
 
-  .view-pill[data-active="true"] {
-    background: linear-gradient(120deg, rgba(34, 197, 94, 0.28), rgba(74, 222, 128, 0.2));
-    color: #e8fff5;
-    border: 1px solid rgba(74, 222, 128, 0.35);
-    box-shadow: 0 6px 18px rgba(74, 222, 128, 0.2);
+  .journal-tab[data-active='true'] {
+    border-color: rgba(74, 222, 128, 0.4);
+    background: rgba(74, 222, 128, 0.18);
+    color: rgba(239, 255, 244, 0.98);
   }
 
-  .mini-meter {
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: radial-gradient(circle at 18% 20%, rgba(74, 222, 128, 0.15), rgba(0, 0, 0, 0));
-    padding: 12px;
+  .journal-chip {
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.82);
-    min-height: 96px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    transition: all 120ms ease;
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    journal-overlay,
-    .story-card,
-    .view-pill,
-    .mini-meter {
-      transition: none;
-    }
+  .journal-chip[data-active='true'] {
+    border-color: rgba(74, 222, 128, 0.45);
+    background: rgba(74, 222, 128, 0.2);
+    color: rgba(234, 255, 241, 1);
+  }
+
+  [data-view-panel] > article {
+    contain: layout paint style;
+    content-visibility: auto;
+    contain-intrinsic-size: 360px;
+  }
+
+  .bench-nav {
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 0.28rem 0.55rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 </style>
 
 <script>
   import type { SimulationEvent } from '../env.d.ts';
 
-  type JournalView = 'timeline' | 'storybook' | 'signals';
+  type JournalView = 'feed' | 'gallery' | 'signals';
 
-  const MAX_RENDER_EVENTS = 120;
-  const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+  const MAX_RENDER_EVENTS = 180;
+  const FEED_PAGE_SIZE = 7;
   const TAG_FALLBACK = 'untagged';
 
   class JournalOverlay extends HTMLElement {
-    private readonly closeTransitionMs = 280;
+    private readonly closeTransitionMs = 300;
     private closeTimer: number | null = null;
     private isOpen = false;
     private events: SimulationEvent[] = [];
-    private activeView: JournalView = 'timeline';
+    private activeView: JournalView = 'feed';
+
+    private selectedTags = new Set<string>();
+    private selectedTypes = new Set<string>();
+    private selectedSeverities = new Set<string>();
+    private searchQuery = '';
+    private feedPage = 0;
+    private filteredEventsCache: SimulationEvent[] = [];
+    private renderScheduled = false;
+    private searchDebounceTimer: number | null = null;
+    private readonly sceneMarkupCache = new Map<string, string>();
 
     private readonly handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && this.isOpen) {
@@ -158,37 +182,80 @@ export interface Props {}
 
     private readonly handleViewButtonClick = (event: Event) => {
       const button = event.currentTarget as HTMLElement | null;
-      const target = button?.getAttribute('data-view-button') as JournalView | null;
-      if (target) {
-        this.setActiveView(target);
+      const targetView = button?.getAttribute('data-view-button') as JournalView | null;
+      if (!targetView) return;
+      this.activeView = targetView;
+      this.updateViewPanels();
+      this.updateViewButtons();
+    };
+
+    private readonly handleSearchInput = (event: Event) => {
+      const input = event.currentTarget as HTMLInputElement | null;
+      this.searchQuery = (input?.value ?? '').trim().toLowerCase();
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer);
       }
+      this.searchDebounceTimer = window.setTimeout(() => {
+        this.feedPage = 0;
+        this.scheduleRender();
+      }, 80);
+    };
+
+    private readonly handleClearFilters = () => {
+      this.selectedTags.clear();
+      this.selectedTypes.clear();
+      this.selectedSeverities.clear();
+      this.searchQuery = '';
+      this.feedPage = 0;
+
+      const searchInput = this.querySelector('[data-search-input]') as HTMLInputElement | null;
+      if (searchInput) {
+        searchInput.value = '';
+      }
+
+      this.scheduleRender();
+    };
+
+    private readonly handleFeedPrev = () => {
+      this.feedPage = Math.max(0, this.feedPage - 1);
+      this.renderFeed();
+    };
+
+    private readonly handleFeedNext = () => {
+      const totalPages = Math.max(1, Math.ceil(this.filteredEventsCache.length / FEED_PAGE_SIZE));
+      this.feedPage = Math.min(totalPages - 1, this.feedPage + 1);
+      this.renderFeed();
     };
 
     connectedCallback() {
-      const backdrop = this.querySelector('[data-overlay-backdrop]');
-      backdrop?.addEventListener('click', this.handleCloseRequested);
+      this.querySelector('[data-overlay-backdrop]')?.addEventListener('click', this.handleCloseRequested);
+      this.querySelector('[data-close-overlay]')?.addEventListener('click', this.handleCloseRequested);
+      this.querySelector('[data-search-input]')?.addEventListener('input', this.handleSearchInput);
+      this.querySelector('[data-clear-filters]')?.addEventListener('click', this.handleClearFilters);
+      this.querySelector('[data-feed-prev]')?.addEventListener('click', this.handleFeedPrev);
+      this.querySelector('[data-feed-next]')?.addEventListener('click', this.handleFeedNext);
 
-      const closeButton = this.querySelector('[data-close-overlay]');
-      closeButton?.addEventListener('click', this.handleCloseRequested);
-
-      const viewButtons = this.querySelectorAll('[data-view-button]');
-      viewButtons.forEach((button) => {
+      this.querySelectorAll('[data-view-button]').forEach((button) => {
         button.addEventListener('click', this.handleViewButtonClick);
       });
 
       window.addEventListener('keydown', this.handleEscape);
+      this.updateViewPanels();
       this.updateViewButtons();
+      this.renderAll();
     }
 
     disconnectedCallback() {
-      const backdrop = this.querySelector('[data-overlay-backdrop]');
-      backdrop?.removeEventListener('click', this.handleCloseRequested);
+      this.querySelector('[data-overlay-backdrop]')?.removeEventListener('click', this.handleCloseRequested);
+      this.querySelector('[data-close-overlay]')?.removeEventListener('click', this.handleCloseRequested);
+      this.querySelector('[data-search-input]')?.removeEventListener('input', this.handleSearchInput);
+      this.querySelector('[data-clear-filters]')?.removeEventListener('click', this.handleClearFilters);
+      this.querySelector('[data-feed-prev]')?.removeEventListener('click', this.handleFeedPrev);
+      this.querySelector('[data-feed-next]')?.removeEventListener('click', this.handleFeedNext);
 
-      const closeButton = this.querySelector('[data-close-overlay]');
-      closeButton?.removeEventListener('click', this.handleCloseRequested);
-
-      const viewButtons = this.querySelectorAll('[data-view-button]');
-      viewButtons.forEach((button) => button.removeEventListener('click', this.handleViewButtonClick));
+      this.querySelectorAll('[data-view-button]').forEach((button) => {
+        button.removeEventListener('click', this.handleViewButtonClick);
+      });
 
       window.removeEventListener('keydown', this.handleEscape);
 
@@ -196,18 +263,27 @@ export interface Props {}
         clearTimeout(this.closeTimer);
         this.closeTimer = null;
       }
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer);
+        this.searchDebounceTimer = null;
+      }
     }
 
     public setEvents(events: SimulationEvent[]) {
       if (!Array.isArray(events)) {
         return;
       }
-      const sorted = [...events].sort((a, b) => {
-        if (a.tick !== b.tick) return b.tick - a.tick;
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-      });
-      this.events = sorted.slice(0, MAX_RENDER_EVENTS);
-      this.renderContent();
+
+      this.events = [...events]
+        .sort((firstEvent, secondEvent) => {
+          if (firstEvent.tick !== secondEvent.tick) {
+            return secondEvent.tick - firstEvent.tick;
+          }
+          return new Date(secondEvent.timestamp).getTime() - new Date(firstEvent.timestamp).getTime();
+        })
+        .slice(0, MAX_RENDER_EVENTS);
+
+      this.scheduleRender();
     }
 
     public openOverlay() {
@@ -223,11 +299,10 @@ export interface Props {}
 
       const panelShell = this.querySelector('[data-panel-shell]') as HTMLElement | null;
       requestAnimationFrame(() => {
-        panelShell?.classList.remove('opacity-0', 'translate-y-3', 'scale-[0.99]');
+        panelShell?.classList.remove('opacity-0', 'translate-y-4', 'scale-[0.985]');
       });
 
-      this.renderContent();
-
+      this.scheduleRender();
       this.dataset.overlayState = 'open';
       this.dispatchEvent(new CustomEvent('journal-overlay-opened', { bubbles: true, composed: true }));
     }
@@ -243,7 +318,7 @@ export interface Props {}
       this.classList.add('opacity-0');
 
       const panelShell = this.querySelector('[data-panel-shell]') as HTMLElement | null;
-      panelShell?.classList.add('opacity-0', 'translate-y-3', 'scale-[0.99]');
+      panelShell?.classList.add('opacity-0', 'translate-y-4', 'scale-[0.985]');
 
       if (this.closeTimer) {
         clearTimeout(this.closeTimer);
@@ -258,448 +333,880 @@ export interface Props {}
       }, this.closeTransitionMs);
     }
 
-    private setActiveView(view: JournalView) {
-      if (this.activeView === view) return;
-      this.activeView = view;
-      this.updateViewPanels();
-      this.updateViewButtons();
-    }
+    private get filteredEvents(): SimulationEvent[] {
+      return this.events.filter((event) => {
+        const tags = this.getTags(event);
 
-    private updateViewButtons() {
-      const buttons = this.querySelectorAll('[data-view-button]');
-      buttons.forEach((button) => {
-        const view = button.getAttribute('data-view-button');
-        button.setAttribute('data-active', view === this.activeView ? 'true' : 'false');
+        if (this.selectedTags.size > 0 && !tags.some((tag) => this.selectedTags.has(tag))) {
+          return false;
+        }
+
+        if (this.selectedTypes.size > 0 && !this.selectedTypes.has(event.eventType)) {
+          return false;
+        }
+
+        const eventSeverity = event.severity ?? 'LOW';
+        if (this.selectedSeverities.size > 0 && !this.selectedSeverities.has(eventSeverity)) {
+          return false;
+        }
+
+        if (this.searchQuery.length > 0) {
+          const haystack = [event.description, event.eventType, eventSeverity, ...tags].join(' ').toLowerCase();
+          if (!haystack.includes(this.searchQuery)) {
+            return false;
+          }
+        }
+
+        return true;
       });
     }
 
-    private updateViewPanels() {
-      const panels = this.querySelectorAll('[data-view-panel]');
-      panels.forEach((panel) => {
-        const view = panel.getAttribute('data-view-panel');
-        panel.classList.toggle('hidden', view !== this.activeView);
-      });
-    }
-
-    private renderContent() {
-      this.updateEventCount();
-      this.updateViewPanels();
-      this.renderTimeline();
-      this.renderTagCloud();
-      this.renderQuickSignals();
-      this.renderVignettes();
-      this.renderSpeciesJournals();
-      this.renderCriticalFeed();
-      this.renderMeters();
-      this.renderSignalSummary();
-    }
-
-    private updateEventCount() {
-      const counter = this.querySelector('[data-event-count]');
-      if (counter) {
-        counter.textContent = `${this.events.length} events tracked`;
-      }
-    }
-
-    private renderTimeline() {
-      const container = this.querySelector('[data-timeline-grid]');
-      if (!container) return;
-
-      // Clear existing content
-      container.textContent = '';
-
-      if (this.events.length === 0) {
-        const message = document.createElement('p');
-        message.className = 'text-white/60 text-sm';
-        message.textContent = 'No events yet. Let the garden breathe.';
-        container.appendChild(message);
+    private scheduleRender() {
+      if (this.renderScheduled) {
         return;
       }
+      this.renderScheduled = true;
+      requestAnimationFrame(() => {
+        this.renderScheduled = false;
+        this.renderAll();
+      });
+    }
 
-      this.events.slice(0, 30).forEach((event) => {
-        const timeLabel = this.buildTimeLabel(event);
-        const severity = event.severity ?? 'LOW';
-        const severityClass = this.severityPillClass(severity);
+    private renderAll() {
+      this.filteredEventsCache = this.filteredEvents;
+      const totalPages = Math.max(1, Math.ceil(this.filteredEventsCache.length / FEED_PAGE_SIZE));
+      if (this.feedPage > totalPages - 1) {
+        this.feedPage = totalPages - 1;
+      }
+      this.renderCounters();
+      this.renderFilterState();
+      this.renderFilterChips();
+      this.renderFeed();
+      this.renderGallery();
+      this.renderSignals();
+    }
 
-        const eventCard = document.createElement('div');
-        eventCard.className = 'rounded-xl border border-white/10 bg-white/5 px-3 py-3 shadow-inner';
+    private renderCounters() {
+      const count = this.querySelector('[data-event-count]');
+      if (!count) return;
+      count.textContent = `${this.filteredEventsCache.length} / ${this.events.length} events`;
+    }
 
-        // Header with tick and severity
-        const header = document.createElement('div');
-        header.className = 'flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/60';
+    private renderFilterState() {
+      const state = this.querySelector('[data-filter-state]');
+      if (!state) return;
 
-        const tickSpan = document.createElement('span');
-        tickSpan.textContent = `Tick ${event.tick}`;
+      const activeCount =
+        this.selectedTags.size +
+        this.selectedTypes.size +
+        this.selectedSeverities.size +
+        (this.searchQuery.length > 0 ? 1 : 0);
 
-        const severitySpan = document.createElement('span');
-        severitySpan.className = severityClass;
-        severitySpan.textContent = severity;
+      state.textContent = activeCount > 0 ? `Active filters: ${activeCount}` : 'Showing all events';
+    }
 
-        header.appendChild(tickSpan);
-        header.appendChild(severitySpan);
+    private renderFilterChips() {
+      this.renderSeverityChips();
+      this.renderTypeChips();
+      this.renderTagChips();
+    }
 
-        // Description
-        const description = document.createElement('p');
-        description.className = 'mt-2 text-white/90 text-sm leading-relaxed';
-        description.textContent = event.description;
+    private renderSeverityChips() {
+      const container = this.querySelector('[data-severity-filters]');
+      if (!container) return;
+      container.textContent = '';
 
-        // Metadata (time and tags)
-        const metadata = document.createElement('div');
-        metadata.className = 'mt-2 flex flex-wrap gap-2 text-[11px] text-white/50';
+      const severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+      severities.forEach((severity) => {
+        const count = this.events.filter((event) => (event.severity ?? 'LOW') === severity).length;
+        if (count === 0) return;
 
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'rounded-full bg-white/5 px-2 py-1';
-        timeSpan.textContent = timeLabel;
-        metadata.appendChild(timeSpan);
-
-        // Add tags
-        const tags = event.tags?.length ? event.tags : [TAG_FALLBACK];
-        tags.slice(0, 4).forEach((tag) => {
-          const tagSpan = document.createElement('span');
-          tagSpan.className = 'rounded-full bg-white/5 px-2 py-1';
-          tagSpan.textContent = tag;
-          metadata.appendChild(tagSpan);
+        const chip = this.createChip(`${severity} ${count}`, this.selectedSeverities.has(severity), () => {
+          this.toggleSet(this.selectedSeverities, severity);
+          this.feedPage = 0;
+          this.scheduleRender();
         });
-
-        eventCard.appendChild(header);
-        eventCard.appendChild(description);
-        eventCard.appendChild(metadata);
-        container.appendChild(eventCard);
+        container.appendChild(chip);
       });
     }
 
-    private renderTagCloud() {
-      const container = this.querySelector('[data-tag-cloud]');
+    private renderTypeChips() {
+      const container = this.querySelector('[data-type-filters]');
       if (!container) return;
-
       container.textContent = '';
 
-      if (this.events.length === 0) {
-        const message = document.createElement('span');
-        message.className = 'text-white/50';
-        message.textContent = 'Waiting for stories...';
-        container.appendChild(message);
-        return;
-      }
+      const typeCounts = new Map<string, number>();
+      this.events.forEach((event) => typeCounts.set(event.eventType, (typeCounts.get(event.eventType) ?? 0) + 1));
+
+      Array.from(typeCounts.entries())
+        .sort((firstEntry, secondEntry) => secondEntry[1] - firstEntry[1])
+        .slice(0, 10)
+        .forEach(([eventType, count]) => {
+          const chip = this.createChip(`${eventType} ${count}`, this.selectedTypes.has(eventType), () => {
+            this.toggleSet(this.selectedTypes, eventType);
+            this.feedPage = 0;
+            this.scheduleRender();
+          });
+          container.appendChild(chip);
+        });
+    }
+
+    private renderTagChips() {
+      const container = this.querySelector('[data-tag-filters]');
+      if (!container) return;
+      container.textContent = '';
 
       const tagCounts = new Map<string, number>();
       this.events.forEach((event) => {
-        const tags = event.tags?.length ? event.tags : [TAG_FALLBACK];
-        tags.forEach((tag) => {
-          const key = tag.toLowerCase();
-          tagCounts.set(key, (tagCounts.get(key) ?? 0) + 1);
-        });
+        this.getTags(event).forEach((tag) => tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1));
       });
 
-      const sortedTags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 18);
-      sortedTags.forEach(([tag, count]) => {
-        const tagSpan = document.createElement('span');
-        tagSpan.className = 'rounded-full border border-white/15 px-3 py-1';
-        tagSpan.textContent = `${tag} · ${count}`;
-        container.appendChild(tagSpan);
-      });
+      Array.from(tagCounts.entries())
+        .sort((firstEntry, secondEntry) => secondEntry[1] - firstEntry[1])
+        .slice(0, 18)
+        .forEach(([tag, count]) => {
+          const chip = this.createChip(`#${tag} ${count}`, this.selectedTags.has(tag), () => {
+            this.toggleSet(this.selectedTags, tag);
+            this.feedPage = 0;
+            this.scheduleRender();
+          });
+          container.appendChild(chip);
+        });
     }
 
-    private renderQuickSignals() {
-      const container = this.querySelector('[data-quick-signals]');
-      if (!container) return;
+    private createChip(label: string, active: boolean, onClick: () => void): HTMLButtonElement {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'journal-chip';
+      button.setAttribute('data-active', active ? 'true' : 'false');
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      return button;
+    }
 
-      container.textContent = '';
+    private renderFeed() {
+      const featureContainer = this.querySelector('[data-bench-feature]');
+      const petalsContainer = this.querySelector('[data-bench-petals]');
+      const pageLabel = this.querySelector('[data-feed-page]');
+      if (!featureContainer || !petalsContainer) return;
+      featureContainer.textContent = '';
+      petalsContainer.textContent = '';
 
-      if (this.events.length === 0) {
+      const events = this.filteredEventsCache;
+      const totalPages = Math.max(1, Math.ceil(events.length / FEED_PAGE_SIZE));
+      const safePage = Math.min(this.feedPage, totalPages - 1);
+      const start = safePage * FEED_PAGE_SIZE;
+      const pageEvents = events.slice(start, start + FEED_PAGE_SIZE);
+      const featured = pageEvents[0] ?? null;
+      const petals = pageEvents.slice(1);
+
+      if (pageLabel) {
+        pageLabel.textContent = `Page ${safePage + 1} / ${totalPages}`;
+      }
+
+      if (!featured) {
+        featureContainer.innerHTML = '<p class="text-sm text-white/60">No events match your filters.</p>';
         return;
       }
 
-      const newest = this.events[0];
-      const criticalCount = this.events.filter((e) => e.severity === 'CRITICAL').length;
-      const births = this.events.filter((e) => e.eventType === 'BIRTH').length;
-      const deaths = this.events.filter((e) => e.eventType === 'DEATH').length;
+      const featuredTags = this.getTags(featured)
+        .slice(0, 5)
+        .map((tag) => `<button type="button" data-tag-value="${this.escapeHtml(tag)}" class="journal-chip">#${this.escapeHtml(tag)}</button>`)
+        .join('');
 
-      const signals = [
-        { label: 'Newest', value: newest.description },
-        { label: 'Critical', value: String(criticalCount) },
-        { label: 'Births', value: String(births) },
-        { label: 'Deaths', value: String(deaths) },
-      ];
+      featureContainer.innerHTML = `
+        <article class="rounded-2xl border border-white/12 bg-white/[0.03] p-4 h-full">
+          <div class="flex flex-col">
+            <div class="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/60">
+              <span>Bench Seat • Tick ${featured.tick}</span>
+              <span>${this.escapeHtml(featured.severity ?? 'LOW')}</span>
+            </div>
+            <h3 class="mt-2 text-lg font-semibold text-white">${this.escapeHtml(featured.eventType)}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-white/88">${this.escapeHtml(featured.description)}</p>
+            <div class="mt-3 flex items-center gap-2 text-xs text-white/70">
+              <span>🪑</span><span>Sit with this moment</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">${featuredTags}</div>
+            <div class="mt-4">
+              ${this.renderFeaturedDiorama(featured)}
+            </div>
+          </div>
+        </article>
+      `;
 
-      signals.forEach(({ label, value }) => {
+      featureContainer.querySelectorAll('[data-tag-value]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const tag = (button as HTMLElement).getAttribute('data-tag-value');
+          if (!tag) return;
+          this.toggleSet(this.selectedTags, tag);
+          this.feedPage = 0;
+          this.scheduleRender();
+        });
+      });
+
+      petals.forEach((event) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-xl border border-white/10 bg-white/[0.03] p-2';
+        const topTag = this.getTags(event)[0] ?? TAG_FALLBACK;
+
+        card.innerHTML = `
+          <div class="grid gap-2 sm:grid-cols-[120px_1fr]">
+            ${this.renderPicture(event, 'feed')}
+            <div>
+              <div class="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-white/60">
+                <span>Tick ${event.tick}</span>
+                <span>${this.escapeHtml(event.eventType)}</span>
+              </div>
+              <p class="mt-1 text-sm leading-relaxed text-white/88 line-clamp-3">${this.escapeHtml(event.description)}</p>
+              <button type="button" data-tag-value="${this.escapeHtml(topTag)}" class="mt-2 journal-chip">#${this.escapeHtml(topTag)}</button>
+            </div>
+          </div>
+        `;
+
+        card.querySelectorAll('[data-tag-value]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const tag = (button as HTMLElement).getAttribute('data-tag-value');
+            if (!tag) return;
+            this.toggleSet(this.selectedTags, tag);
+            this.feedPage = 0;
+            this.scheduleRender();
+          });
+        });
+
+        petalsContainer.appendChild(card);
+      });
+    }
+
+    private renderGallery() {
+      const container = this.querySelector('[data-gallery-grid]');
+      if (!container) return;
+      container.textContent = '';
+
+      const events = this.filteredEventsCache.slice(0, 24);
+      if (events.length === 0) {
+        container.innerHTML = '<p class="text-sm text-white/60">No gallery cards for current filters.</p>';
+        return;
+      }
+
+      events.forEach((event) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-xl border border-white/10 bg-white/[0.03] p-2';
+        card.innerHTML = `
+          ${this.renderPicture(event, 'gallery')}
+          <p class="mt-2 text-[11px] uppercase tracking-[0.16em] text-white/56">Tick ${event.tick}</p>
+          <p class="mt-1 text-sm text-white/88 line-clamp-3">${this.escapeHtml(event.description)}</p>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    private renderSignals() {
+      this.renderBars('[data-severity-bars]', this.buildSeverityCounts(this.filteredEventsCache));
+      this.renderBars('[data-type-bars]', this.buildTypeCounts(this.filteredEventsCache));
+
+      const snapshot = this.querySelector('[data-snapshot]');
+      if (!snapshot) return;
+
+      const events = this.filteredEventsCache;
+      if (events.length === 0) {
+        snapshot.textContent = 'No narrative signal in this filter state.';
+        return;
+      }
+
+      const births = events.filter((event) => event.eventType === 'BIRTH').length;
+      const deaths = events.filter((event) => event.eventType === 'DEATH').length;
+      const critical = events.filter((event) => event.severity === 'CRITICAL').length;
+      const newest = events[0];
+
+      snapshot.innerHTML = `
+        <p><strong>Newest:</strong> ${this.escapeHtml(newest.description)}</p>
+        <p class="mt-1"><strong>Lifecycle:</strong> ${births} births, ${deaths} deaths.</p>
+        <p class="mt-1"><strong>Drama Index:</strong> ${critical} critical events.</p>
+      `;
+    }
+
+    private renderBars(selector: string, entries: Array<{ label: string; count: number }>) {
+      const container = this.querySelector(selector);
+      if (!container) return;
+      container.textContent = '';
+
+      if (entries.length === 0) {
+        container.innerHTML = '<p class="text-sm text-white/60">No data for current filters.</p>';
+        return;
+      }
+
+      const maxCount = Math.max(...entries.map((entry) => entry.count), 1);
+      entries.forEach((entry) => {
         const row = document.createElement('div');
-        row.className = 'flex justify-between text-sm text-white/80';
-
-        const labelSpan = document.createElement('span');
-        labelSpan.className = 'text-white/60';
-        labelSpan.textContent = label;
-
-        const valueSpan = document.createElement('span');
-        valueSpan.textContent = value;
-
-        row.appendChild(labelSpan);
-        row.appendChild(valueSpan);
+        row.innerHTML = `
+          <div class="flex items-center justify-between text-xs text-white/76">
+            <span>${this.escapeHtml(entry.label)}</span>
+            <span>${entry.count}</span>
+          </div>
+          <div class="mt-1 h-2 rounded-full bg-white/10">
+            <div class="h-2 rounded-full bg-gradient-to-r from-garden-green-300 to-garden-blue-300" style="width:${(entry.count / maxCount) * 100}%"></div>
+          </div>
+        `;
         container.appendChild(row);
       });
     }
 
-    private renderVignettes() {
-      const container = this.querySelector('[data-story-vignettes]');
-      if (!container) return;
+    private renderPicture(event: SimulationEvent, size: 'feed' | 'gallery'): string {
+      const theme = this.getTheme(event.eventType);
+      const iconA = this.getPrimaryIcon(event.eventType);
+      const iconB = this.getSecondaryIcon(event);
+      const heightClass = size === 'feed' ? 'h-[120px]' : 'h-[180px]';
 
-      container.textContent = '';
+      return `
+        <div class="${heightClass} rounded-lg border border-white/15 overflow-hidden relative" style="background:${theme.background}">
+          <div class="absolute inset-0" style="background:${theme.overlay};opacity:0.6"></div>
+          <div class="relative h-full p-3 flex flex-col justify-between">
+            <span class="text-2xl">${iconA}</span>
+            <div class="flex items-end justify-between">
+              <span class="text-3xl">${iconB}</span>
+              <span class="rounded-full bg-black/35 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white/80">${this.escapeHtml(event.eventType)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
-      if (this.events.length === 0) {
-        const message = document.createElement('p');
-        message.className = 'text-white/60 text-sm';
-        message.textContent = 'No stories yet.';
-        container.appendChild(message);
-        return;
+    private renderFeaturedDiorama(event: SimulationEvent): string {
+      const cacheKey = `${event.id ?? ''}:${event.tick}:${event.eventType}:${event.description}`;
+      const cachedMarkup = this.sceneMarkupCache.get(cacheKey);
+      if (cachedMarkup) {
+        return cachedMarkup;
       }
 
-      const slices = this.events.slice(0, 12);
-      slices.forEach((event, index) => {
-        const opener = this.buildOpener(event, index);
+      const scene = this.buildIsometricScene(event);
+      const markup = `
+        <div class="rounded-lg border border-white/15 overflow-hidden relative bg-black/40">
+          <svg viewBox="0 0 560 320" class="w-full h-[220px]" preserveAspectRatio="xMidYMid meet" aria-label="Procedural event scene">
+            <defs>
+              <linearGradient id="scene-sky-${scene.seed}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${scene.palette.skyTop}" />
+                <stop offset="100%" stop-color="${scene.palette.skyBottom}" />
+              </linearGradient>
+              <linearGradient id="scene-ground-${scene.seed}" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="${scene.palette.groundA}" />
+                <stop offset="100%" stop-color="${scene.palette.groundB}" />
+              </linearGradient>
+            </defs>
 
-        const card = document.createElement('div');
-        card.className = 'rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/3 to-white/0 p-3 text-sm text-white/85 shadow-lg';
+            <rect x="0" y="0" width="560" height="320" fill="url(#scene-sky-${scene.seed})" />
+            <ellipse cx="280" cy="284" rx="215" ry="36" fill="rgba(0,0,0,0.26)" />
 
-        const tickLabel = document.createElement('div');
-        tickLabel.className = 'text-[11px] uppercase tracking-[0.2em] text-white/55';
-        tickLabel.textContent = `Tick ${event.tick}`;
+            ${scene.tiles}
+            ${scene.props}
+            ${scene.effects}
+          </svg>
 
-        const openerP = document.createElement('p');
-        openerP.className = 'mt-1 font-semibold text-white';
-        openerP.textContent = opener;
-
-        const descriptionP = document.createElement('p');
-        descriptionP.className = 'mt-1 text-white/80 leading-relaxed';
-        descriptionP.textContent = event.description;
-
-        card.appendChild(tickLabel);
-        card.appendChild(openerP);
-        card.appendChild(descriptionP);
-        container.appendChild(card);
-      });
-    }
-
-    private renderSpeciesJournals() {
-      const container = this.querySelector('[data-species-journals]');
-      if (!container) return;
-
-      container.textContent = '';
-
-      if (this.events.length === 0) {
-        return;
-      }
-
-      const byTag = this.groupByPrimaryTag();
-      Object.entries(byTag).slice(0, 6).forEach(([tag, events]) => {
-        const focus = events[0];
-
-        const card = document.createElement('div');
-        card.className = 'rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white/85';
-
-        const tagLabel = document.createElement('div');
-        tagLabel.className = 'text-[11px] uppercase tracking-[0.22em] text-white/60';
-        tagLabel.textContent = tag;
-
-        const description = document.createElement('p');
-        description.className = 'mt-1 text-white';
-        description.textContent = focus.description;
-
-        const count = document.createElement('p');
-        count.className = 'mt-1 text-white/60 text-xs';
-        count.textContent = `${events.length} notes logged`;
-
-        card.appendChild(tagLabel);
-        card.appendChild(description);
-        card.appendChild(count);
-        container.appendChild(card);
-      });
-    }
-
-    private renderCriticalFeed() {
-      const container = this.querySelector('[data-critical-feed]');
-      if (!container) return;
-
-      container.textContent = '';
-
-      const criticalEvents = this.events
-        .filter((event) => SEVERITY_ORDER[event.severity ?? 'LOW'] >= 3)
-        .slice(0, 20);
-
-      if (criticalEvents.length === 0) {
-        const message = document.createElement('p');
-        message.className = 'text-white/60 text-sm';
-        message.textContent = 'No high-severity signals right now.';
-        container.appendChild(message);
-        return;
-      }
-
-      criticalEvents.forEach((event) => {
-        const severityClass = this.severityPillClass(event.severity ?? 'LOW');
-
-        const card = document.createElement('div');
-        card.className = 'rounded-xl border border-white/10 bg-red-500/5 px-3 py-2';
-
-        const header = document.createElement('div');
-        header.className = 'flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/65';
-
-        const typeSpan = document.createElement('span');
-        typeSpan.textContent = event.eventType;
-
-        const severitySpan = document.createElement('span');
-        severitySpan.className = severityClass;
-        severitySpan.textContent = event.severity ?? 'LOW';
-
-        header.appendChild(typeSpan);
-        header.appendChild(severitySpan);
-
-        const description = document.createElement('p');
-        description.className = 'mt-1 text-white/90';
-        description.textContent = event.description;
-
-        card.appendChild(header);
-        card.appendChild(description);
-        container.appendChild(card);
-      });
-    }
-
-    private renderMeters() {
-      const balanceMeter = this.querySelector('[data-meter="balance"]');
-      const tensionMeter = this.querySelector('[data-meter="tension"]');
-      if (!balanceMeter || !tensionMeter) return;
-
-      const balanceScore = this.computeBalanceScore();
-      const tensionScore = this.computeTensionScore();
-
-      this.buildMeterDom(balanceMeter, 'Balance', balanceScore, 'Harmony vs flux');
-      this.buildMeterDom(tensionMeter, 'Tension', tensionScore, 'Risk + drama index');
-    }
-
-    private renderSignalSummary() {
-      const container = this.querySelector('[data-signal-summary]');
-      if (!container) return;
-
-      container.textContent = '';
-
-      if (this.events.length === 0) {
-        container.textContent = 'No signals to summarize yet.';
-        return;
-      }
-
-      const recent = this.events.slice(0, 8);
-      const critical = recent.find((event) => event.severity === 'CRITICAL');
-      const births = recent.filter((event) => event.eventType === 'BIRTH').length;
-      const deaths = recent.filter((event) => event.eventType === 'DEATH').length;
-      const envChange = recent.find((event) => event.eventType === 'ENVIRONMENT_CHANGE');
-
-      const lines = [
-        critical ? `Critical alert: ${critical.description}` : 'No critical alerts in the latest window.',
-        `Life cycle: ${births} births, ${deaths} deaths logged recently.`,
-        envChange ? `Environment shift: ${envChange.description}` : 'Environment steady this interval.',
-      ];
-
-      lines.forEach((line) => {
-        const p = document.createElement('p');
-        p.className = 'mb-1';
-        p.textContent = line;
-        container.appendChild(p);
-      });
-    }
-
-    private buildTimeLabel(event: SimulationEvent): string {
-      const time = new Date(event.timestamp).toLocaleTimeString();
-      return `${time}`;
-    }
-
-    private severityPillClass(severity: string | undefined): string {
-      const base = 'rounded-full border px-2 py-1 text-[10px]';
-      switch (severity) {
-        case 'CRITICAL':
-          return `${base} border-red-300/40 text-red-100 bg-red-500/20`;
-        case 'HIGH':
-          return `${base} border-orange-300/40 text-orange-100 bg-orange-500/15`;
-        case 'MEDIUM':
-          return `${base} border-yellow-300/40 text-yellow-100 bg-yellow-500/15`;
-        default:
-          return `${base} border-emerald-300/30 text-emerald-100 bg-emerald-500/10`;
-      }
-    }
-
-    private buildOpener(event: SimulationEvent, index: number): string {
-      const openers = [
-        'A soft rustle precedes',
-        'From the canopy we note',
-        'The ground remembers',
-        'Whispers carry news:',
-        'A quiet ripple signals',
-      ];
-      return openers[index % openers.length];
-    }
-
-    private groupByPrimaryTag(): Record<string, SimulationEvent[]> {
-      const result: Record<string, SimulationEvent[]> = {};
-      for (const event of this.events) {
-        const tag = (event.tags?.[0] || TAG_FALLBACK).toUpperCase();
-        if (!result[tag]) {
-          result[tag] = [];
+          <div class="absolute top-2 left-2 rounded-full bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-white/80">
+            Isometric Diorama
+          </div>
+        </div>
+      `;
+      this.sceneMarkupCache.set(cacheKey, markup);
+      if (this.sceneMarkupCache.size > 80) {
+        const firstKey = this.sceneMarkupCache.keys().next().value;
+        if (firstKey) {
+          this.sceneMarkupCache.delete(firstKey);
         }
-        result[tag].push(event);
       }
-      return result;
+      return markup;
     }
 
-    private computeBalanceScore(): number {
-      if (this.events.length === 0) return 0.5;
-      const births = this.events.filter((event) => event.eventType === 'BIRTH').length;
-      const deaths = this.events.filter((event) => event.eventType === 'DEATH').length;
-      const total = births + deaths || 1;
-      const ratio = births / total;
-      return Math.min(1, Math.max(0, ratio));
+    private buildIsometricScene(event: SimulationEvent): {
+      seed: number;
+      tiles: string;
+      props: string;
+      effects: string;
+      palette: {
+        skyTop: string;
+        skyBottom: string;
+        groundA: string;
+        groundB: string;
+        tileTop: string;
+        tileLeft: string;
+        tileRight: string;
+        accent: string;
+      };
+    } {
+      const seed = this.hashString(`${event.id ?? ''}:${event.tick}:${event.eventType}:${event.description}`);
+      const random = this.createSeededRandom(seed);
+      const semantics = this.extractSceneSemantics(event);
+      const palette = this.getScenePalette(semantics.biome);
+      const tileWidth = 52;
+      const tileHeight = 26;
+      const tileDepth = 16;
+      const gridWidth = 8;
+      const gridHeight = 6;
+      const originX = 280;
+      const originY = 94;
+
+      const toIso = (gridX: number, gridY: number) => ({
+        x: originX + (gridX - gridY) * (tileWidth / 2),
+        y: originY + (gridX + gridY) * (tileHeight / 2),
+      });
+
+      let tiles = '';
+      for (let y = 0; y < gridHeight; y += 1) {
+        for (let x = 0; x < gridWidth; x += 1) {
+          const screen = toIso(x, y);
+          const jitter = (random() - 0.5) * 4;
+          const topY = screen.y + jitter;
+
+          const top = [
+            `${screen.x},${topY - tileHeight / 2}`,
+            `${screen.x + tileWidth / 2},${topY}`,
+            `${screen.x},${topY + tileHeight / 2}`,
+            `${screen.x - tileWidth / 2},${topY}`,
+          ].join(' ');
+
+          const right = [
+            `${screen.x + tileWidth / 2},${topY}`,
+            `${screen.x + tileWidth / 2},${topY + tileDepth}`,
+            `${screen.x},${topY + tileHeight / 2 + tileDepth}`,
+            `${screen.x},${topY + tileHeight / 2}`,
+          ].join(' ');
+
+          const left = [
+            `${screen.x - tileWidth / 2},${topY}`,
+            `${screen.x - tileWidth / 2},${topY + tileDepth}`,
+            `${screen.x},${topY + tileHeight / 2 + tileDepth}`,
+            `${screen.x},${topY + tileHeight / 2}`,
+          ].join(' ');
+
+          tiles += `
+            <polygon points="${top}" fill="${palette.tileTop}" opacity="${0.78 + random() * 0.16}" />
+            <polygon points="${right}" fill="${palette.tileRight}" opacity="0.9" />
+            <polygon points="${left}" fill="${palette.tileLeft}" opacity="0.9" />
+          `;
+        }
+      }
+
+      const focalX = Math.floor(random() * gridWidth * 0.5) + 2;
+      const focalY = Math.floor(random() * gridHeight * 0.5) + 1;
+      const focal = toIso(focalX, focalY);
+      const propCount = 14 + Math.floor(semantics.intensity * 8);
+
+      let props = '';
+      for (let index = 0; index < propCount; index += 1) {
+        const gridX = Math.floor(random() * gridWidth);
+        const gridY = Math.floor(random() * gridHeight);
+        const screen = toIso(gridX, gridY);
+        const jitterX = (random() - 0.5) * 10;
+        const jitterY = (random() - 0.5) * 8;
+        const baseX = screen.x + jitterX;
+        const baseY = screen.y + tileDepth + jitterY - 3;
+        const size = 6 + random() * 7;
+
+        props += `<ellipse cx="${baseX}" cy="${baseY + 4}" rx="${size * 0.85}" ry="${size * 0.32}" fill="rgba(0,0,0,0.28)" />`;
+        const roll = random();
+        if (roll < semantics.weights.flora) {
+          props += `
+            <rect x="${baseX - 1}" y="${baseY - size * 1.1}" width="2" height="${size * 1.1}" fill="#7dd3a7" />
+            <circle cx="${baseX - size * 0.5}" cy="${baseY - size * 0.9}" r="${size * 0.38}" fill="#86efac" />
+            <circle cx="${baseX + size * 0.48}" cy="${baseY - size * 0.72}" r="${size * 0.32}" fill="#4ade80" />
+          `;
+        } else if (roll < semantics.weights.flora + semantics.weights.fungi) {
+          props += `
+            <rect x="${baseX - 1.2}" y="${baseY - size * 0.8}" width="2.4" height="${size * 0.6}" fill="#c084fc" />
+            <ellipse cx="${baseX}" cy="${baseY - size * 0.85}" rx="${size * 0.45}" ry="${size * 0.22}" fill="#d8b4fe" />
+            <circle cx="${baseX - size * 0.16}" cy="${baseY - size * 0.9}" r="${size * 0.07}" fill="#f5d0fe" />
+            <circle cx="${baseX + size * 0.14}" cy="${baseY - size * 0.82}" r="${size * 0.06}" fill="#f5d0fe" />
+          `;
+        } else if (roll < semantics.weights.flora + semantics.weights.fungi + semantics.weights.remains) {
+          props += `
+            <line x1="${baseX - size * 0.5}" y1="${baseY - size * 0.85}" x2="${baseX + size * 0.5}" y2="${baseY}" stroke="#fecdd3" stroke-width="1.8" />
+            <line x1="${baseX + size * 0.4}" y1="${baseY - size * 0.9}" x2="${baseX - size * 0.45}" y2="${baseY + 1}" stroke="#fda4af" stroke-width="1.6" />
+          `;
+        } else if (roll < semantics.weights.flora + semantics.weights.fungi + semantics.weights.remains + semantics.weights.weather) {
+          props += `
+            <ellipse cx="${baseX}" cy="${baseY - size * 0.3}" rx="${size * 0.52}" ry="${size * 0.18}" fill="#93c5fd" opacity="0.8" />
+            <line x1="${baseX - size * 0.1}" y1="${baseY - size * 0.65}" x2="${baseX - size * 0.2}" y2="${baseY - size * 0.15}" stroke="#bae6fd" stroke-width="1.2" />
+          `;
+        } else {
+          props += `
+            <circle cx="${baseX}" cy="${baseY - size * 0.6}" r="${size * 0.36}" fill="${palette.accent}" />
+            <rect x="${baseX - 1}" y="${baseY - size * 0.5}" width="2" height="${size * 0.55}" fill="#a7f3d0" />
+          `;
+        }
+      }
+
+      let effects = '';
+      effects += `<circle cx="${focal.x}" cy="${focal.y + 8}" r="24" fill="${palette.accent}" opacity="0.22" />`;
+      effects += `<circle cx="${focal.x}" cy="${focal.y + 8}" r="10" fill="${palette.accent}" opacity="0.34" />`;
+
+      if (semantics.action.weatherShift) {
+        const rainCount = 10 + Math.floor(semantics.intensity * 18);
+        for (let rain = 0; rain < rainCount; rain += 1) {
+          const rx = 120 + random() * 320;
+          const ry = 40 + random() * 130;
+          effects += `<line x1="${rx}" y1="${ry}" x2="${rx - 4}" y2="${ry + 14}" stroke="#bae6fd" stroke-opacity="0.45" stroke-width="1.2" />`;
+        }
+      }
+
+      if (semantics.action.birth) {
+        effects += `
+          <circle cx="${focal.x}" cy="${focal.y - 4}" r="${22 + semantics.intensity * 8}" fill="#86efac" opacity="0.2" />
+          <line x1="${focal.x}" y1="${focal.y - 20}" x2="${focal.x}" y2="${focal.y + 2}" stroke="#bbf7d0" stroke-width="2" />
+          <circle cx="${focal.x - 10}" cy="${focal.y - 18}" r="4" fill="#86efac" />
+          <circle cx="${focal.x + 10}" cy="${focal.y - 15}" r="3.5" fill="#4ade80" />
+        `;
+      }
+
+      if (semantics.action.death) {
+        effects += `
+          <line x1="${focal.x - 16}" y1="${focal.y - 16}" x2="${focal.x + 16}" y2="${focal.y + 10}" stroke="#fecaca" stroke-width="2.2" />
+          <line x1="${focal.x + 14}" y1="${focal.y - 16}" x2="${focal.x - 14}" y2="${focal.y + 10}" stroke="#fda4af" stroke-width="2.2" />
+        `;
+      }
+
+      if (semantics.action.hunt) {
+        effects += `
+          <path d="M ${focal.x - 26} ${focal.y + 10} Q ${focal.x - 10} ${focal.y - 10}, ${focal.x + 18} ${focal.y - 4}" fill="none" stroke="#fca5a5" stroke-width="2" stroke-dasharray="4 3" />
+          <polygon points="${focal.x + 18},${focal.y - 4} ${focal.x + 9},${focal.y - 8} ${focal.x + 10},${focal.y + 2}" fill="#fca5a5" />
+        `;
+      }
+
+      if (semantics.action.reproduction) {
+        effects += `
+          <line x1="${focal.x - 20}" y1="${focal.y + 2}" x2="${focal.x}" y2="${focal.y - 8}" stroke="#c4b5fd" stroke-width="1.8" />
+          <line x1="${focal.x + 20}" y1="${focal.y + 2}" x2="${focal.x}" y2="${focal.y - 8}" stroke="#c4b5fd" stroke-width="1.8" />
+          <circle cx="${focal.x}" cy="${focal.y - 8}" r="4" fill="#ddd6fe" />
+        `;
+      }
+
+      const actorOffsets = [
+        { dx: -20, dy: 8, kind: semantics.actors.primary },
+        { dx: 18, dy: 10, kind: semantics.actors.secondary },
+        { dx: 0, dy: 16, kind: semantics.actors.tertiary },
+      ];
+      for (const actorOffset of actorOffsets) {
+        effects += this.renderActorGlyph(
+          focal.x + actorOffset.dx,
+          focal.y + actorOffset.dy,
+          actorOffset.kind
+        );
+      }
+
+      return {
+        seed,
+        tiles,
+        props,
+        effects,
+        palette,
+      };
     }
 
-    private computeTensionScore(): number {
-      if (this.events.length === 0) return 0.2;
-      const weightedSum = this.events.reduce((sum, event) => sum + (SEVERITY_ORDER[event.severity ?? 'LOW'] ?? 1), 0);
-      const maxPossible = this.events.length * SEVERITY_ORDER.CRITICAL;
-      return Math.min(1, weightedSum / maxPossible);
+    private getScenePalette(biome: 'lush' | 'scar' | 'storm' | 'twilight'): {
+      skyTop: string;
+      skyBottom: string;
+      groundA: string;
+      groundB: string;
+      tileTop: string;
+      tileLeft: string;
+      tileRight: string;
+      accent: string;
+    } {
+      if (biome === 'lush') {
+        return {
+          skyTop: '#123a2a',
+          skyBottom: '#0a1b16',
+          groundA: '#1c6b4a',
+          groundB: '#10432f',
+          tileTop: '#2f855a',
+          tileLeft: '#1f5f42',
+          tileRight: '#23684a',
+          accent: '#86efac',
+        };
+      }
+
+      if (biome === 'scar') {
+        return {
+          skyTop: '#3a1724',
+          skyBottom: '#180c13',
+          groundA: '#7f1d3a',
+          groundB: '#4a1327',
+          tileTop: '#9f224b',
+          tileLeft: '#6f1a36',
+          tileRight: '#7f1d3a',
+          accent: '#fda4af',
+        };
+      }
+
+      if (biome === 'storm') {
+        return {
+          skyTop: '#10314a',
+          skyBottom: '#0b1827',
+          groundA: '#1e4f6b',
+          groundB: '#173c52',
+          tileTop: '#256b88',
+          tileLeft: '#1f5670',
+          tileRight: '#215e7a',
+          accent: '#93c5fd',
+        };
+      }
+
+      return {
+        skyTop: '#1c2550',
+        skyBottom: '#10142b',
+        groundA: '#3a4d92',
+        groundB: '#27346a',
+        tileTop: '#4a5fb1',
+        tileLeft: '#344589',
+        tileRight: '#3c4f9e',
+        accent: '#c4b5fd',
+      };
     }
 
-    private buildMeterDom(container: Element, label: string, value: number, subtitle: string): void {
-      container.textContent = '';
+    private extractSceneSemantics(event: SimulationEvent): {
+      biome: 'lush' | 'scar' | 'storm' | 'twilight';
+      intensity: number;
+      weights: {
+        flora: number;
+        fungi: number;
+        remains: number;
+        weather: number;
+      };
+      action: {
+        birth: boolean;
+        death: boolean;
+        reproduction: boolean;
+        hunt: boolean;
+        weatherShift: boolean;
+      };
+      actors: {
+        primary: 'plant' | 'herbivore' | 'carnivore' | 'fungus' | 'neutral';
+        secondary: 'plant' | 'herbivore' | 'carnivore' | 'fungus' | 'neutral';
+        tertiary: 'plant' | 'herbivore' | 'carnivore' | 'fungus' | 'neutral';
+      };
+    } {
+      const description = event.description.toLowerCase();
+      const tags = this.getTags(event).join(' ');
+      const severity = event.severity ?? 'LOW';
+      const severityBoost = severity === 'CRITICAL'
+        ? 1
+        : severity === 'HIGH'
+          ? 0.7
+          : severity === 'MEDIUM'
+            ? 0.45
+            : 0.25;
 
-      const percentage = Math.round(value * 100);
-      const width = `${percentage}%`;
+      const isBirth = event.eventType === 'BIRTH' || description.includes('born') || description.includes('sprout');
+      const isDeath = event.eventType === 'DEATH' || description.includes('died') || description.includes('collapse');
+      const isReproduction = event.eventType === 'REPRODUCTION' || description.includes('reproduce') || description.includes('offspring');
+      const isHunt = description.includes('hunt') || description.includes('chase') || description.includes('predator') || tags.includes('carnivore');
+      const isWeather = event.eventType === 'ENVIRONMENT_CHANGE' || tags.includes('weather') || tags.includes('storm') || tags.includes('rain') || tags.includes('drought') || tags.includes('fog');
+      const isPlantHeavy = tags.includes('plant');
+      const isFungusHeavy = tags.includes('fungus') || tags.includes('fungi') || description.includes('decompose');
 
-      // Header with label and percentage
-      const header = document.createElement('div');
-      header.className = 'flex justify-between text-[11px] uppercase tracking-[0.2em] text-white/60';
+      const biome: 'lush' | 'scar' | 'storm' | 'twilight' = isDeath
+        ? 'scar'
+        : isWeather
+          ? 'storm'
+          : (isBirth || isPlantHeavy)
+            ? 'lush'
+            : 'twilight';
 
-      const labelSpan = document.createElement('span');
-      labelSpan.textContent = label;
+      const baseFlora = isPlantHeavy || isBirth ? 0.44 : 0.22;
+      const baseFungi = isFungusHeavy ? 0.28 : 0.12;
+      const baseRemains = isDeath ? 0.3 : 0.08;
+      const baseWeather = isWeather ? 0.25 : 0.06;
+      const weightTotal = baseFlora + baseFungi + baseRemains + baseWeather;
 
-      const percentSpan = document.createElement('span');
-      percentSpan.textContent = `${percentage}%`;
+      return {
+        biome,
+        intensity: severityBoost,
+        weights: {
+          flora: baseFlora / weightTotal,
+          fungi: baseFungi / weightTotal,
+          remains: baseRemains / weightTotal,
+          weather: baseWeather / weightTotal,
+        },
+        action: {
+          birth: isBirth,
+          death: isDeath,
+          reproduction: isReproduction,
+          hunt: isHunt,
+          weatherShift: isWeather,
+        },
+        actors: {
+          primary: this.resolveActorType(tags, description, event.eventType),
+          secondary: this.resolveActorType(tags, description, 'secondary'),
+          tertiary: this.resolveActorType(tags, description, 'tertiary'),
+        },
+      };
+    }
 
-      header.appendChild(labelSpan);
-      header.appendChild(percentSpan);
+    private resolveActorType(tags: string, description: string, hint: string): 'plant' | 'herbivore' | 'carnivore' | 'fungus' | 'neutral' {
+      const combined = `${tags} ${description} ${hint}`.toLowerCase();
+      if (combined.includes('carnivore') || combined.includes('predator') || combined.includes('hunt')) return 'carnivore';
+      if (combined.includes('herbivore') || combined.includes('graze')) return 'herbivore';
+      if (combined.includes('fungus') || combined.includes('fungi') || combined.includes('decompose')) return 'fungus';
+      if (combined.includes('plant') || combined.includes('sprout')) return 'plant';
+      return 'neutral';
+    }
 
-      // Progress bar container
-      const barContainer = document.createElement('div');
-      barContainer.className = 'mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10';
+    private renderActorGlyph(
+      x: number,
+      y: number,
+      actorType: 'plant' | 'herbivore' | 'carnivore' | 'fungus' | 'neutral'
+    ): string {
+      if (actorType === 'plant') {
+        return `
+          <rect x="${x - 1}" y="${y - 12}" width="2" height="11" fill="#86efac" />
+          <circle cx="${x - 4}" cy="${y - 11}" r="3" fill="#4ade80" />
+          <circle cx="${x + 4}" cy="${y - 9}" r="2.6" fill="#22c55e" />
+        `;
+      }
 
-      const bar = document.createElement('div');
-      bar.className = 'h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300';
-      bar.style.width = width;
+      if (actorType === 'herbivore') {
+        return `
+          <ellipse cx="${x}" cy="${y - 6}" rx="7" ry="4" fill="#fcd34d" />
+          <circle cx="${x + 6}" cy="${y - 9}" r="2.3" fill="#fde68a" />
+          <line x1="${x - 3}" y1="${y - 2}" x2="${x - 3}" y2="${y + 4}" stroke="#fbbf24" stroke-width="1.2" />
+          <line x1="${x + 2}" y1="${y - 2}" x2="${x + 2}" y2="${y + 4}" stroke="#fbbf24" stroke-width="1.2" />
+        `;
+      }
 
-      barContainer.appendChild(bar);
+      if (actorType === 'carnivore') {
+        return `
+          <ellipse cx="${x}" cy="${y - 6}" rx="7.5" ry="4.2" fill="#f87171" />
+          <polygon points="${x + 8},${y - 8} ${x + 12},${y - 10} ${x + 8},${y - 4}" fill="#fecaca" />
+          <circle cx="${x + 4}" cy="${y - 7}" r="1" fill="#fff" />
+        `;
+      }
 
-      // Subtitle
-      const subtitleP = document.createElement('p');
-      subtitleP.className = 'mt-2 text-xs text-white/65';
-      subtitleP.textContent = subtitle;
+      if (actorType === 'fungus') {
+        return `
+          <rect x="${x - 1.2}" y="${y - 10}" width="2.4" height="8" fill="#d8b4fe" />
+          <ellipse cx="${x}" cy="${y - 10}" rx="6" ry="2.8" fill="#c084fc" />
+          <circle cx="${x - 2}" cy="${y - 10}" r="0.8" fill="#f5d0fe" />
+          <circle cx="${x + 2}" cy="${y - 9.7}" r="0.7" fill="#f5d0fe" />
+        `;
+      }
 
-      container.appendChild(header);
-      container.appendChild(barContainer);
-      container.appendChild(subtitleP);
+      return `<circle cx="${x}" cy="${y - 6}" r="4" fill="rgba(255,255,255,0.45)" />`;
+    }
+
+    private hashString(value: string): number {
+      let hash = 2166136261;
+      for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+      return Math.abs(hash >>> 0);
+    }
+
+    private createSeededRandom(seed: number): () => number {
+      let state = seed || 1;
+      return () => {
+        state ^= state << 13;
+        state ^= state >>> 17;
+        state ^= state << 5;
+        return ((state >>> 0) % 10000) / 10000;
+      };
+    }
+
+    private getTheme(eventType: string): { background: string; overlay: string } {
+      if (eventType === 'BIRTH') {
+        return {
+          background: 'linear-gradient(140deg, rgba(34,197,94,0.35), rgba(6,95,70,0.45), rgba(10,14,22,0.95))',
+          overlay: 'radial-gradient(circle at 20% 20%, rgba(187,247,208,0.45), transparent 52%)',
+        };
+      }
+      if (eventType === 'DEATH') {
+        return {
+          background: 'linear-gradient(140deg, rgba(239,68,68,0.32), rgba(190,24,93,0.35), rgba(10,14,22,0.95))',
+          overlay: 'radial-gradient(circle at 80% 20%, rgba(254,202,202,0.35), transparent 52%)',
+        };
+      }
+      if (eventType === 'ENVIRONMENT_CHANGE') {
+        return {
+          background: 'linear-gradient(140deg, rgba(14,165,233,0.35), rgba(20,184,166,0.35), rgba(10,14,22,0.95))',
+          overlay: 'radial-gradient(circle at 50% 20%, rgba(186,230,253,0.36), transparent 54%)',
+        };
+      }
+
+      return {
+        background: 'linear-gradient(140deg, rgba(139,92,246,0.3), rgba(59,130,246,0.28), rgba(10,14,22,0.95))',
+        overlay: 'radial-gradient(circle at 24% 20%, rgba(221,214,254,0.32), transparent 54%)',
+      };
+    }
+
+    private getPrimaryIcon(eventType: string): string {
+      if (eventType === 'BIRTH') return '🌱';
+      if (eventType === 'DEATH') return '🕯️';
+      if (eventType === 'REPRODUCTION') return '🧬';
+      if (eventType === 'ENVIRONMENT_CHANGE') return '🌦️';
+      if (eventType === 'POPULATION_DELTA') return '📈';
+      if (eventType === 'AMBIENT') return '✨';
+      return '📖';
+    }
+
+    private getSecondaryIcon(event: SimulationEvent): string {
+      const joinedTags = this.getTags(event).join(' ');
+      if (joinedTags.includes('plant')) return '🌿';
+      if (joinedTags.includes('herbivore')) return '🦌';
+      if (joinedTags.includes('carnivore')) return '🐺';
+      if (joinedTags.includes('fungus') || joinedTags.includes('fungi')) return '🍄';
+      return '🌌';
+    }
+
+    private buildSeverityCounts(events: SimulationEvent[]): Array<{ label: string; count: number }> {
+      const severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+      return severities
+        .map((severity) => ({ label: severity, count: events.filter((event) => (event.severity ?? 'LOW') === severity).length }))
+        .filter((entry) => entry.count > 0);
+    }
+
+    private buildTypeCounts(events: SimulationEvent[]): Array<{ label: string; count: number }> {
+      const counts = new Map<string, number>();
+      events.forEach((event) => counts.set(event.eventType, (counts.get(event.eventType) ?? 0) + 1));
+      return Array.from(counts.entries())
+        .sort((firstEntry, secondEntry) => secondEntry[1] - firstEntry[1])
+        .slice(0, 8)
+        .map(([label, count]) => ({ label, count }));
+    }
+
+    private getTags(event: SimulationEvent): string[] {
+      if (!event.tags || event.tags.length === 0) {
+        return [TAG_FALLBACK];
+      }
+      return event.tags
+        .map((tag) => tag.trim().toLowerCase())
+        .filter((tag) => tag.length > 0);
+    }
+
+    private toggleSet(set: Set<string>, value: string) {
+      if (set.has(value)) {
+        set.delete(value);
+      } else {
+        set.add(value);
+      }
+    }
+
+    private updateViewButtons() {
+      this.querySelectorAll('[data-view-button]').forEach((button) => {
+        button.setAttribute('data-active', button.getAttribute('data-view-button') === this.activeView ? 'true' : 'false');
+      });
+    }
+
+    private updateViewPanels() {
+      this.querySelectorAll('[data-view-panel]').forEach((panel) => {
+        panel.classList.toggle('hidden', panel.getAttribute('data-view-panel') !== this.activeView);
+      });
+    }
+
+    private escapeHtml(value: string): string {
+      return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
     }
   }
 

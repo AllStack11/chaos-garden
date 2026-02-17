@@ -3,6 +3,9 @@ export {
   renderSpeciesShareMarkup,
   renderLivingDeadAreaMarkup,
   renderEnvironmentLinesMarkup,
+  renderBiodiversityTrendMarkup,
+  renderFoodWebPressureMarkup,
+  renderSpeciesMomentumMarkup,
 } from './charts';
 
 export {
@@ -17,3 +20,10 @@ export {
 } from './breakdowns';
 
 export { renderMoversMarkup } from './movers';
+
+export {
+  renderNittyGrittyMarkup,
+  renderStoryCardsMarkup,
+  renderTrendDigestMarkup,
+  renderWeatherRhythmMarkup,
+} from './deepDive';
