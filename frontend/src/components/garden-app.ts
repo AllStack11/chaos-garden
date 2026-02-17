@@ -5,7 +5,6 @@ import { updateGardenUI } from '../ui/update-ui';
 import { updateStatusIndicators, updateCountdownDisplay } from '../ui/statusIndicators';
 import { REFRESH_INTERVAL_MS, HEALTH_INTERVAL_MS } from '../constants/ui';
 import type { GardenAppState } from '../ui/gardenAppState';
-import { SoundscapeController } from '../lib/audio/soundscapeController';
 
 export class GardenApp extends HTMLElement {
   private gardenService: GardenService;
@@ -16,7 +15,6 @@ export class GardenApp extends HTMLElement {
   private gardenRequestInFlight = false;
   private readonly coarsePointerMediaQuery = window.matchMedia('(pointer: coarse)');
   private readonly mobileViewportMediaQuery = window.matchMedia('(max-width: 639px)');
-  private soundscapeController: SoundscapeController | null = null;
 
   private state: GardenAppState = {
     gardenState: null,
@@ -42,8 +40,6 @@ export class GardenApp extends HTMLElement {
   }
 
   connectedCallback() {
-    this.soundscapeController = new SoundscapeController();
-    this.soundscapeController.connectUi(this);
     this.loadGardenData();
     this.checkHealth();
 
@@ -69,8 +65,6 @@ export class GardenApp extends HTMLElement {
       clearTimeout(this.uiTimeout);
       this.uiTimeout = null;
     }
-    this.soundscapeController?.dispose();
-    this.soundscapeController = null;
     this.teardownEventListeners();
   }
 
@@ -156,7 +150,6 @@ export class GardenApp extends HTMLElement {
       this.loadGardenData();
       this.checkHealth();
     }
-    void this.soundscapeController?.handleVisibilityChange(document.visibilityState === 'visible');
   };
 
   private readonly handleOnline = () => {
@@ -240,7 +233,6 @@ export class GardenApp extends HTMLElement {
       this.gardenRequestInFlight = false;
       this.state.isLoading = false;
       this.updateUI();
-      this.updateSoundscape();
     }
   }
 
@@ -282,14 +274,6 @@ export class GardenApp extends HTMLElement {
     const countdownEl = document.getElementById('next-tick-countdown');
     const tickIntervalMinutes = this.state.health?.config?.tickIntervalMinutes;
     updateCountdownDisplay(this.state.lastTickTime, tickIntervalMinutes, countdownEl);
-  }
-
-  private updateSoundscape() {
-    this.soundscapeController?.update({
-      gardenState: this.state.gardenState,
-      recentEvents: this.state.recentEvents,
-      nowMs: Date.now(),
-    });
   }
 }
 
