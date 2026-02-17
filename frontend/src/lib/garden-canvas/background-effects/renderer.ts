@@ -113,17 +113,17 @@ function drawFarBackground(input: BackgroundRenderInput): void {
   let topColor, middleColor, bottomColor;
 
   if (timePhase === 'dawn') {
-    // Dawn: Pink/orange horizon transitioning to blue-green (reduced intensity by 50%)
+    // Dawn: Subtle warm horizon transitioning to blue-green (orange tint reduced by ~75%)
     const dawnProgress = Math.max(0, Math.min(1, (worldState.sunlight - 0.2) / 0.25)); // 0-1 through dawn phase
     topColor = `rgba(${15 + dawnProgress * 15}, ${20 + dawnProgress * 20}, ${40 + dawnProgress * 10}, 0.98)`;
-    middleColor = `rgba(${140 + dawnProgress * 10}, ${80 + dawnProgress * 20}, ${50 - dawnProgress * 7.5}, ${0.92 + dawnProgress * 0.06})`;
-    bottomColor = `rgba(${160 + dawnProgress * 10}, ${110 + dawnProgress * 15}, ${60 + dawnProgress * 7.5}, 0.95)`;
+    middleColor = `rgba(${110 + dawnProgress * 10}, ${95 + dawnProgress * 10}, ${85 - dawnProgress * 7.5}, ${0.92 + dawnProgress * 0.06})`;
+    bottomColor = `rgba(${95 + dawnProgress * 15}, ${100 + dawnProgress * 15}, ${85 + dawnProgress * 10}, 0.95)`;
   } else if (timePhase === 'dusk') {
-    // Dusk: Orange/red/purple horizon fading to dark (reduced intensity by 50%)
+    // Dusk: Cooler dusk horizon with restrained warmth (orange tint reduced by ~75%)
     const duskProgress = Math.max(0, Math.min(1, 1 - ((worldState.sunlight - 0.45) / 0.3))); // 1 at start, 0 at end
     topColor = `rgba(${30 - duskProgress * 10}, ${27 - duskProgress * 5}, ${20 - duskProgress * 2.5}, 0.98)`;
-    middleColor = `rgba(${140 + duskProgress * 25}, ${70 + duskProgress * 20}, ${40 + duskProgress * 10}, ${0.90 + duskProgress * 0.05})`;
-    bottomColor = `rgba(${60 + duskProgress * 50}, ${40 + duskProgress * 35}, ${20 + duskProgress * 15}, 0.95)`;
+    middleColor = `rgba(${95 + duskProgress * 10}, ${80 + duskProgress * 8}, ${70 + duskProgress * 6}, ${0.90 + duskProgress * 0.05})`;
+    bottomColor = `rgba(${40 + duskProgress * 18}, ${46 + duskProgress * 14}, ${34 + duskProgress * 8}, 0.95)`;
   } else if (timePhase === 'night') {
     // Night: Deep blues
     topColor = `rgba(5, 14, 28, ${0.95 + lighting.fogDensity * 0.1})`;
@@ -687,18 +687,18 @@ function drawWeatherPostVeilEffects(input: BackgroundRenderInput): void {
   // Drought warm tint + heat haze
   if (weather === 'DROUGHT') {
     const heatGradient = ctx.createLinearGradient(0, 0, 0, viewport.height);
-    heatGradient.addColorStop(0, 'rgba(210, 140, 30, 0.12)');
-    heatGradient.addColorStop(0.5, 'rgba(230, 160, 40, 0.08)');
-    heatGradient.addColorStop(1, 'rgba(190, 110, 20, 0.04)');
+    heatGradient.addColorStop(0, 'rgba(210, 140, 30, 0.06)');
+    heatGradient.addColorStop(0.5, 'rgba(230, 160, 40, 0.04)');
+    heatGradient.addColorStop(1, 'rgba(190, 110, 20, 0.02)');
     ctx.fillStyle = heatGradient;
     ctx.fillRect(0, 0, viewport.width, viewport.height);
 
     // Subtle heat haze shimmer
     const shimmer = Math.sin((worldState.tick || 0) * 0.1) * 2;
     ctx.save();
-    ctx.globalAlpha = 0.05;
+    ctx.globalAlpha = 0.025;
     ctx.translate(0, shimmer);
-    ctx.fillStyle = 'rgba(255, 230, 180, 0.1)';
+    ctx.fillStyle = 'rgba(255, 230, 180, 0.05)';
     for (let i = 0; i < 5; i++) {
       ctx.fillRect(0, (viewport.height / 5) * i, viewport.width, 2);
     }
