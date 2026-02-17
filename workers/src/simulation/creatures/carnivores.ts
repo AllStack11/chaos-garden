@@ -51,7 +51,7 @@ const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 40;
 const HUNTING_DISTANCE = 10; // pixels (slightly larger than herbivore eating)
 const MAX_AGE = 320; // ticks (longer lifespan helps preserve apex lineages in long-horizon simulations)
-const MAX_REPRODUCTIVE_AGE = 150; // older carnivores can no longer reproduce
+const MAX_REPRODUCTIVE_AGE = 130; // older carnivores can no longer reproduce
 const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
 const HEALTH_RECOVERY_FROM_FEED = 5;
 const MIN_MOVEMENT_SPEED = 0.4; // ensure movement never stalls from bad mutations
@@ -96,10 +96,10 @@ export function createNewCarnivoreEntity(
     energy: 50,
     health: 100,
     age: 0,
-    reproductionRate: traits?.reproductionRate ?? 0.02, // Lower reproduction than herbivores
+    reproductionRate: traits?.reproductionRate ?? 0.015, // Lower reproduction than herbivores
     movementSpeed: traits?.movementSpeed ?? 4.6, // Carnivores should move the most
     metabolismEfficiency: traits?.metabolismEfficiency ?? 1.1, // Higher metabolism cost
-    perceptionRadius: traits?.perceptionRadius ?? 175, // Better vision for hunting
+    perceptionRadius: traits?.perceptionRadius ?? 160, // Better vision for hunting
     lineage: parentId,
     createdAt: now,
     updatedAt: now

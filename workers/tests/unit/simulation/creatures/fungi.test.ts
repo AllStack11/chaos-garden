@@ -30,7 +30,7 @@ describe('simulation/creatures/fungi', () => {
     const fungus = buildFungus({ position: { x: 0, y: 0 }, perceptionRadius: 50, energy: 40 });
     const nearbyDead = buildHerbivore({
       id: 'dead-mid',
-      position: { x: 20, y: 0 },
+      position: { x: 40, y: 0 },
       isAlive: false,
       health: 0,
       energy: 50

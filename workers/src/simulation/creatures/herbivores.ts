@@ -54,12 +54,12 @@ const REPRODUCTION_COST = 30; // cheaper so reproduction is less energy prohibit
 const EATING_DISTANCE = 5; // pixels
 const MAX_AGE = 150; // ticks
 const MIN_MOVEMENT_SPEED = 0.35; // ensure movement never fully stalls
-const MAX_REPRODUCTIVE_AGE = 125; // extend reproductive window to soften cohort die-offs
-const ENERGY_FROM_PLANT = 30; // energy gained per plant eaten
+const MAX_REPRODUCTIVE_AGE = 140; // extend reproductive window to soften cohort die-offs
+const ENERGY_FROM_PLANT = 40; // energy gained per plant eaten
 const HEALTH_RECOVERY_FROM_FEED = 5;
 const MOVE_TO_PLANT_COST_MULTIPLIER = 0.68;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
-const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
+const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.5;
 const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 // State tracking for fleeing behavior (ephemeral, not persisted)
@@ -97,7 +97,7 @@ export function createNewHerbivoreEntity(
     energy: 60,
     health: 100,
     age: 0,
-    reproductionRate: traits?.reproductionRate ?? 0.05, // slightly higher baseline reproduction chance
+    reproductionRate: traits?.reproductionRate ?? 0.055, // slightly higher baseline reproduction chance
     movementSpeed: traits?.movementSpeed ?? 2.0,
     metabolismEfficiency: traits?.metabolismEfficiency ?? 1.0,
     perceptionRadius: traits?.perceptionRadius ?? 100,

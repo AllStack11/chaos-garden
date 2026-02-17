@@ -113,16 +113,16 @@ export const PACK_COORDINATION_RADIUS = 100;
 export const FLEE_SPEED_MULTIPLIER = 1.2;
 
 /** Energy cost multiplier when fleeing (more expensive than normal movement) */
-export const FLEE_ENERGY_COST_MULTIPLIER = 1.6;
+export const FLEE_ENERGY_COST_MULTIPLIER = 1.2;
 
 /** Panic threshold distance when energy is low (flee earlier when weak) */
 export const PANIC_THRESHOLD_LOW_ENERGY = 120;
 
 /** Panic threshold distance when energy is high (flee later when strong) */
-export const PANIC_THRESHOLD_HIGH_ENERGY = 85;
+export const PANIC_THRESHOLD_HIGH_ENERGY = 90;
 
 /** Consecutive fleeing ticks before exhaustion sets in */
-export const EXHAUSTION_THRESHOLD_TICKS = 15;
+export const EXHAUSTION_THRESHOLD_TICKS = 22;
 
 /** Speed reduction when exhausted (0.6 = 40% penalty) */
 export const EXHAUSTION_SPEED_PENALTY = 0.6;

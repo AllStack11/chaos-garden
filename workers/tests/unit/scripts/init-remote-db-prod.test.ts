@@ -47,7 +47,7 @@ const {
     uniqueSpeciesCounts: Record<SeedType, number>;
   };
   MIN_SPACING_BY_TYPE: Record<SeedType, number>;
-} = requireModule('../../../scripts/init-remote-db-prod.js');
+} = requireModule('../../../scripts/init-remote-db-prod-v3.js');
 
 function getEntityTypeEntries(seedData: SeedData, type: SeedType): SeedEntity[] {
   return seedData.entities.filter((entity) => entity.type === type);
@@ -81,7 +81,7 @@ function toDeterministicProjection(seedData: SeedData): Array<{
   }));
 }
 
-describe('scripts/init-remote-db-prod', () => {
+describe('scripts/init-remote-db-prod-v3', () => {
   it('produces deterministic entities for the same seed', () => {
     const first = generateEntities(20260210);
     const second = generateEntities(20260210);
@@ -90,16 +90,16 @@ describe('scripts/init-remote-db-prod', () => {
     expect(toDeterministicProjection(first)).toEqual(toDeterministicProjection(second));
   });
 
-  it('chooses minimal sustainable startup counts with fungi included', () => {
+  it('chooses resilient startup counts with fungi included', () => {
     const counts = determineCandidatePopulationCounts(20260210);
 
-    expect(counts.totalLiving).toBeGreaterThanOrEqual(20);
-    expect(counts.totalLiving).toBeLessThanOrEqual(30);
-    expect(counts.plantCount).toBeGreaterThanOrEqual(15);
-    expect(counts.herbivoreCount).toBeGreaterThanOrEqual(6);
-    expect(counts.carnivoreCount).toBeGreaterThanOrEqual(2);
-    expect(counts.fungusCount).toBeGreaterThanOrEqual(1);
-    expect(counts.fungusCount).toBeLessThanOrEqual(2);
+    expect(counts.totalLiving).toBeGreaterThanOrEqual(84);
+    expect(counts.totalLiving).toBeLessThanOrEqual(108);
+    expect(counts.plantCount).toBeGreaterThanOrEqual(48);
+    expect(counts.herbivoreCount).toBeGreaterThanOrEqual(20);
+    expect(counts.carnivoreCount).toBeGreaterThanOrEqual(4);
+    expect(counts.fungusCount).toBeGreaterThanOrEqual(4);
+    expect(counts.fungusCount).toBeLessThanOrEqual(8);
   });
 
   it('creates globally unique names and diverse species labels', () => {
@@ -107,10 +107,10 @@ describe('scripts/init-remote-db-prod', () => {
     const diversitySummary = getDiversitySummary(seedData.entities);
 
     expect(diversitySummary.uniqueNameCount).toBe(diversitySummary.totalNames);
-    expect(diversitySummary.uniqueSpeciesCounts.plant).toBeGreaterThanOrEqual(5);
-    expect(diversitySummary.uniqueSpeciesCounts.herbivore).toBeGreaterThanOrEqual(3);
-    expect(diversitySummary.uniqueSpeciesCounts.carnivore).toBeGreaterThanOrEqual(1);
-    expect(diversitySummary.uniqueSpeciesCounts.fungus).toBeGreaterThanOrEqual(1);
+    expect(diversitySummary.uniqueSpeciesCounts.plant).toBeGreaterThanOrEqual(8);
+    expect(diversitySummary.uniqueSpeciesCounts.herbivore).toBeGreaterThanOrEqual(6);
+    expect(diversitySummary.uniqueSpeciesCounts.carnivore).toBeGreaterThanOrEqual(3);
+    expect(diversitySummary.uniqueSpeciesCounts.fungus).toBeGreaterThanOrEqual(3);
   });
 
   it('uses broad trait spreads across all trophic groups', () => {

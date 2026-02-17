@@ -102,8 +102,8 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
       sunlightMultiplier: 0.15,
       moistureChangePerTick: 0.03,
       photosynthesisModifier: 0.3,
-      movementModifier: 0.5,
-      reproductionModifier: 0.6,
+      movementModifier: 0.6,
+      reproductionModifier: 0.7,
     },
     transitions: [
       { targetState: 'OVERCAST', weight: 50 },
@@ -142,7 +142,7 @@ export const WEATHER_STATE_DEFINITIONS: Record<WeatherStateName, WeatherStateDef
       sunlightMultiplier: 0.5,
       moistureChangePerTick: 0.005,
       photosynthesisModifier: 0.7,
-      movementModifier: 0.7,
+      movementModifier: 0.78,
       reproductionModifier: 0.9,
     },
     transitions: [

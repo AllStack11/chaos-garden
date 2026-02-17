@@ -95,7 +95,7 @@ describe('simulation/creatures/herbivores', () => {
 
   it('does not reproduce after max reproductive age', async () => {
     const herbivore = buildHerbivore({
-      age: 120,
+      age: 150,
       energy: 100,
       reproductionRate: 1
     });

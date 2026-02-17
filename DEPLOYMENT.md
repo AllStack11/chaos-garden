@@ -32,12 +32,12 @@ From repository root:
 npm run db:init:remote
 ```
 
-This resets the remote D1 database, applies `workers/schema.sql`, and seeds a fair-ratio random population.
+This resets the remote D1 database, applies `workers/schema.sql`, and seeds the v3 production resilience baseline population.
 
-Optional custom seed/size:
+Optional custom seed:
 
 ```bash
-npm run db:init:remote -- --seed=12345 --total=24
+npm run db:init:remote -- --seed=12345
 ```
 
 ### Deploy Workers API once
