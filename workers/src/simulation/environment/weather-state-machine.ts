@@ -38,6 +38,17 @@ const NEUTRAL_WEATHER_MODIFIERS: WeatherStateModifiers = {
   reproductionModifier: 1.0,
 };
 
+/** Sunlight level above which evaporation pressure grows */
+const EVAPORATION_SUNLIGHT_THRESHOLD = 0.55;
+/** Low-light threshold where condensation can recover slight moisture */
+const CONDENSATION_SUNLIGHT_THRESHOLD = 0.35;
+/** Maximum extra moisture loss from sunlight-driven evaporation */
+const MAX_SUNLIGHT_EVAPORATION_PER_TICK = 0.006;
+/** Maximum extra moisture gain from low-light condensation */
+const MAX_LOW_LIGHT_CONDENSATION_PER_TICK = 0.003;
+/** Temperature feedback from moisture delta (drying warms, wetting cools) */
+const MOISTURE_TEMPERATURE_FEEDBACK_STRENGTH = 6;
+
 /**
  * Determine if the current weather state has lasted long enough to transition.
  */
@@ -145,19 +156,45 @@ export function applyWeatherModifiersToEnvironment(
     1
   );
 
-  const temperature = clampValueToRange(
-    baseTemperature + modifiers.temperatureOffset,
-    MINIMUM_TEMPERATURE_FOR_LIFE,
-    MAXIMUM_TEMPERATURE_FOR_LIFE
-  );
+  const evaporationPressure = calculateSunlightDrivenEvaporation(baseSunlight);
+  const condensationRecovery = calculateLowLightCondensation(baseSunlight);
 
   const moisture = clampValueToRange(
-    currentMoisture + modifiers.moistureChangePerTick,
+    currentMoisture + modifiers.moistureChangePerTick - evaporationPressure + condensationRecovery,
     MINIMUM_MOISTURE_FOR_LIFE,
     MAXIMUM_MOISTURE_FOR_LIFE
   );
 
+  const moistureDelta = moisture - currentMoisture;
+  const moistureTemperatureFeedback = -moistureDelta * MOISTURE_TEMPERATURE_FEEDBACK_STRENGTH;
+
+  const temperature = clampValueToRange(
+    baseTemperature + modifiers.temperatureOffset + moistureTemperatureFeedback,
+    MINIMUM_TEMPERATURE_FOR_LIFE,
+    MAXIMUM_TEMPERATURE_FOR_LIFE
+  );
+
   return { temperature, sunlight, moisture };
+}
+
+function calculateSunlightDrivenEvaporation(baseSunlight: number): number {
+  if (baseSunlight <= EVAPORATION_SUNLIGHT_THRESHOLD) {
+    return 0;
+  }
+
+  const normalizedIntensity =
+    (baseSunlight - EVAPORATION_SUNLIGHT_THRESHOLD) / (1 - EVAPORATION_SUNLIGHT_THRESHOLD);
+
+  return normalizedIntensity * MAX_SUNLIGHT_EVAPORATION_PER_TICK;
+}
+
+function calculateLowLightCondensation(baseSunlight: number): number {
+  if (baseSunlight >= CONDENSATION_SUNLIGHT_THRESHOLD) {
+    return 0;
+  }
+
+  const normalizedDarkness = (CONDENSATION_SUNLIGHT_THRESHOLD - baseSunlight) / CONDENSATION_SUNLIGHT_THRESHOLD;
+  return normalizedDarkness * MAX_LOW_LIGHT_CONDENSATION_PER_TICK;
 }
 
 /**
