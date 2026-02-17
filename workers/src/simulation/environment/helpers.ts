@@ -89,7 +89,7 @@ export function generateRandomPositionInGarden(
  */
 export function generatePositionNearParent(
   parentPosition: Position,
-  spreadRadius: number = 50,
+  spreadRadius: number = 75,
   width: number = DEFAULT_SIMULATION_CONFIG.gardenWidth,
   height: number = DEFAULT_SIMULATION_CONFIG.gardenHeight
 ): Position {
