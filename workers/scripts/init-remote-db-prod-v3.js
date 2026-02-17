@@ -1007,7 +1007,11 @@ function runVerification(commandOptions) {
   assertVerification('minimum plant count', plants >= CANDIDATE_COUNT_BOUNDS.minPlants, `Expected plants >= ${CANDIDATE_COUNT_BOUNDS.minPlants}, got ${plants}.`);
   assertVerification('minimum herbivore count', herbivores >= CANDIDATE_COUNT_BOUNDS.minHerbivores, `Expected herbivores >= ${CANDIDATE_COUNT_BOUNDS.minHerbivores}, got ${herbivores}.`);
   assertVerification('minimum carnivore count', carnivores >= CANDIDATE_COUNT_BOUNDS.minCarnivores, `Expected carnivores >= ${CANDIDATE_COUNT_BOUNDS.minCarnivores}, got ${carnivores}.`);
-  assertVerification('fungi range', fungi >= 1 && fungi <= 2, `Expected fungi in [1,2], got ${fungi}.`);
+  assertVerification(
+    'fungi range',
+    fungi >= CANDIDATE_COUNT_BOUNDS.minFungi && fungi <= CANDIDATE_COUNT_BOUNDS.maxFungi,
+    `Expected fungi in [${CANDIDATE_COUNT_BOUNDS.minFungi},${CANDIDATE_COUNT_BOUNDS.maxFungi}], got ${fungi}.`
+  );
 
   const entityRows = executeSqlRowsJson(
     `SELECT type, name, species, position_x, position_y, traits

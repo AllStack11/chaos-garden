@@ -7,6 +7,10 @@
 
 import type { Entity } from '../../../env.d.ts';
 import type { PlantVisual } from '../PlantVisualSystem.ts';
+import {
+  calculateFlowerBloomGeometry,
+  calculateLilyBloomGeometry,
+} from './bloomGeometry.ts';
 
 // blue plant hue
 const BLUE_PLANT_BASE_HUE = 210;
@@ -14,7 +18,6 @@ const BROWN_PLANT_BASE_HUE = 28;
 
 // Maximum growth constraints to prevent visual "gigantism"
 const MAX_BASE_PLANT_SIZE = 42;
-const MAX_PETAL_RADIUS = 6.5; // Slightly increased but still strictly capped
 const VINE_SIZE_NORMALIZATION_FACTOR = 0.72;
 
 function clampToRange(value: number, min: number, max: number): number {
@@ -294,22 +297,21 @@ export class PlantRenderer {
 
     const baseHue = 220 + visual.baseHue;
     const petalStretch = 1 + visual.genome.plant.petalDeformation * 0.25;
-
-    // Cap the bloom size for petal calculations
-    // size is already clamped by calculateSize, but we clamp further for the bloom
-    const cappedBloomSize = Math.min(size, MAX_PETAL_RADIUS * 2.5);
+    const bloomGeometry = calculateFlowerBloomGeometry(size, petalStretch);
 
     // Outer petals
     for (let i = 0; i < petalCount; i++) {
       const angle = (i / petalCount) * Math.PI * 2 + time * 0.1;
       this.ctx.fillStyle = `hsl(${baseHue + 20}, ${70 + visual.saturation}%, ${60 + visual.baseHue / 2}%)`;
       this.ctx.beginPath();
-      const petalWidth = Math.min(cappedBloomSize * 0.35 * petalStretch, MAX_PETAL_RADIUS);
-      const petalHeight = Math.min(cappedBloomSize * 0.17, MAX_PETAL_RADIUS * 0.5);
       this.ctx.ellipse(
-        x + Math.cos(angle) * cappedBloomSize * 0.25,
-        y + Math.sin(angle) * cappedBloomSize * 0.25,
-        petalWidth, petalHeight, angle, 0, Math.PI * 2
+        x + Math.cos(angle) * bloomGeometry.bloomSize * 0.25,
+        y + Math.sin(angle) * bloomGeometry.bloomSize * 0.25,
+        bloomGeometry.outerPetalWidth,
+        bloomGeometry.outerPetalHeight,
+        angle,
+        0,
+        Math.PI * 2
       );
       this.ctx.fill();
     }
@@ -319,12 +321,14 @@ export class PlantRenderer {
       const angle = (i / (petalCount / 2)) * Math.PI * 2 + Math.PI / petalCount + time * 0.1;
       this.ctx.fillStyle = `hsl(${baseHue}, ${75 + visual.saturation}%, ${65 + visual.baseHue / 2}%)`;
       this.ctx.beginPath();
-      const innerPetalWidth = Math.min(cappedBloomSize * 0.22 * petalStretch, MAX_PETAL_RADIUS * 0.6);
-      const innerPetalHeight = Math.min(cappedBloomSize * 0.1, MAX_PETAL_RADIUS * 0.3);
       this.ctx.ellipse(
-        x + Math.cos(angle) * cappedBloomSize * 0.12,
-        y + Math.sin(angle) * cappedBloomSize * 0.12,
-        innerPetalWidth, innerPetalHeight, angle, 0, Math.PI * 2
+        x + Math.cos(angle) * bloomGeometry.bloomSize * 0.12,
+        y + Math.sin(angle) * bloomGeometry.bloomSize * 0.12,
+        bloomGeometry.innerPetalWidth,
+        bloomGeometry.innerPetalHeight,
+        angle,
+        0,
+        Math.PI * 2
       );
       this.ctx.fill();
     }
@@ -332,7 +336,7 @@ export class PlantRenderer {
     // Center
     this.ctx.fillStyle = this.getBrownPlantColor(visual, 8, 52, 48);
     this.ctx.beginPath();
-    this.ctx.arc(x, y, size * 0.18, 0, Math.PI * 2);
+    this.ctx.arc(x, y, bloomGeometry.centerRadius, 0, Math.PI * 2);
     this.ctx.fill();
 
     // Stamens
@@ -340,7 +344,13 @@ export class PlantRenderer {
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2 + time * 0.2;
       this.ctx.beginPath();
-      this.ctx.arc(x + Math.cos(angle) * size * 0.09, y + Math.sin(angle) * size * 0.09, 2, 0, Math.PI * 2);
+      this.ctx.arc(
+        x + Math.cos(angle) * bloomGeometry.stamenOrbitRadius,
+        y + Math.sin(angle) * bloomGeometry.stamenOrbitRadius,
+        2,
+        0,
+        Math.PI * 2
+      );
       this.ctx.fill();
     }
   }
@@ -516,6 +526,7 @@ export class PlantRenderer {
     if (!this.ctx) return;
     
     const baseHue = 180 + visual.baseHue;
+    const bloomGeometry = calculateLilyBloomGeometry(size);
     
     // Outer petals (trumpet shape)
     for (let i = 0; i < 6; i++) {
@@ -523,9 +534,13 @@ export class PlantRenderer {
       this.ctx.fillStyle = `hsl(${baseHue + 20}, ${40 + visual.saturation}%, ${90 + visual.baseHue / 2}%)`;
       this.ctx.beginPath();
       this.ctx.ellipse(
-        x + Math.cos(angle) * size * 0.3,
-        y + Math.sin(angle) * size * 0.3,
-        size * 0.5, size * 0.25, angle, 0, Math.PI * 2
+        x + Math.cos(angle) * bloomGeometry.petalOffsetRadius,
+        y + Math.sin(angle) * bloomGeometry.petalOffsetRadius,
+        bloomGeometry.petalWidth,
+        bloomGeometry.petalHeight,
+        angle,
+        0,
+        Math.PI * 2
       );
       this.ctx.fill();
     }
@@ -533,13 +548,13 @@ export class PlantRenderer {
     // Inner trumpet tube
     this.ctx.fillStyle = `hsl(${baseHue + 10}, ${30}%, ${88 + visual.baseHue / 2}%)`;
     this.ctx.beginPath();
-    this.ctx.ellipse(x, y, size * 0.35, size * 0.4, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(x, y, bloomGeometry.tubeWidth, bloomGeometry.tubeHeight, 0, 0, Math.PI * 2);
     this.ctx.fill();
     
     // Center (stigma)
     this.ctx.fillStyle = this.getBrownPlantColor(visual, 6, 46, 56);
     this.ctx.beginPath();
-    this.ctx.arc(x, y, size * 0.15, 0, Math.PI * 2);
+    this.ctx.arc(x, y, bloomGeometry.centerRadius, 0, Math.PI * 2);
     this.ctx.fill();
   }
   
