@@ -127,15 +127,15 @@ export function deriveSoundscapeState(input: SoundscapeInput): DerivedSoundscape
   });
 
   const layerTargets: SoundscapeLayerTargets = {
-    windLevel: clamp(0.04 + weatherWindBoost * 0.2 + eventIntensity * 0.03, 0, 0.3),
-    windFilterHz: clamp(1200 + weatherBrightness * 2800 + (1 - dayNightBlend) * 400, 700, 4600),
-    droneLevel: clamp(0.05 + (1 - populationTension) * 0.04 + (1 - weatherWindBoost) * 0.03, 0.04, 0.18),
-    droneFilterHz: clamp(320 + dayNightBlend * 1300 * weatherBrightness, 220, 2200),
-    droneFrequencyHz: clamp(56 + dayNightBlend * 38 + (weatherBrightness - 0.5) * 9, 45, 110),
-    biophonyLevel: clamp(0.02 + biodiversity * 0.08 * weatherBiophony + (1 - populationTension) * 0.015, 0.01, 0.16),
-    biophonyPulseRateHz: clamp(0.08 + dayNightBlend * 0.18 + populationTension * 0.12, 0.08, 0.45),
-    tensionLevel: clamp(0.01 + populationTension * 0.14 + weatherRumble * 0.05 + eventIntensity * 0.05, 0.01, 0.26),
-    tensionFilterHz: clamp(90 + populationTension * 160 + weatherRumble * 80, 70, 380),
+    windLevel: clamp(0.007 + weatherWindBoost * 0.055 + eventIntensity * 0.007, 0.003, 0.095),
+    windFilterHz: clamp(480 + weatherBrightness * 820 + (1 - dayNightBlend) * 130, 380, 1450),
+    droneLevel: clamp(0.075 + (1 - populationTension) * 0.04 + (1 - weatherWindBoost) * 0.016, 0.055, 0.17),
+    droneFilterHz: clamp(480 + dayNightBlend * 760 * weatherBrightness, 360, 1350),
+    droneFrequencyHz: clamp(74 + dayNightBlend * 18 + (weatherBrightness - 0.5) * 4, 66, 98),
+    biophonyLevel: clamp(0.011 + biodiversity * 0.04 * weatherBiophony + (1 - populationTension) * 0.008, 0.004, 0.075),
+    biophonyPulseRateHz: clamp(0.055 + dayNightBlend * 0.11 + populationTension * 0.05, 0.05, 0.26),
+    tensionLevel: clamp(0.005 + populationTension * 0.055 + weatherRumble * 0.02 + eventIntensity * 0.02, 0.003, 0.095),
+    tensionFilterHz: clamp(75 + populationTension * 80 + weatherRumble * 38, 55, 220),
   };
 
   return {
@@ -193,8 +193,25 @@ function createNoiseBuffer(context: AudioContext): AudioBuffer {
   const buffer = context.createBuffer(1, frameCount, context.sampleRate);
   const channelData = buffer.getChannelData(0);
 
+  let b0 = 0;
+  let b1 = 0;
+  let b2 = 0;
+  let b3 = 0;
+  let b4 = 0;
+  let b5 = 0;
+  let b6 = 0;
+
   for (let index = 0; index < frameCount; index += 1) {
-    channelData[index] = Math.random() * 2 - 1;
+    const white = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + white * 0.0555179;
+    b1 = 0.99332 * b1 + white * 0.0750759;
+    b2 = 0.969 * b2 + white * 0.153852;
+    b3 = 0.8665 * b3 + white * 0.3104856;
+    b4 = 0.55 * b4 + white * 0.5329522;
+    b5 = -0.7616 * b5 - white * 0.016898;
+    const pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+    b6 = white * 0.115926;
+    channelData[index] = pink * 0.1;
   }
 
   return buffer;
@@ -211,6 +228,7 @@ function createLoopedNoiseNode(context: AudioContext, buffer: AudioBuffer): Audi
 export class WebAudioSoundscapeEngine implements SoundscapeEngine {
   private readonly context: AudioContext;
   private readonly masterGain: GainNode;
+  private readonly masterToneFilter: BiquadFilterNode;
   private readonly compressor: DynamicsCompressorNode;
 
   private readonly windGain: GainNode;
@@ -225,6 +243,12 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
   private readonly biophonyPulseGain: GainNode;
   private readonly biophonyPulseOsc: OscillatorNode;
   private biophonyLfo: number | null = null;
+  private droneWowTimer: number | null = null;
+  private windDriftTimer: number | null = null;
+  private wowPhase = 0;
+  private windPhase = 0;
+  private targetDroneFrequencyHz = 86;
+  private targetWindLevel = 0.01;
 
   private readonly tensionGain: GainNode;
   private readonly tensionFilter: BiquadFilterNode;
@@ -242,24 +266,29 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
 
     this.masterGain = context.createGain();
     this.masterGain.gain.value = 0;
+    this.masterToneFilter = context.createBiquadFilter();
+    this.masterToneFilter.type = 'lowpass';
+    this.masterToneFilter.frequency.value = 2400;
+    this.masterToneFilter.Q.value = 0.52;
 
     this.compressor = context.createDynamicsCompressor();
-    this.compressor.threshold.value = -22;
-    this.compressor.knee.value = 28;
-    this.compressor.ratio.value = 3;
-    this.compressor.attack.value = 0.012;
-    this.compressor.release.value = 0.25;
+    this.compressor.threshold.value = -26;
+    this.compressor.knee.value = 32;
+    this.compressor.ratio.value = 2;
+    this.compressor.attack.value = 0.03;
+    this.compressor.release.value = 0.4;
 
-    this.masterGain.connect(this.compressor);
+    this.masterGain.connect(this.masterToneFilter);
+    this.masterToneFilter.connect(this.compressor);
     this.compressor.connect(context.destination);
 
     this.noiseBuffer = createNoiseBuffer(context);
 
     this.windSource = createLoopedNoiseNode(context, this.noiseBuffer);
     this.windFilter = context.createBiquadFilter();
-    this.windFilter.type = 'bandpass';
-    this.windFilter.frequency.value = 2200;
-    this.windFilter.Q.value = 0.45;
+    this.windFilter.type = 'lowpass';
+    this.windFilter.frequency.value = 900;
+    this.windFilter.Q.value = 0.18;
     this.windGain = context.createGain();
     this.windGain.gain.value = 0;
     this.windSource.connect(this.windFilter);
@@ -267,11 +296,11 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
     this.windGain.connect(this.masterGain);
 
     this.droneOscA = context.createOscillator();
-    this.droneOscA.type = 'triangle';
-    this.droneOscA.frequency.value = 74;
+    this.droneOscA.type = 'sine';
+    this.droneOscA.frequency.value = 82;
     this.droneOscB = context.createOscillator();
-    this.droneOscB.type = 'sine';
-    this.droneOscB.frequency.value = 111;
+    this.droneOscB.type = 'triangle';
+    this.droneOscB.frequency.value = 123;
     this.droneFilter = context.createBiquadFilter();
     this.droneFilter.type = 'lowpass';
     this.droneFilter.frequency.value = 900;
@@ -286,7 +315,7 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
 
     this.biophonyPulseOsc = context.createOscillator();
     this.biophonyPulseOsc.type = 'sine';
-    this.biophonyPulseOsc.frequency.value = 260;
+    this.biophonyPulseOsc.frequency.value = 160;
     this.biophonyPulseGain = context.createGain();
     this.biophonyPulseGain.gain.value = 0;
     this.biophonyGain = context.createGain();
@@ -299,17 +328,20 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
     this.tensionNoiseSource = createLoopedNoiseNode(context, this.noiseBuffer);
     this.tensionFilter = context.createBiquadFilter();
     this.tensionFilter.type = 'lowpass';
-    this.tensionFilter.frequency.value = 150;
+    this.tensionFilter.frequency.value = 110;
     this.tensionGain = context.createGain();
     this.tensionGain.gain.value = 0;
     this.tensionOsc = context.createOscillator();
-    this.tensionOsc.type = 'sawtooth';
-    this.tensionOsc.frequency.value = 42;
+    this.tensionOsc.type = 'sine';
+    this.tensionOsc.frequency.value = 32;
     this.tensionNoiseSource.connect(this.tensionFilter);
     this.tensionOsc.connect(this.tensionFilter);
     this.tensionFilter.connect(this.tensionGain);
     this.tensionGain.connect(this.masterGain);
     this.tensionOsc.start();
+
+    this.scheduleDroneWow();
+    this.scheduleWindDrift();
   }
 
   setMasterVolume(volume: number): void {
@@ -332,20 +364,23 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
     const now = this.context.currentTime;
     const targets = state.layerTargets;
 
+    this.targetWindLevel = targets.windLevel;
     scheduleSmoothedValue(this.windGain.gain, targets.windLevel, now, 0.42);
     scheduleSmoothedValue(this.windFilter.frequency, targets.windFilterHz, now, 0.5);
+    scheduleSmoothedValue(this.masterToneFilter.frequency, 1700 + state.dayNightBlend * 620, now, 0.6);
 
     scheduleSmoothedValue(this.droneGain.gain, targets.droneLevel, now, 0.44);
     scheduleSmoothedValue(this.droneFilter.frequency, targets.droneFilterHz, now, 0.44);
-    scheduleSmoothedValue(this.droneOscA.frequency, targets.droneFrequencyHz, now, 0.38);
-    scheduleSmoothedValue(this.droneOscB.frequency, targets.droneFrequencyHz * 1.5, now, 0.38);
+    this.targetDroneFrequencyHz = targets.droneFrequencyHz;
+    scheduleSmoothedValue(this.droneOscA.frequency, targets.droneFrequencyHz, now, 0.46);
+    scheduleSmoothedValue(this.droneOscB.frequency, targets.droneFrequencyHz * 1.498, now, 0.46);
 
     scheduleSmoothedValue(this.biophonyGain.gain, targets.biophonyLevel, now, 0.4);
-    scheduleSmoothedValue(this.biophonyPulseOsc.frequency, 180 + targets.biophonyPulseRateHz * 320, now, 0.3);
+    scheduleSmoothedValue(this.biophonyPulseOsc.frequency, 110 + targets.biophonyPulseRateHz * 140, now, 0.4);
 
     scheduleSmoothedValue(this.tensionGain.gain, targets.tensionLevel, now, 0.32);
     scheduleSmoothedValue(this.tensionFilter.frequency, targets.tensionFilterHz, now, 0.35);
-    scheduleSmoothedValue(this.tensionOsc.frequency, 32 + state.populationTension * 28, now, 0.35);
+    scheduleSmoothedValue(this.tensionOsc.frequency, 24 + state.populationTension * 14, now, 0.4);
 
     this.scheduleBiophonyPulse(targets.biophonyPulseRateHz, targets.biophonyLevel);
   }
@@ -358,12 +393,12 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
 
     const pulseIntervalMs = clamp(1000 / Math.max(0.05, pulseRateHz), 400, 5000);
     const now = this.context.currentTime;
-    const pulsePeak = clamp(level * 1.8, 0, 0.22);
+    const pulsePeak = clamp(level * 1.35, 0, 0.085);
 
     this.biophonyPulseGain.gain.cancelScheduledValues(now);
     this.biophonyPulseGain.gain.setValueAtTime(0.0001, now);
-    this.biophonyPulseGain.gain.linearRampToValueAtTime(pulsePeak, now + 0.07);
-    this.biophonyPulseGain.gain.setTargetAtTime(0.0001, now + 0.08, 0.22);
+    this.biophonyPulseGain.gain.linearRampToValueAtTime(pulsePeak, now + 0.15);
+    this.biophonyPulseGain.gain.setTargetAtTime(0.0001, now + 0.2, 0.42);
 
     this.biophonyLfo = window.setTimeout(() => {
       this.scheduleBiophonyPulse(pulseRateHz, level);
@@ -380,42 +415,83 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
 
     limitedAccents.forEach((accent, index) => {
       const offset = now + index * 0.08;
-      const amplitude = clamp(0.02 + accent.intensity * 0.04, 0.015, 0.07);
+      const amplitude = clamp(0.004 + accent.intensity * 0.012, 0.003, 0.016);
       const baseFrequency = accent.type === 'BIRTH'
-        ? 420
+        ? 300
         : accent.type === 'DEATH'
-          ? 180
+          ? 156
           : accent.type === 'MUTATION'
-            ? 330
+            ? 246
             : accent.type === 'EXTINCTION'
-              ? 120
+              ? 110
               : accent.type === 'POPULATION_EXPLOSION'
-                ? 260
-                : 150;
+                ? 220
+                : 132;
 
       const tone = this.context.createOscillator();
-      tone.type = accent.type === 'DEATH' || accent.type === 'EXTINCTION' ? 'triangle' : 'sine';
+      tone.type = accent.type === 'MUTATION' ? 'triangle' : 'sine';
       tone.frequency.value = baseFrequency;
+
+      const toneFilter = this.context.createBiquadFilter();
+      toneFilter.type = 'lowpass';
+      toneFilter.frequency.value = 900;
+      toneFilter.Q.value = 0.5;
 
       const gain = this.context.createGain();
       gain.gain.value = 0;
 
-      tone.connect(gain);
+      tone.connect(toneFilter);
+      toneFilter.connect(gain);
       gain.connect(this.masterGain);
 
       tone.start(offset);
       gain.gain.setValueAtTime(0, offset);
-      gain.gain.linearRampToValueAtTime(amplitude, offset + 0.03);
-      gain.gain.setTargetAtTime(0.0001, offset + 0.04, 0.16);
+      gain.gain.linearRampToValueAtTime(amplitude, offset + 0.1);
+      gain.gain.setTargetAtTime(0.0001, offset + 0.12, 0.34);
 
-      tone.frequency.setTargetAtTime(baseFrequency * 0.78, offset + 0.02, 0.18);
-      tone.stop(offset + 0.35);
+      tone.frequency.setTargetAtTime(baseFrequency * 0.9, offset + 0.07, 0.34);
+      tone.stop(offset + 0.62);
 
       window.setTimeout(() => {
         tone.disconnect();
+        toneFilter.disconnect();
         gain.disconnect();
-      }, 500);
+      }, 780);
     });
+  }
+
+  private scheduleDroneWow(): void {
+    if (this.droneWowTimer) {
+      window.clearTimeout(this.droneWowTimer);
+      this.droneWowTimer = null;
+    }
+
+    this.wowPhase += 0.23;
+    const wowCents = Math.sin(this.wowPhase) * 4 + Math.sin(this.wowPhase * 0.6) * 1.8;
+    const ratio = Math.pow(2, wowCents / 1200);
+    const now = this.context.currentTime;
+    scheduleSmoothedValue(this.droneOscA.frequency, this.targetDroneFrequencyHz * ratio, now, 0.22);
+    scheduleSmoothedValue(this.droneOscB.frequency, this.targetDroneFrequencyHz * 1.498 * ratio, now, 0.22);
+
+    this.droneWowTimer = window.setTimeout(() => {
+      this.scheduleDroneWow();
+    }, 260);
+  }
+
+  private scheduleWindDrift(): void {
+    if (this.windDriftTimer) {
+      window.clearTimeout(this.windDriftTimer);
+      this.windDriftTimer = null;
+    }
+
+    this.windPhase += 0.31;
+    const drift = 0.88 + (Math.sin(this.windPhase) * 0.06 + Math.sin(this.windPhase * 0.43) * 0.04);
+    const now = this.context.currentTime;
+    scheduleSmoothedValue(this.windGain.gain, clamp(this.targetWindLevel * drift, 0.002, 0.12), now, 0.3);
+
+    this.windDriftTimer = window.setTimeout(() => {
+      this.scheduleWindDrift();
+    }, 340);
   }
 
   async suspend(): Promise<void> {
@@ -434,6 +510,14 @@ export class WebAudioSoundscapeEngine implements SoundscapeEngine {
     if (this.biophonyLfo) {
       window.clearTimeout(this.biophonyLfo);
       this.biophonyLfo = null;
+    }
+    if (this.droneWowTimer) {
+      window.clearTimeout(this.droneWowTimer);
+      this.droneWowTimer = null;
+    }
+    if (this.windDriftTimer) {
+      window.clearTimeout(this.windDriftTimer);
+      this.windDriftTimer = null;
     }
     this.windSource.stop();
     this.tensionNoiseSource.stop();

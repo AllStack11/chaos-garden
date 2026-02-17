@@ -2,36 +2,50 @@
 /**
  * Ambient Sound Control
  *
- * Compact bottom-right audio control with mute + volume.
+ * Minimal icon-first control with a compact volume popover.
  */
 ---
 
 <ambient-sound-control class="pointer-events-auto fixed bottom-4 right-4 z-30 block select-none">
-  <div
-    data-audio-chip
-    class="flex items-center gap-2 rounded-full border border-emerald-200/20 bg-[#071711]/82 px-3 py-2 text-[11px] text-emerald-50/90 backdrop-blur-md shadow-[0_8px_22px_rgba(0,0,0,0.35)]"
-  >
+  <div class="relative">
     <button
       type="button"
       data-audio-toggle
       aria-label="Toggle ambient sound"
-      class="rounded-full border border-emerald-200/25 bg-emerald-300/10 px-2 py-1 font-mono tracking-wide text-emerald-100/95 transition-colors hover:bg-emerald-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/80"
+      aria-haspopup="true"
+      class="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-[#071711]/78 text-emerald-100/90 backdrop-blur-md transition-colors hover:bg-[#0b2018]/84 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/70"
     >
-      Muted
+      <svg data-icon-on xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+        <path d="M18.5 6a9 9 0 0 1 0 12"></path>
+      </svg>
+      <svg data-icon-off xmlns="http://www.w3.org/2000/svg" class="hidden h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <line x1="23" y1="9" x2="17" y2="15"></line>
+        <line x1="17" y1="9" x2="23" y2="15"></line>
+      </svg>
+      <svg data-icon-disabled xmlns="http://www.w3.org/2000/svg" class="hidden h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle>
+        <line x1="8" y1="8" x2="16" y2="16"></line>
+      </svg>
     </button>
 
-    <input
-      data-audio-volume
-      type="range"
-      min="0"
-      max="100"
-      step="1"
-      value="55"
-      aria-label="Ambient sound volume"
-      class="h-1.5 w-24 cursor-pointer accent-emerald-300"
-    />
-
-    <span data-audio-status class="min-w-[56px] text-right font-mono uppercase tracking-wider text-emerald-50/75">Muted</span>
+    <div
+      data-audio-panel
+      class="pointer-events-none absolute bottom-12 right-0 w-32 translate-y-1 rounded-xl border border-white/15 bg-[#071711]/86 px-3 py-2 opacity-0 backdrop-blur-md transition-all duration-200"
+    >
+      <input
+        data-audio-volume
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value="55"
+        aria-label="Ambient sound volume"
+        class="h-1.5 w-full cursor-pointer accent-emerald-300"
+      />
+    </div>
   </div>
 </ambient-sound-control>
 
@@ -41,20 +55,36 @@
   class AmbientSoundControl extends HTMLElement {
     private toggleButton: HTMLButtonElement | null = null;
     private volumeInput: HTMLInputElement | null = null;
-    private statusText: HTMLElement | null = null;
+    private panel: HTMLElement | null = null;
+    private iconOn: SVGElement | null = null;
+    private iconOff: SVGElement | null = null;
+    private iconDisabled: SVGElement | null = null;
 
     private muted = true;
     private userEnabled = false;
+    private hidePanelTimer: number | null = null;
 
     connectedCallback() {
       this.toggleButton = this.querySelector('[data-audio-toggle]');
       this.volumeInput = this.querySelector('[data-audio-volume]');
-      this.statusText = this.querySelector('[data-audio-status]');
+      this.panel = this.querySelector('[data-audio-panel]');
+      this.iconOn = this.querySelector('[data-icon-on]');
+      this.iconOff = this.querySelector('[data-icon-off]');
+      this.iconDisabled = this.querySelector('[data-icon-disabled]');
 
       this.toggleButton?.addEventListener('click', this.handleToggleClick);
+      this.toggleButton?.addEventListener('mouseenter', this.showPanel);
+      this.toggleButton?.addEventListener('focus', this.showPanel);
+      this.toggleButton?.addEventListener('mouseleave', this.scheduleHidePanel);
+      this.toggleButton?.addEventListener('blur', this.scheduleHidePanel);
+
+      this.panel?.addEventListener('mouseenter', this.showPanel);
+      this.panel?.addEventListener('mouseleave', this.scheduleHidePanel);
+
       this.volumeInput?.addEventListener('input', this.handleVolumeInput);
-      this.addEventListener('pointerdown', this.handlePointerGesture);
-      this.addEventListener('keydown', this.handleKeyboardGesture);
+      this.volumeInput?.addEventListener('focus', this.showPanel);
+      this.volumeInput?.addEventListener('blur', this.scheduleHidePanel);
+
       this.addEventListener('audio-state-changed', this.handleAudioStateChanged as EventListener);
 
       this.renderState({ isSupported: true, muted: true, volume: 0.55, userEnabled: false });
@@ -62,14 +92,30 @@
 
     disconnectedCallback() {
       this.toggleButton?.removeEventListener('click', this.handleToggleClick);
+      this.toggleButton?.removeEventListener('mouseenter', this.showPanel);
+      this.toggleButton?.removeEventListener('focus', this.showPanel);
+      this.toggleButton?.removeEventListener('mouseleave', this.scheduleHidePanel);
+      this.toggleButton?.removeEventListener('blur', this.scheduleHidePanel);
+
+      this.panel?.removeEventListener('mouseenter', this.showPanel);
+      this.panel?.removeEventListener('mouseleave', this.scheduleHidePanel);
+
       this.volumeInput?.removeEventListener('input', this.handleVolumeInput);
-      this.removeEventListener('pointerdown', this.handlePointerGesture);
-      this.removeEventListener('keydown', this.handleKeyboardGesture);
+      this.volumeInput?.removeEventListener('focus', this.showPanel);
+      this.volumeInput?.removeEventListener('blur', this.scheduleHidePanel);
+
       this.removeEventListener('audio-state-changed', this.handleAudioStateChanged as EventListener);
+
+      if (this.hidePanelTimer) {
+        window.clearTimeout(this.hidePanelTimer);
+        this.hidePanelTimer = null;
+      }
     }
 
     private readonly handleToggleClick = () => {
       this.dispatchUserGesture();
+      this.showPanel();
+
       const nextMuted = !this.muted;
       this.dispatchEvent(new CustomEvent<{ muted: boolean }>('audio-toggle-requested', {
         detail: { muted: nextMuted },
@@ -80,6 +126,8 @@
 
     private readonly handleVolumeInput = (event: Event) => {
       this.dispatchUserGesture();
+      this.showPanel();
+
       const target = event.target as HTMLInputElement;
       const normalizedVolume = Number.parseFloat(target.value) / 100;
       this.dispatchEvent(new CustomEvent<{ volume: number }>('audio-volume-changed', {
@@ -87,16 +135,6 @@
         bubbles: true,
         composed: true,
       }));
-    };
-
-    private readonly handlePointerGesture = () => {
-      this.dispatchUserGesture();
-    };
-
-    private readonly handleKeyboardGesture = (event: KeyboardEvent) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        this.dispatchUserGesture();
-      }
     };
 
     private readonly handleAudioStateChanged = (event: CustomEvent<SoundscapeUiState>) => {
@@ -114,36 +152,61 @@
       }));
     }
 
+    private readonly showPanel = () => {
+      if (!this.panel) {
+        return;
+      }
+
+      if (this.hidePanelTimer) {
+        window.clearTimeout(this.hidePanelTimer);
+        this.hidePanelTimer = null;
+      }
+
+      this.panel.classList.remove('pointer-events-none', 'opacity-0', 'translate-y-1');
+      this.panel.classList.add('pointer-events-auto', 'opacity-100', 'translate-y-0');
+    };
+
+    private readonly scheduleHidePanel = () => {
+      if (this.hidePanelTimer) {
+        window.clearTimeout(this.hidePanelTimer);
+      }
+
+      this.hidePanelTimer = window.setTimeout(() => {
+        if (!this.panel) {
+          return;
+        }
+
+        this.panel.classList.remove('pointer-events-auto', 'opacity-100', 'translate-y-0');
+        this.panel.classList.add('pointer-events-none', 'opacity-0', 'translate-y-1');
+      }, 180);
+    };
+
     private renderState(state: SoundscapeUiState) {
       this.muted = state.muted;
       this.userEnabled = state.userEnabled;
 
-      if (!this.toggleButton || !this.volumeInput || !this.statusText) {
+      if (!this.toggleButton || !this.volumeInput || !this.iconOn || !this.iconOff || !this.iconDisabled) {
         return;
       }
 
       const volumePercent = Math.round(state.volume * 100);
-
-      if (!state.isSupported) {
-        this.toggleButton.disabled = true;
-        this.volumeInput.disabled = true;
-        this.toggleButton.textContent = 'Audio N/A';
-        this.statusText.textContent = 'Unsupported';
-        return;
-      }
-
-      this.toggleButton.disabled = false;
-      this.volumeInput.disabled = false;
       this.volumeInput.value = String(volumePercent);
 
-      if (!state.userEnabled) {
-        this.toggleButton.textContent = 'Enable';
-        this.statusText.textContent = 'Tap to enable';
-        return;
-      }
+      this.toggleButton.disabled = !state.isSupported;
+      this.volumeInput.disabled = !state.isSupported;
 
-      this.toggleButton.textContent = state.muted ? 'Muted' : 'Sound On';
-      this.statusText.textContent = state.muted ? 'Muted' : `${volumePercent}%`;
+      this.toggleButton.setAttribute(
+        'aria-label',
+        !state.isSupported
+          ? 'Ambient sound unavailable'
+          : state.muted
+            ? 'Enable ambient sound'
+            : 'Mute ambient sound',
+      );
+
+      this.iconDisabled.classList.toggle('hidden', state.isSupported);
+      this.iconOff.classList.toggle('hidden', !state.isSupported || (!state.userEnabled || !state.muted));
+      this.iconOn.classList.toggle('hidden', !state.isSupported || (state.userEnabled && state.muted));
     }
   }
 
