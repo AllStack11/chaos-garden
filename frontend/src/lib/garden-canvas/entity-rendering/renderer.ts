@@ -109,23 +109,37 @@ export class GardenEntityRenderer {
     config: EntityRenderConfig,
   ): void {
     const preparedEntities = this.prepareEntities(entities, config);
+    const shadowDirectionRadians = config.lighting.sunDirection + Math.PI;
+    const shadowDirectionX = Math.cos(shadowDirectionRadians);
+    const shadowDirectionY = Math.sin(shadowDirectionRadians);
+    const normalizedSunlight = clampToUnit(config.lighting.sunlight);
+    const shadowVisibility = calculateShadowVisibilityForTimePhase(config.timePhase, normalizedSunlight);
+    const shadowStretch = Math.max(0, 1 - normalizedSunlight);
+    const baseShadowOpacity = 0.04 + config.lighting.shadowStrength * 0.17;
+    const shadowOpacity = baseShadowOpacity * shadowVisibility;
+    const shadowRotation = Math.atan2(shadowDirectionY, shadowDirectionX);
+
+    if (shadowOpacity <= 0.01) {
+      return;
+    }
 
     preparedEntities.forEach((prepared) => {
       if (!prepared.entity.isAlive) return;
-
-      const shadowDirectionX = Math.cos(config.lighting.sunDirection + Math.PI);
-      const shadowDirectionY = Math.sin(config.lighting.sunDirection + Math.PI);
-      const shadowLength = 8 + (1 - config.lighting.sunlight) * 18;
+      const anchorDistance = prepared.radius * (0.24 + shadowStretch * 0.55);
+      const shadowCenterX = prepared.x + shadowDirectionX * anchorDistance;
+      const shadowCenterY = prepared.y + shadowDirectionY * anchorDistance + prepared.radius * 0.08;
+      const shadowRadiusX = prepared.radius * (0.62 + shadowStretch * 1.05);
+      const shadowRadiusY = prepared.radius * (0.24 + shadowStretch * 0.18);
 
       ctx.save();
-      ctx.fillStyle = `rgba(3, 8, 6, ${0.08 + config.lighting.shadowStrength * 0.18})`;
+      ctx.fillStyle = `rgba(3, 8, 6, ${shadowOpacity})`;
       ctx.beginPath();
       ctx.ellipse(
-        prepared.x + shadowDirectionX * shadowLength,
-        prepared.y + shadowDirectionY * shadowLength,
-        prepared.radius * 0.9,
-        prepared.radius * 0.35,
-        shadowDirectionX * 0.25,
+        shadowCenterX,
+        shadowCenterY,
+        shadowRadiusX,
+        shadowRadiusY,
+        shadowRotation,
         0,
         Math.PI * 2,
       );
@@ -541,6 +555,25 @@ function drawSelectionRing(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.beginPath();
   ctx.arc(x, y, radius + 12, 0, Math.PI * 2);
   ctx.stroke();
+}
+
+function clampToUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function calculateShadowVisibilityForTimePhase(
+  timePhase: EntityRenderConfig['timePhase'],
+  sunlight: number,
+): number {
+  if (timePhase === 'night') {
+    return 0.14 + sunlight * 0.2;
+  }
+
+  if (timePhase === 'dawn' || timePhase === 'dusk') {
+    return 0.42 + sunlight * 0.5;
+  }
+
+  return 0.65 + sunlight * 0.35;
 }
 
 function buildRuntimeVisualState(entity: Entity, config: EntityRenderConfig): RuntimeVisualState {

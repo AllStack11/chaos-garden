@@ -18,6 +18,7 @@ const BROWN_PLANT_BASE_HUE = 28;
 
 // Maximum growth constraints to prevent visual "gigantism"
 const MAX_BASE_PLANT_SIZE = 42;
+const MAX_BASE_VINE_SIZE = 28;
 const VINE_SIZE_NORMALIZATION_FACTOR = 0.72;
 
 function clampToRange(value: number, min: number, max: number): number {
@@ -153,6 +154,7 @@ export class PlantRenderer {
     // their base scale to keep them visually aligned with other plant silhouettes.
     if (visual.plantType === 'vine') {
       baseSize *= VINE_SIZE_NORMALIZATION_FACTOR;
+      return Math.min(baseSize, MAX_BASE_VINE_SIZE);
     }
 
     return Math.min(baseSize, MAX_BASE_PLANT_SIZE);
