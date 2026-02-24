@@ -75,7 +75,7 @@ export async function processEntitiesForTick(
       continue;
     }
 
-    const offspring = await processPlantBehaviorDuringTick(plant, environment, eventLogger);
+    const offspring = await processPlantBehaviorDuringTick(plant, environment, plants, eventLogger);
     for (const child of offspring) {
       child.lineage = plant.id;
     }

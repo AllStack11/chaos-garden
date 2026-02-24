@@ -36,7 +36,7 @@ describe('simulation/creatures/carnivores', () => {
       createFakeEventLogger()
     );
 
-    expect(carnivore.energy).toBeCloseTo(78.75, 3);
+    expect(carnivore.energy).toBeCloseTo(78.875, 3);
     expect(prey.isAlive).toBe(false);
     expect(prey.health).toBe(0);
     expect(prey.energy).toBe(0);
@@ -53,9 +53,9 @@ describe('simulation/creatures/carnivores', () => {
       createFakeEventLogger()
     );
 
-    expect(carnivore.energy).toBeCloseTo(98.75, 3);
+    expect(carnivore.energy).toBeCloseTo(98.875, 3);
     expect(prey.isAlive).toBe(false);
-    expect(prey.energy).toBe(70);
+    expect(prey.energy).toBe(62);
   });
 
   it('restores health when a starving carnivore feeds', async () => {
@@ -94,7 +94,7 @@ describe('simulation/creatures/carnivores', () => {
     );
 
     expect(result.consumed).toEqual(['prey-regular-feed']);
-    expect(carnivore.energy).toBe(60.75);
+    expect(carnivore.energy).toBe(60.875);
     expect(carnivore.health).toBe(75);
     expect(prey.isAlive).toBe(false);
     expect(prey.energy).toBe(0);

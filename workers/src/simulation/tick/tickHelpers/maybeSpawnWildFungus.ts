@@ -7,7 +7,7 @@ import {
 } from '../../environment/helpers';
 import { createNewFungusEntity } from '../../creatures/fungi';
 
-const WILD_FUNGUS_SPAWN_PROBABILITY = 0.02;
+const WILD_FUNGUS_SPAWN_PROBABILITY = 0.006;
 
 export async function maybeSpawnWildFungus(
   gardenStateId: number,

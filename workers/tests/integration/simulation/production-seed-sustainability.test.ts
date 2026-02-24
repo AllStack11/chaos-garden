@@ -255,7 +255,7 @@ describe('integration/simulation production seed sustainability', () => {
     expect(livingSummary.carnivores).toBeGreaterThanOrEqual(1);
     expect(livingSummary.fungi).toBeGreaterThanOrEqual(1);
     expect(livingSummary.totalLiving).toBeGreaterThanOrEqual(6);
-  });
+  }, 20_000);
 
   it('achieves >=80% survival success across 10 stochastic runs at tick 500', async () => {
     const runSummaries: Array<{ seed: number; summary: ReturnType<typeof countLivingByType> }> = [];

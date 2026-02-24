@@ -45,21 +45,21 @@ import {
 } from './creatureHelpers';
 
 // Constants
-const BASE_METABOLISM_COST = (DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick); 
+const BASE_METABOLISM_COST = DEFAULT_SIMULATION_CONFIG.baseEnergyCostPerTick * 0.9;
 const REPRODUCTION_THRESHOLD = DEFAULT_SIMULATION_CONFIG.carnivoreReproductionThreshold;
 const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 40;
 const HUNTING_DISTANCE = 10; // pixels (slightly larger than herbivore eating)
 const MAX_AGE = 320; // ticks (longer lifespan helps preserve apex lineages in long-horizon simulations)
 const MAX_REPRODUCTIVE_AGE = 130; // older carnivores can no longer reproduce
-const ENERGY_FROM_PREY = 50; // energy gained per herbivore eaten
+const ENERGY_FROM_PREY = 58;
 const HEALTH_RECOVERY_FROM_FEED = 5;
 const MIN_MOVEMENT_SPEED = 0.4; // ensure movement never stalls from bad mutations
 const PREY_HEALTH_TO_ENERGY_RATIO = 0.2;
 const MAX_CARCASS_ENERGY = 100;
 const SEARCH_MOVEMENT_SPEED_MULTIPLIER = 0.85;
 const HUNT_MOVEMENT_COST_MULTIPLIER = 0.65;
-const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.65;
+const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.55;
 const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 // State tracking for hunting behavior (ephemeral, not persisted)
@@ -96,7 +96,7 @@ export function createNewCarnivoreEntity(
     energy: 50,
     health: 100,
     age: 0,
-    reproductionRate: traits?.reproductionRate ?? 0.015, // Lower reproduction than herbivores
+    reproductionRate: traits?.reproductionRate ?? 0.018,
     movementSpeed: traits?.movementSpeed ?? 4.6, // Carnivores should move the most
     metabolismEfficiency: traits?.metabolismEfficiency ?? 1.1, // Higher metabolism cost
     perceptionRadius: traits?.perceptionRadius ?? 160, // Better vision for hunting

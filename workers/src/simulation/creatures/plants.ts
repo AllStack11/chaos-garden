@@ -16,7 +16,8 @@ import {
   willRandomEventOccur,
   copyTraitsWithPossibleMutations,
   generatePositionNearParent,
-  clampValueToRange
+  clampValueToRange,
+  findAllEntitiesOfTypeWithinRadius
 } from '../environment/helpers';
 import { calculateMoistureGrowthMultiplier } from '../environment/creature-effects';
 import { getEffectiveWeatherModifiersFromEnvironment } from '../environment/weather-state-machine';
@@ -34,7 +35,10 @@ const MAX_ENERGY = 100;
 const REPRODUCTION_COST = 30;
 const BASE_METABOLISM_COST = 0.2;
 const MAX_AGE = 200;
-const SEED_SPREAD_RADIUS = 50; // Increased from 30 for more spread out offspring
+const SEED_SPREAD_RADIUS = 70;
+const MIN_SEED_SPREAD_DISTANCE = 18;
+const LOCAL_PLANT_DENSITY_RADIUS = 42;
+const MAX_LOCAL_PLANTS_FOR_REPRODUCTION = 6;
 const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
 /**
@@ -80,6 +84,7 @@ export function createNewPlantEntity(
 export async function processPlantBehaviorDuringTick(
   plant: Entity,
   environment: Environment,
+  allEntities: Entity[],
   eventLogger: EventLogger
 ): Promise<Entity[]> {
   if (plant.type !== 'plant') return [];
@@ -98,9 +103,17 @@ export async function processPlantBehaviorDuringTick(
   }
   
   // Reproduction
-  if (doesPlantHaveEnoughEnergyToReproduce(plant)) {
+  if (
+    doesPlantHaveEnoughEnergyToReproduce(plant) &&
+    canPlantReproduceInLocalDensity(plant, allEntities)
+  ) {
     if (willRandomEventOccur(plant.reproductionRate)) {
-      const child = await attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
+      const child = await attemptPlantReproduction(
+        plant,
+        plant.gardenStateId ?? 0,
+        allEntities,
+        eventLogger
+      );
       if (child) {
         offspring.push(child);
       }
@@ -149,12 +162,18 @@ export function doesPlantHaveEnoughEnergyToReproduce(plant: Entity): boolean {
 export async function attemptPlantReproduction(
   parent: Entity,
   gardenStateId: number,
+  _allEntities: Entity[],
   eventLogger: EventLogger
 ): Promise<Entity | null> {
   if (parent.type !== 'plant') return null;
+  const childPosition = generatePositionNearParent(
+    parent.position,
+    SEED_SPREAD_RADIUS,
+    MIN_SEED_SPREAD_DISTANCE
+  );
+
   parent.energy -= REPRODUCTION_COST;
-  
-  const childPosition = generatePositionNearParent(parent.position, SEED_SPREAD_RADIUS);
+
   const childTraits = copyTraitsWithPossibleMutations(parent);
   
   const child = createNewPlantEntity(childPosition, gardenStateId, childTraits, parent.id, 0, parent.name);
@@ -168,6 +187,19 @@ export async function attemptPlantReproduction(
   );
   
   return child;
+}
+
+function canPlantReproduceInLocalDensity(
+  plant: Entity,
+  allEntities: Entity[]
+): boolean {
+  const nearbyPlants = findAllEntitiesOfTypeWithinRadius(
+    plant,
+    allEntities,
+    'plant',
+    LOCAL_PLANT_DENSITY_RADIUS
+  );
+  return nearbyPlants.length <= MAX_LOCAL_PLANTS_FOR_REPRODUCTION;
 }
 
 /**

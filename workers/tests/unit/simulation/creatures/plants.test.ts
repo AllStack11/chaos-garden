@@ -28,7 +28,7 @@ describe('simulation/creatures/plants', () => {
     const plant = buildPlant({ energy: 95, reproductionRate: 1 });
     const environment = buildEnvironment({ tick: 48, moisture: 0.5 });
 
-    const offspring = await processPlantBehaviorDuringTick(plant, environment, createFakeEventLogger());
+    const offspring = await processPlantBehaviorDuringTick(plant, environment, [plant], createFakeEventLogger());
 
     expect(offspring.length).toBe(1);
     expect(plant.energy).toBeLessThan(95);
@@ -38,7 +38,7 @@ describe('simulation/creatures/plants', () => {
   it('dies from old age when max age reached', async () => {
     const plant = buildPlant({ age: 200, energy: 50, health: 100 });
 
-    await processPlantBehaviorDuringTick(plant, buildEnvironment(), createFakeEventLogger());
+    await processPlantBehaviorDuringTick(plant, buildEnvironment(), [plant], createFakeEventLogger());
 
     expect(plant.isAlive).toBe(false);
     expect(plant.health).toBe(0);
@@ -48,7 +48,7 @@ describe('simulation/creatures/plants', () => {
     const plant = buildPlant({ energy: 0.1, photosynthesisRate: 0 });
     const environment = buildEnvironment({ tick: 0, moisture: 0.5 });
 
-    await processPlantBehaviorDuringTick(plant, environment, createFakeEventLogger());
+    await processPlantBehaviorDuringTick(plant, environment, [plant], createFakeEventLogger());
 
     expect(plant.isAlive).toBe(true);
     expect(plant.energy).toBe(0);

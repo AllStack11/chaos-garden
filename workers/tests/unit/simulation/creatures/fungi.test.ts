@@ -67,8 +67,8 @@ describe('simulation/creatures/fungi', () => {
     );
 
     expect(result.decomposed).toEqual(['dead-near']);
-    expect(fungus.energy).toBeCloseTo(79.875, 3);
-    expect(deadHerbivore.energy).toBe(10);
+    expect(fungus.energy).toBeCloseTo(65.875, 3);
+    expect(deadHerbivore.energy).toBe(24);
   });
 
   it('loses health first when energy reaches zero', async () => {

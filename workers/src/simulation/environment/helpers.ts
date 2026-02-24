@@ -90,11 +90,13 @@ export function generateRandomPositionInGarden(
 export function generatePositionNearParent(
   parentPosition: Position,
   spreadRadius: number = 75,
+  minimumDistance: number = 0,
   width: number = DEFAULT_SIMULATION_CONFIG.gardenWidth,
   height: number = DEFAULT_SIMULATION_CONFIG.gardenHeight
 ): Position {
   const angle = Math.random() * Math.PI * 2;
-  const distance = Math.random() * spreadRadius;
+  const clampedMinimumDistance = Math.max(0, Math.min(minimumDistance, spreadRadius));
+  const distance = clampedMinimumDistance + (Math.random() * (spreadRadius - clampedMinimumDistance));
   
   let x = parentPosition.x + Math.cos(angle) * distance;
   let y = parentPosition.y + Math.sin(angle) * distance;

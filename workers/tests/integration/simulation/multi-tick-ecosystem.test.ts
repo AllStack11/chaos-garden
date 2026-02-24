@@ -26,7 +26,7 @@ async function runOneTick(entities: Entity[], tickNumber: number): Promise<Entit
   const births: Entity[] = [];
 
   for (const plant of plants) {
-    births.push(...await processPlantBehaviorDuringTick(plant, environment, eventLogger));
+    births.push(...await processPlantBehaviorDuringTick(plant, environment, plants, eventLogger));
   }
 
   for (const herbivore of herbivores) {
@@ -66,7 +66,7 @@ async function runOneDeterministicTick(entities: Entity[], tickNumber: number): 
   const births: Entity[] = [];
 
   for (const plant of plants) {
-    births.push(...await processPlantBehaviorDuringTick(plant, environment, eventLogger));
+    births.push(...await processPlantBehaviorDuringTick(plant, environment, plants, eventLogger));
   }
 
   for (const herbivore of herbivores) {
