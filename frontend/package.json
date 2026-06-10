@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:all": "npm run test",
-    "deploy": "astro build && wrangler pages deploy dist --project-name ${CLOUDFLARE_PAGES_PROJECT_NAME:-chaos-garden-frontend}",
+    "deploy": "node scripts/deploy-pages.cjs",
     "clean": "rm -rf dist .astro",
     "type-check": "astro check",
     "db:init:local": "echo '🎨 Frontend: No database to initialize - this script is handled by the workers workspace' && exit 0",
