@@ -65,7 +65,7 @@ Create a Pages project in Cloudflare dashboard (or via Wrangler) named `chaos-ga
 Set `CORS_ORIGIN` in `workers/wrangler.jsonc` to your Pages production URL, for example:
 
 ```json
-"CORS_ORIGIN": "https://chaos-garden-frontend.pages.dev"
+"CORS_ORIGIN": "https://your-app-title.pages.dev"
 ```
 
 Then deploy Worker again:

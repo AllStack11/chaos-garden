@@ -111,6 +111,21 @@ If approved, append a short entry with:
 - Key insights
 - Next steps
 
+## Deployment Notes
+
+- Deploy the Worker first so the current production API URL is known before deploying the frontend.
+- Production Worker deploy command: `npm run deploy:workers`
+- Frontend deploys must set `PUBLIC_API_URL` to the live Worker URL used by Pages at build time.
+- On Windows PowerShell, the frontend script in `frontend/package.json` uses POSIX-style `${CLOUDFLARE_PAGES_PROJECT_NAME:-...}` expansion, which does not resolve correctly.
+- When deploying from Windows, prefer:
+  - `npm run build -w @chaos-garden/frontend` with `PUBLIC_API_URL` set in the environment
+  - `npx wrangler pages deploy frontend/dist --project-name chaos-garden-frontend`
+- Verify deploys after release:
+  - Worker health: `GET https://<worker-url>/api/health`
+  - Frontend: confirm the deployed Pages URL returns HTTP `200`
+- Current production Worker URL: `https://chaos-garden-api.saadmankabir95.workers.dev`
+- Current Pages project name: `chaos-garden-frontend`
+
 ## Repository Orientation
 
 - `frontend/src/components/` for UI components (including `GardenCanvas.astro`, `StatsPanel.astro`)

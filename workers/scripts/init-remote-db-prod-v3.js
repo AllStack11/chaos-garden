@@ -25,6 +25,7 @@ const DEFAULT_WRANGLER_CONFIG = 'wrangler.jsonc';
 const WORKERS_DIR = path.resolve(__dirname, '..');
 const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
 const CURRENT_SCHEMA_VERSION = '1.8.0';
+const WRANGLER_CLI_PATH = require.resolve('wrangler/bin/wrangler.js');
 
 const GARDEN_WIDTH = 800;
 const GARDEN_HEIGHT = 600;
@@ -717,7 +718,7 @@ function createSustainabilitySummary(seedData) {
 
 function runWranglerExecute(extraArgs, description, commandOptions) {
   const commandArgs = [
-    'wrangler',
+    WRANGLER_CLI_PATH,
     'd1',
     'execute',
     commandOptions.databaseName,
@@ -727,15 +728,18 @@ function runWranglerExecute(extraArgs, description, commandOptions) {
     ...extraArgs
   ];
 
-  const result = spawnSync('npx', commandArgs, {
+  const result = spawnSync(process.execPath, commandArgs, {
     cwd: WORKERS_DIR,
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
   if (result.status !== 0) {
+    const commandLine = `${process.execPath} ${commandArgs.join(' ')}`;
     const combinedOutput = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
-    throw new Error(`${description} failed.\nCommand: npx ${commandArgs.join(' ')}\n${combinedOutput}`);
+    const processErrorDetails = result.error ? `\nProcess error: ${result.error.message}` : '';
+    const outputDetails = combinedOutput ? `\n${combinedOutput}` : '\nNo stdout/stderr output captured.';
+    throw new Error(`${description} failed.\nCommand: ${commandLine}${processErrorDetails}${outputDetails}`);
   }
 
   return result.stdout || '';
@@ -874,11 +878,14 @@ function executeSqlPhase(sql, phaseName, commandOptions) {
       try {
         executeSqlStatementsIndividually(sql, phaseName, commandOptions);
       } catch (statementError) {
-        if (!isRemoteImportAuthenticationError(error)) {
-          throw error;
-        }
+        const fileExecutionMessage = error instanceof Error ? error.message : String(error);
+        const statementExecutionMessage = statementError instanceof Error ? statementError.message : String(statementError);
 
-        throw statementError;
+        throw new Error(
+          `${phaseName} failed during both execution strategies.\n` +
+          `File execution error:\n${fileExecutionMessage}\n\n` +
+          `Statement fallback error:\n${statementExecutionMessage}`
+        );
       }
     }
     console.log(`✅ ${phaseName} complete`);
