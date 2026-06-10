@@ -448,10 +448,17 @@ export interface GardenStatsResponse {
  * Response from GET /api/garden - the current state of the world.
  */
 export interface GardenResponse {
-  state: GardenState;
-  entities: Entity[];
-  recentEvents: SimulationEvent[];
-  tick: number;
+  success: boolean;
+  data: {
+    gardenState: GardenState;
+    entities: Entity[];
+    deadMatter: DeadMatter[];
+    events: SimulationEvent[];
+    timestamp: string;
+  };
+  error?: string;
+  details?: unknown;
+  timestamp: string;
 }
 
 // ==========================================

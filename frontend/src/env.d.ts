@@ -7,6 +7,7 @@ import type {
   SimulationEvent as SharedSimulationEvent,
   PopulationSummary as SharedPopulationSummary,
   HealthStatus as SharedHealthStatus,
+  GardenResponse as SharedGardenResponse,
   GardenStatsResponse as SharedGardenStatsResponse,
   GardenStatsPoint as SharedGardenStatsPoint,
   GardenStatsAggregate as SharedGardenStatsAggregate,
@@ -39,6 +40,7 @@ export type Entity = SharedEntity;
 export type SimulationEvent = SharedSimulationEvent;
 export type PopulationSummary = SharedPopulationSummary;
 export type HealthStatus = SharedHealthStatus;
+export type GardenResponse = SharedGardenResponse;
 export type GardenStatsResponse = SharedGardenStatsResponse;
 export type GardenStatsPoint = SharedGardenStatsPoint;
 export type GardenStatsAggregate = SharedGardenStatsAggregate;
@@ -46,18 +48,6 @@ export type GardenInsight = SharedGardenInsight;
 export type EventTypeBreakdown = SharedEventTypeBreakdown;
 export type EventSeverityBreakdown = SharedEventSeverityBreakdown;
 export type GardenEntityVitals = SharedGardenEntityVitals;
-
-export interface GardenResponse {
-  success: boolean;
-  data: {
-    gardenState: GardenState;
-    entities: Entity[];
-    events: SimulationEvent[];
-    timestamp: string;
-  };
-  error?: string;
-  details?: unknown;
-}
 
 export interface TickResponse {
   success: boolean;

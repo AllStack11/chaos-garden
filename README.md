@@ -1,145 +1,197 @@
 # Chaos Garden
 
-> *"Plant the rules. Water them with time. Step back. Watch what grows."*
+Chaos Garden is a persistent ecosystem simulator with an Astro frontend and a Cloudflare Workers backend. Plants, herbivores, carnivores, and fungi evolve on a 2D canvas while the simulation continues on a 15-minute cron, stores history in Cloudflare D1, and exposes live state plus analytics through a small HTTP API.
 
-A digital ecosystem that lives on Cloudflare's edge — photosynthesizing, hunting, decomposing, evolving — whether you're watching or not.
+## What the app includes
 
-```
-        sunrise                          sunset
-          ↓                                ↓
-  ┌───────────────────────────────────────────┐
-  │  ☀                                        │
-  │       🌿 🌿    🦋         🌿              │
-  │    🌿    🌿 🌿    🐛  🌿     🍄           │
-  │  🌿  🌿       🌿       🌿  🐺    🍄      │
-  │    🌿   🌿  🌿   🦋 🌿   🌿    💀  🍄   │
-  │       🌿    🌿       🌿  🌿    🍄        │
-  └───────────────────────────────────────────┘
-         light → leaf → mouth → soil → light
-```
+- A full-screen canvas garden rendered in the browser with entity selection, ambient effects, and responsive overlays
+- A Worker-driven simulation tick that advances weather, aging, feeding, reproduction, death, decomposition, and persistence
+- Four entity families: plants, herbivores, carnivores, and fungi
+- Historical analytics with derived insights, event severity breakdowns, biodiversity trends, and food-web pressure views
+- A journal/event overlay for browsing recent simulation activity
+- Deterministic local seeding and a production seeding script tuned for a more sustainable remote baseline
 
----
+## Stack
 
-## The Four Kingdoms
-
-**🌿 Plants** — *The patient ones.* They cannot flee. They convert starlight into staying alive. A fern at noon gains +2.5 energy/tick. The same fern at midnight bleeds -0.2. Survival is a function of dawn.
-
-**🦋 Herbivores** — *The anxious middle.* They eat plants. They flee predators. After 15 ticks of running, exhaustion sets in — speed drops 40%. You cannot run forever. This is math, not cruelty.
-
-**🐺 Carnivores** — *The patient hunters.* They stalk within 35px, then ambush. When full, they rest — metabolism drops, movement slows. A fed predator is a still predator. An apex hunter who doesn't conserve energy becomes compost.
-
-**🍄 Fungi** — *The quiet reckoning.* They drift toward death at 0.4px/tick. They don't kill. They unmake what's already gone. Moisture accelerates them. In wet soil, nothing stays dead for long.
-
-```
-🌿 → sunlight → energy → reproduction → 🌿
-🦋 → plants → energy → reproduction → 🦋
-🐺 → herbivores → energy → reproduction → 🐺
-🍄 → corpses → energy → reproduction → 🍄
-              ↑                          │
-              └──────────────────────────┘
-              nothing is wasted
-```
-
----
-
-## What Emerges
-
-We didn't code intelligence. We coded hunger, fear, sunlight, and decay. The rest grew on its own:
-
-- **Lotka-Volterra cycles** — herbivore booms → predator booms → herbivore crashes → predator crashes. Textbook ecology from 200 lines of TypeScript.
-- **Evolutionary drift** — 10% mutation rate per offspring. Fast herbivores survive longer, so speed increases across generations. We planted random. Natural selection grew direction.
-- **Spatial clustering** — plants near light, herbivores near plants, carnivores near herbivores, fungi near battlefields. Nobody told them to do this.
-- **Weather cascades** — a drought starves plants → herbivores starve → carnivores starve → fungi feast. One weather state topples the whole food chain like dominoes through a greenhouse.
-
----
-
-## The Numbers Under the Soil
-
-```
-Day/night cycle       96 ticks = 1 full day
-Tick interval         every 15 minutes (cron)
-Max population        500 entities across all species
-
-Lifespan (ticks)      Plant: 200  Herbivore: 150  Carnivore: 200  Fungus: 300
-Starting energy       Plant: 50   Herbivore: 60   Carnivore: 50   Fungus: 40
-Reproduction cost     Plant: 30   Herbivore: 40   Carnivore: 50   Fungus: 25
-
-Sunlight at noon      1.0 (sine wave peak)
-Sunlight at midnight  0.0 (sine wave trough)
-```
-
----
+- `frontend/`: Astro 5 + TypeScript + Tailwind
+- `workers/`: Cloudflare Workers + TypeScript
+- `shared/`: shared TypeScript contracts
+- Database: Cloudflare D1 (SQLite)
 
 ## Architecture
 
-Three layers of soil:
+```text
+frontend/
+  src/pages/index.astro          app shell
+  src/components/                canvas + overlays
+  src/services/                  API client and garden service
 
-```
-┌──────────────────────────────────────────────┐
-│  frontend/          the window into the garden│
-│  Astro 4 + Web Components + Canvas 2D        │
-│  polls /api/garden every 30s                 │
-├──────────────────────────────────────────────┤
-│  workers/           the engine of life        │
-│  Cloudflare Workers + D1 SQLite              │
-│  cron tick every 15 min                      │
-├──────────────────────────────────────────────┤
-│  shared/            the book of laws          │
-│  TypeScript types only — no runtime code     │
-│  Entity, Traits, Environment, GardenState    │
-└──────────────────────────────────────────────┘
+workers/
+  src/index.ts                   HTTP API + cron entry
+  src/simulation/                tick loop, creatures, environment
+  src/db/                        queries, migrations, simulation lock
+  scripts/                       local and remote D1 initialization
+
+shared/
+  types.ts                       cross-layer contracts
 ```
 
-**Tick order** — the seasons within each moment:
-1. Environment shifts (weather, light, temperature)
-2. Plants photosynthesize
-3. Herbivores eat and flee
-4. Carnivores hunt and rest
-5. Fungi decompose the fallen
-6. State persists to D1. History is written.
+### Runtime flow
 
----
+1. The Worker cron runs every 15 minutes.
+2. The tick updates weather and environment state.
+3. Living entities age and receive environmental effects.
+4. Species behaviors run in trophic order.
+5. Deaths become dead matter when enough energy remains.
+6. The new garden state, events, and cleanup are persisted to D1.
+7. The frontend polls the API on the same 15-minute cadence and refreshes health every minute.
 
-## Getting Started
+## Key simulation behavior
+
+- Garden size is `800 x 600`
+- Max living population is capped at `500`
+- Weather is stateful and can transition through `CLEAR`, `OVERCAST`, `RAIN`, `STORM`, `DROUGHT`, and `FOG`
+- Dead matter is tracked separately from living entities and expires after a TTL if fungi do not fully decompose it
+- Garden history is retained for `1000` ticks, which backs the analytics window
+- Wild recovery helpers can reintroduce missing trophic groups after extinction
+
+## Local setup
+
+### Prerequisites
+
+- Node.js `>=18`
+- A local npm install at repo root
+
+### Install
 
 ```bash
-git clone https://github.com/saadmankabir/chaos-garden.git
-cd chaos-garden
 npm install
-npm run db:init:local    # till the soil
-npm run dev              # plant the first seeds
 ```
 
-Two windows. Two heartbeats:
-- `localhost:4321` — the garden (what you see)
-- `localhost:8787` — the engine (what you don't)
+### Configure the frontend API URL
 
-For deployment to Cloudflare, see [DEPLOYMENT.md](DEPLOYMENT.md).
-
----
-
-## Useful Commands
+Create `frontend/.env` for local development:
 
 ```bash
-npm run type-check:all                             # inspect the roots
-npm run test -w @chaos-garden/workers              # test the soil
-npm run test:coverage -w @chaos-garden/workers     # how deep do the roots go
-npm run deploy:workers                             # transplant to the cloud
-npm run deploy:frontend                            # open the greenhouse doors
+PUBLIC_API_URL=http://localhost:8787
 ```
 
----
+The frontend build expects `PUBLIC_API_URL` to be present.
 
-## Philosophy
+### Initialize the local D1 database
 
-The garden asks five questions:
+```bash
+npm run db:init:local
+```
 
-1. **What is life?** — Anything that maintains order against entropy. These creatures do exactly that.
-2. **What is evolution?** — Randomness filtered by consequences. Mutation without selection is noise. Selection without mutation is stagnation.
-3. **What is an ecosystem?** — A system where every death is someone else's breakfast.
-4. **What is emergence?** — When the gardener can no longer predict what the garden will do.
-5. **What is a god?** — Someone who writes the physics, plants the first seed, and then has the wisdom to stop touching things.
+This command:
 
----
+- Drops and recreates the local schema
+- Applies `workers/schema.sql`
+- Seeds a deterministic baseline population
+- Verifies required invariants after setup
 
-> *The garden runs on Cloudflare's edge. It ticks every 15 minutes. It evolves while you sleep. It remembers every birth, every death, every meal, every mutation. You are not required. The garden continues.*
+Useful variants:
+
+```bash
+npm run db:init:local -- --verify-only
+npm run db:init:local -- --schema-only
+npm run db:init:local -- --seed=42
+```
+
+### Run the app
+
+```bash
+npm run dev
+```
+
+Local endpoints:
+
+- Frontend: `http://localhost:4321`
+- Worker API: `http://localhost:8787`
+
+## API surface
+
+The Worker currently exposes:
+
+- `GET /api/garden`
+  Returns the latest `gardenState`, living `entities`, `deadMatter`, and recent `events`.
+- `GET /api/garden/stats?windowTicks=120`
+  Returns current state, history, event breakdowns, derived analytics, insights, and entity vitals.
+- `GET /api/health`
+  Returns service health plus the latest completed tick and configured tick interval.
+
+Notes:
+
+- `windowTicks` is validated and supports `10` to `500`
+- Non-health endpoints are rate-limited
+- CORS is controlled through Worker vars
+
+## Frontend behavior
+
+The main page is a custom-element-driven garden shell with:
+
+- Canvas rendering for the live ecosystem
+- A weather/status layer
+- Entity selection details
+- A fullscreen stats overlay with historical charts and deterministic insights
+- A journal overlay with event filtering and gallery/signals views
+- A countdown to the next expected tick based on worker health data
+
+## Database and seeding
+
+`workers/schema.sql` creates:
+
+- `garden_state`
+- `entities`
+- `simulation_events`
+- `simulation_control`
+- `dead_matter`
+- `system_metadata`
+
+Important scripts:
+
+- `workers/scripts/init-local-db.js`
+  Deterministic local reset and seed workflow
+- `workers/scripts/init-remote-db-prod-v3.js`
+  Remote production reset and habitat-zoned sustainable seed workflow
+
+`npm run db:init:remote` is destructive for the target remote D1 database.
+
+## Testing and verification
+
+Useful commands:
+
+```bash
+npm run type-check:all
+npm run test:all
+npm run test -w @chaos-garden/workers
+npm run test:integration -w @chaos-garden/workers
+npm run test -w @chaos-garden/frontend
+```
+
+The repo includes:
+
+- Shared contract tests
+- Worker unit tests for creatures, environment, DB helpers, and tick orchestration
+- Worker integration tests for simulation sustainability and D1 behavior
+- Frontend service, audio, rendering, and stats tests
+
+## Deployment
+
+For deployment steps, use [DEPLOYMENT.md](DEPLOYMENT.md).
+
+At a high level:
+
+1. Create the D1 database and wire its `database_id` into `workers/wrangler.jsonc`
+2. Run `npm run db:init:remote`
+3. Deploy the Worker with `npm run deploy:workers`
+4. Set `PUBLIC_API_URL` for the frontend deployment
+5. Deploy the frontend with `npm run deploy:frontend`
+
+## Current review notes
+
+The app structure is solid and the README was mainly behind the implementation, but two issues surfaced during review:
+
+1. `npm run test:all` currently fails in [`shared/types.test.ts`](/C:/Users/saadm/Documents/repos/chaos-garden/shared/types.test.ts:11) because `plantReproductionThreshold` is `69` while the test still expects plant < herbivore < carnivore thresholds.
+2. The shared [`GardenResponse`](/C:/Users/saadm/Documents/repos/chaos-garden/shared/types.ts:450) contract is stale relative to the real `/api/garden` payload in [`workers/src/index.ts`](/C:/Users/saadm/Documents/repos/chaos-garden/workers/src/index.ts:244), which now returns `gardenState`, `entities`, `deadMatter`, and `events`.
