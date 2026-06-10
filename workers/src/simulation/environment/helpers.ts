@@ -10,12 +10,13 @@
  * reliable building blocks for emergent behavior.
  */
 
-import type { 
-  Position, 
-  Entity, 
+import type {
+  Position,
+  Entity,
+  DeadMatter,
   EntityType,
-  Traits, 
-  SimulationConfig, 
+  Traits,
+  SimulationConfig,
   PopulationSummary,
   BaseTraits,
   PlantTraits,
@@ -194,8 +195,29 @@ export function extractTraits<T extends Entity>(entity: T):
   for (const key of keys) {
     traits[key] = (entity as any)[key];
   }
+  // Persist hunt state for carnivores so it survives Worker restarts between ticks.
+  // Excluded from copyTraitsWithPossibleMutations so offspring start without a target.
+  if (entity.type === 'carnivore') {
+    traits.huntTargetId = (entity as any).huntTargetId ?? null;
+    traits.huntTicksOnTarget = (entity as any).huntTicksOnTarget ?? 0;
+  }
   return traits;
 }
+
+// Hard limits for each heritable trait. Without these, unbounded ±20% drift
+// can push traits to degenerate values (e.g. reproductionRate → 0 = sterile
+// lineage, perceptionRadius → 0 = permanently blind entity, metabolismEfficiency
+// → 0 = effectively free energy). Bounds are permissive enough not to constrain
+// evolutionary pressure but prevent runaway trait collapse.
+const TRAIT_BOUNDS: Record<string, { min: number; max: number }> = {
+  reproductionRate:      { min: 0.001, max: 1.0 },
+  metabolismEfficiency:  { min: 0.1,   max: 3.0 },
+  movementSpeed:         { min: 0.4,   max: 12.0 },
+  perceptionRadius:      { min: 10,    max: 400 },
+  threatDetectionRadius: { min: 10,    max: 500 },
+  photosynthesisRate:    { min: 0.1,   max: 3.0 },
+  decompositionRate:     { min: 0.1,   max: 3.0 },
+};
 
 /**
  * Create a new copy of traits with potential random mutations.
@@ -208,7 +230,7 @@ export function copyTraitsWithPossibleMutations<T extends Entity>(
    T extends { type: 'fungus' } ? FungusTraits : BaseTraits {
   const mutationProbability = DEFAULT_SIMULATION_CONFIG.mutationProbability;
   const mutationRange = DEFAULT_SIMULATION_CONFIG.mutationRange;
-  
+
   // Define which keys are traits for each entity type
   const traitKeysMap: Record<string, string[]> = {
     plant: ['reproductionRate', 'metabolismEfficiency', 'photosynthesisRate'],
@@ -219,18 +241,19 @@ export function copyTraitsWithPossibleMutations<T extends Entity>(
 
   const keysToCopy = traitKeysMap[entity.type] || ['reproductionRate', 'metabolismEfficiency'];
   const mutatedTraits: any = {};
-  
+
   for (const key of keysToCopy) {
     const originalValue = (entity as any)[key];
     if (typeof originalValue === 'number') {
+      let value = originalValue;
       if (willRandomEventOccur(mutationProbability)) {
-        mutatedTraits[key] = applyRandomMutationToTrait(originalValue, mutationRange);
-      } else {
-        mutatedTraits[key] = originalValue;
+        value = applyRandomMutationToTrait(originalValue, mutationRange);
       }
+      const bounds = TRAIT_BOUNDS[key];
+      mutatedTraits[key] = bounds ? clampValueToRange(value, bounds.min, bounds.max) : value;
     }
   }
-  
+
   return mutatedTraits;
 }
 
@@ -596,29 +619,33 @@ export function generateRandomName(type: EntityType, parentName?: string): strin
  * @param entities - Array of entities
  * @returns Population summary
  */
-export function countEntitiesByType(entities: Entity[]): PopulationSummary {
-  const living = entities.filter(entity => entity.isAlive);
-  const deadInGarden = entities.filter(entity => !entity.isAlive && entity.energy > 0);
-  
-  const livingCounts = groupEntitiesByType(living);
-  const deadCounts = groupEntitiesByType(deadInGarden);
-  
+export function countEntitiesByType(
+  livingEntities: Entity[],
+  deadMatter: DeadMatter[] = []
+): PopulationSummary {
+  const livingCounts = groupEntitiesByType(livingEntities);
+
+  const deadByType = { plant: 0, herbivore: 0, carnivore: 0, fungus: 0 };
+  for (const item of deadMatter) {
+    deadByType[item.type] = (deadByType[item.type] ?? 0) + 1;
+  }
+
   return {
     plants: livingCounts.plant.length,
     herbivores: livingCounts.herbivore.length,
     carnivores: livingCounts.carnivore.length,
     fungi: livingCounts.fungus.length,
-    deadPlants: deadCounts.plant.length,
-    deadHerbivores: deadCounts.herbivore.length,
-    deadCarnivores: deadCounts.carnivore.length,
-    deadFungi: deadCounts.fungus.length,
+    deadPlants: deadByType.plant,
+    deadHerbivores: deadByType.herbivore,
+    deadCarnivores: deadByType.carnivore,
+    deadFungi: deadByType.fungus,
     allTimeDeadPlants: 0,
     allTimeDeadHerbivores: 0,
     allTimeDeadCarnivores: 0,
     allTimeDeadFungi: 0,
-    total: living.length + deadInGarden.length,
-    totalLiving: living.length,
-    totalDead: deadInGarden.length,
+    total: livingEntities.length + deadMatter.length,
+    totalLiving: livingEntities.length,
+    totalDead: deadMatter.length,
     allTimeDead: 0
   };
 }

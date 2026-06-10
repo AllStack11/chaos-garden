@@ -8,7 +8,7 @@
  * They are the silent recyclers, the foundation of nutrient cycling.
  */
 
-import type { Entity, Environment, Traits, FungusTraits } from '@chaos-garden/shared';
+import type { Entity, DeadMatter, Environment, Traits, FungusTraits } from '@chaos-garden/shared';
 import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import type { EventLogger } from '../../logging/event-logger';
 import {
@@ -20,8 +20,7 @@ import {
   copyTraitsWithPossibleMutations,
   generatePositionNearParent,
   clampValueToRange,
-  findNearestEntity,
-  calculateDistanceBetweenEntities,
+  calculateDistanceBetweenPositions,
   moveEntityTowardTarget,
   calculateMovementEnergyCost
 } from '../environment/helpers';
@@ -87,34 +86,34 @@ export function createNewFungusEntity(
 
 /**
  * Process a fungus's behavior for one tick.
- * Returns offspring and IDs of entities decomposed.
+ * Returns offspring and dead matter items whose energy was changed this tick.
+ * The caller is responsible for persisting energy updates and deleting fully
+ * decomposed items (energy <= 0).
  */
 export async function processFungusBehaviorDuringTick(
   fungus: Entity,
   environment: Environment,
-  allEntities: Entity[],
+  deadMatter: DeadMatter[],
   eventLogger: EventLogger
-): Promise<{ offspring: Entity[]; decomposed: string[] }> {
-  if (fungus.type !== 'fungus') return { offspring: [], decomposed: [] };
+): Promise<{ offspring: Entity[]; touchedDeadMatter: DeadMatter[] }> {
+  if (fungus.type !== 'fungus') return { offspring: [], touchedDeadMatter: [] };
   const offspring: Entity[] = [];
-  const decomposed: string[] = [];
-  
-  // 1. Find nearest dead entity to decompose
-  const targetDead = findNearestDeadEntity(fungus, allEntities, fungus.perceptionRadius);
-  
-  // 2. Decompose if found and within range
-  if (targetDead) {
-    const distance = calculateDistanceBetweenEntities(fungus, targetDead);
-    
+  const touchedDeadMatter: DeadMatter[] = [];
+
+  // 1. Find nearest dead matter within perception radius
+  const target = findNearestDeadMatter(fungus, deadMatter, fungus.perceptionRadius);
+
+  // 2. Decompose or creep toward target
+  if (target) {
+    const distance = calculateDistanceBetweenPositions(fungus.position, target.position);
+
     if (distance <= DECOMPOSITION_DISTANCE) {
-      // Decompose the dead matter
-      const energyGained = decomposeMatter(fungus, targetDead, environment);
+      const energyGained = decomposeMatter(fungus, target, environment);
       if (energyGained > 0) {
-        decomposed.push(targetDead.id);
+        touchedDeadMatter.push(target);
       }
     } else {
-      // Fungi slowly creep toward nearby dead matter.
-      moveEntityTowardTarget(fungus, targetDead.position, FUNGUS_MOVEMENT_SPEED);
+      moveEntityTowardTarget(fungus, target.position, FUNGUS_MOVEMENT_SPEED);
       const movedDistance = Math.min(distance, FUNGUS_MOVEMENT_SPEED);
       const movementCost = calculateMovementEnergyCost(
         movedDistance,
@@ -123,11 +122,11 @@ export async function processFungusBehaviorDuringTick(
       fungus.energy -= movementCost;
     }
   }
-  
+
   // 3. Base metabolism
   const tempMultiplier = calculateTemperatureMetabolismMultiplier(environment.temperature);
-  fungus.energy -= BASE_METABOLISM_COST * tempMultiplier * 0.5; // Fungi have lower metabolism
-  
+  fungus.energy -= BASE_METABOLISM_COST * tempMultiplier * 0.5;
+
   // 4. Reproduction
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
   if (fungus.energy >= REPRODUCTION_THRESHOLD) {
@@ -138,7 +137,7 @@ export async function processFungusBehaviorDuringTick(
       }
     }
   }
-  
+
   // 5. Death checks
   if (fungus.age >= MAX_AGE) {
     fungus.isAlive = false;
@@ -147,30 +146,28 @@ export async function processFungusBehaviorDuringTick(
   } else {
     applyStarvationHealthDecay(fungus, STARVATION_HEALTH_DECAY_PER_TICK);
   }
-  
+
   fungus.updatedAt = createTimestamp();
-  return { offspring, decomposed };
+  return { offspring, touchedDeadMatter };
 }
 
 /**
- * Decompose dead matter and gain energy.
+ * Decompose a dead matter item and gain energy.
+ * Mutates both fungus.energy and target.energy in place.
  */
 function decomposeMatter(
   fungus: Entity,
-  deadEntity: Entity,
+  target: DeadMatter,
   environment: Environment
 ): number {
   if (fungus.type !== 'fungus') return 0;
-  // Fungi are more efficient in moist conditions
   const moistureMultiplier = Math.max(0.5, environment.moisture * 2);
   const efficiency = fungus.decompositionRate * moistureMultiplier;
-  
-  const energyGained = Math.min(ENERGY_FROM_DECOMPOSITION * efficiency, deadEntity.energy);
+
+  const energyGained = Math.min(ENERGY_FROM_DECOMPOSITION * efficiency, target.energy);
   fungus.energy = clampValueToRange(fungus.energy + energyGained, 0, MAX_ENERGY);
-  
-  // Reduce the dead entity's energy (partial decomposition)
-  deadEntity.energy = Math.max(0, deadEntity.energy - energyGained);
-  
+  target.energy = Math.max(0, target.energy - energyGained);
+
   return energyGained;
 }
 
@@ -203,40 +200,26 @@ async function attemptFungusReproduction(
 }
 
 /**
- * Find the nearest dead entity (plant or herbivore).
+ * Find the nearest dead matter item within maxDistance.
+ * All items in the array are valid targets (energy > 0 is guaranteed by the caller).
  */
-function findNearestDeadEntity(
+function findNearestDeadMatter(
   fungus: Entity,
-  allEntities: Entity[],
+  deadMatter: DeadMatter[],
   maxDistance?: number
-): Entity | null {
-  const deadEntities = allEntities.filter(e => 
-    e.type !== 'fungus' &&
-    !e.isAlive &&
-    e.energy > 0
-  );
+): DeadMatter | null {
+  let nearest: DeadMatter | null = null;
+  let minDistance = Infinity;
 
-  const deadEntitiesInRange = typeof maxDistance === 'number'
-    ? deadEntities.filter(entity =>
-      calculateDistanceBetweenEntities(fungus, entity) <= maxDistance
-    )
-    : deadEntities;
-  
-  if (deadEntitiesInRange.length === 0) {
-    return null;
-  }
-  
-  let nearest = deadEntitiesInRange[0];
-  let minDistance = calculateDistanceBetweenEntities(fungus, nearest);
-  
-  for (let i = 1; i < deadEntitiesInRange.length; i++) {
-    const distance = calculateDistanceBetweenEntities(fungus, deadEntitiesInRange[i]);
+  for (const item of deadMatter) {
+    const distance = calculateDistanceBetweenPositions(fungus.position, item.position);
+    if (maxDistance !== undefined && distance > maxDistance) continue;
     if (distance < minDistance) {
       minDistance = distance;
-      nearest = deadEntitiesInRange[i];
+      nearest = item;
     }
   }
-  
+
   return nearest;
 }
 
@@ -259,18 +242,3 @@ export function getFungusCauseOfDeath(fungus: Entity): string {
   );
 }
 
-/**
- * Calculate energy gained from decomposing a specific entity type.
- */
-export function calculateDecompositionEnergy(
-  fungus: Entity,
-  targetEntity: Entity,
-  environment: Environment
-): number {
-  if (fungus.type !== 'fungus') return 0;
-  const baseEnergy = ENERGY_FROM_DECOMPOSITION;
-  const efficiency = fungus.decompositionRate;
-  const moistureMultiplier = Math.max(0.5, environment.moisture * 2);
-  
-  return baseEnergy * efficiency * moistureMultiplier;
-}

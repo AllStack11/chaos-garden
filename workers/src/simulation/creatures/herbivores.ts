@@ -224,6 +224,10 @@ export async function processHerbivoreBehaviorDuringTick(
     applyStarvationHealthDecay(herbivore, STARVATION_HEALTH_DECAY_PER_TICK);
   }
 
+  if (!herbivore.isAlive) {
+    herbivoreFleeingState.delete(herbivore.id);
+  }
+
   herbivore.updatedAt = createTimestamp();
   return { offspring, consumed };
 }

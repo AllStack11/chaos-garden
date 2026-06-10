@@ -18,7 +18,7 @@ import {
   getLatestGardenStateFromDatabase,
   getRecentSimulationEventsFromDatabase,
   getAllLivingEntitiesFromDatabase,
-  getAllDecomposableDeadEntitiesFromDatabase,
+  getDeadMatterFromDatabase,
   getGardenStateHistoryFromDatabase,
   getSimulationEventCountsByTypeFromDatabase,
   getSimulationEventSeverityBreakdownFromDatabase,
@@ -248,25 +248,24 @@ async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> 
       return createNotFoundResponse(corsOrigin, 'No garden state found - garden may not be initialized');
     }
 
-    // Get all entities currently visible in the garden (living + decomposable dead matter)
-    const livingEntities = await getAllLivingEntitiesFromDatabase(env.DB);
-    const decomposableDeadEntities = await getAllDecomposableDeadEntitiesFromDatabase(env.DB);
-    const entities = [...livingEntities, ...decomposableDeadEntities];
-
-    // Get recent events
-    const events = await getRecentSimulationEventsFromDatabase(env.DB, 20);
+    // Get all living entities and dead matter separately
+    const [entities, deadMatter, events] = await Promise.all([
+      getAllLivingEntitiesFromDatabase(env.DB),
+      getDeadMatterFromDatabase(env.DB),
+      getRecentSimulationEventsFromDatabase(env.DB, 20),
+    ]);
 
     await logger.debug('api_get_garden_success', 'Garden state retrieved', {
       tick: gardenState.tick,
       entityCount: entities.length,
-      livingEntityCount: livingEntities.length,
-      deadEntityCount: decomposableDeadEntities.length,
+      deadMatterCount: deadMatter.length,
       eventCount: events.length
     });
 
     return createSuccessResponse({
       gardenState,
       entities,
+      deadMatter,
       events,
       timestamp: new Date().toISOString()
     }, corsOrigin);

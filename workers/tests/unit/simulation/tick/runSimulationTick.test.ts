@@ -10,7 +10,13 @@ const mockQueries = vi.hoisted(() => ({
   saveGardenStateToDatabase: vi.fn(),
   getAllEntitiesFromDatabase: vi.fn(),
   getAllLivingEntitiesFromDatabase: vi.fn(),
-  getAllDecomposableDeadEntitiesFromDatabase: vi.fn(),
+  getDeadMatterFromDatabase: vi.fn(),
+  createDeadMatterBatchInDatabase: vi.fn(),
+  updateDeadMatterEnergyBatchInDatabase: vi.fn(),
+  deleteDeadMatterBatchInDatabase: vi.fn(),
+  deleteEntitiesByIdsFromDatabase: vi.fn(),
+  purgeExpiredDeadMatterFromDatabase: vi.fn(),
+  pruneOldGardenStatesFromDatabase: vi.fn(),
   deleteSimulationEventsByTickFromDatabase: vi.fn(),
   saveEntitiesToDatabase: vi.fn(),
   markEntitiesAsDeadInDatabase: vi.fn()
@@ -32,7 +38,10 @@ const mockEnvironment = vi.hoisted(() => ({
 }));
 
 const mockTickHelpers = vi.hoisted(() => ({
-  maybeSpawnWildFungus: vi.fn(async () => null)
+  maybeSpawnWildFungus: vi.fn(async () => []),
+  maybeSpawnWildPlants: vi.fn(async () => []),
+  maybeSpawnWildHerbivores: vi.fn(async () => []),
+  maybeSpawnWildCarnivore: vi.fn(async () => null)
 }));
 
 const mockEventLoggerFactories = vi.hoisted(() => {
@@ -76,7 +85,10 @@ vi.mock('../../../../src/simulation/environment', async (importOriginal) => {
     updateEnvironmentForNextTick: mockEnvironment.updateEnvironmentForNextTick
   };
 });
-vi.mock('../../../../src/simulation/tick/tickHelpers/maybeSpawnWildFungus', () => mockTickHelpers);
+vi.mock('../../../../src/simulation/tick/tickHelpers/maybeSpawnWildFungus', () => ({ maybeSpawnWildFungus: mockTickHelpers.maybeSpawnWildFungus }));
+vi.mock('../../../../src/simulation/tick/tickHelpers/maybeSpawnWildPlants', () => ({ maybeSpawnWildPlants: mockTickHelpers.maybeSpawnWildPlants }));
+vi.mock('../../../../src/simulation/tick/tickHelpers/maybeSpawnWildHerbivores', () => ({ maybeSpawnWildHerbivores: mockTickHelpers.maybeSpawnWildHerbivores }));
+vi.mock('../../../../src/simulation/tick/tickHelpers/maybeSpawnWildCarnivore', () => ({ maybeSpawnWildCarnivore: mockTickHelpers.maybeSpawnWildCarnivore }));
 vi.mock('../../../../src/logging/event-logger', () => mockEventLoggerFactories);
 
 import { runSimulationTick } from '../../../../src/simulation/tick/tick';
@@ -116,7 +128,13 @@ describe('simulation/tick/runSimulationTick', () => {
     mockQueries.getLatestGardenStateFromDatabase.mockResolvedValue(previousState);
     mockQueries.getGardenStateByTickFromDatabase.mockResolvedValue(previousState);
     mockQueries.getAllLivingEntitiesFromDatabase.mockResolvedValue([livingPlant]);
-    mockQueries.getAllDecomposableDeadEntitiesFromDatabase.mockResolvedValue([]);
+    mockQueries.getDeadMatterFromDatabase.mockResolvedValue([]);
+    mockQueries.createDeadMatterBatchInDatabase.mockResolvedValue(undefined);
+    mockQueries.updateDeadMatterEnergyBatchInDatabase.mockResolvedValue(undefined);
+    mockQueries.deleteDeadMatterBatchInDatabase.mockResolvedValue(undefined);
+    mockQueries.deleteEntitiesByIdsFromDatabase.mockResolvedValue(undefined);
+    mockQueries.purgeExpiredDeadMatterFromDatabase.mockResolvedValue(undefined);
+    mockQueries.pruneOldGardenStatesFromDatabase.mockResolvedValue(undefined);
     mockQueries.deleteSimulationEventsByTickFromDatabase.mockResolvedValue(undefined);
     mockQueries.saveGardenStateToDatabase.mockResolvedValue(2);
     mockQueries.saveEntitiesToDatabase.mockResolvedValue(undefined);
@@ -160,7 +178,6 @@ describe('simulation/tick/runSimulationTick', () => {
     expect(result.executed).toBe(true);
     expect(result.deaths).toBe(0);
     expect(mockEventLoggerFactories.eventLogger.logDeath).not.toHaveBeenCalled();
-    expect(mockQueries.markEntitiesAsDeadInDatabase).toHaveBeenCalledWith({}, [], 1);
     expect(persistedPlant?.isAlive).toBe(true);
     expect(persistedPlant?.energy).toBe(0);
     expect(persistedPlant?.health).toBe(99);

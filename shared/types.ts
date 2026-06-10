@@ -51,8 +51,10 @@ export interface HerbivoreTraits extends BaseTraits {
  * Traits specific to carnivores.
  */
 export interface CarnivoreTraits extends BaseTraits {
-  movementSpeed: number;        // pixels per tick
-  perceptionRadius: number;     // detection range for prey (pixels)
+  movementSpeed: number;          // pixels per tick
+  perceptionRadius: number;       // detection range for prey (pixels)
+  huntTargetId?: string | null;   // persisted hunt target; null when not actively hunting
+  huntTicksOnTarget?: number;     // ticks spent chasing current target; resets on switch or kill
 }
 
 /**
@@ -81,6 +83,34 @@ export type Traits =
  * Entity type discriminator - the kingdom of life each entity belongs to.
  */
 export type EntityType = Traits['type'];
+
+/**
+ * Lightweight dead matter entry. Replaces the old pattern of keeping dead
+ * entities in the `entities` table with `is_alive = 0`. Only the data
+ * needed for decomposition and rendering is stored.
+ *
+ * Created when an entity dies with energy > DEAD_MATTER_MIN_ENERGY.
+ * Deleted when fungi decompose it to 0 or after DEAD_MATTER_TTL_TICKS.
+ */
+export interface DeadMatter {
+  id: string;
+  position: Position;
+  energy: number;
+  type: EntityType;
+  deathTick: number;
+}
+
+/**
+ * Raw database row shape for the dead_matter table.
+ */
+export interface DeadMatterRow {
+  id: string;
+  position_x: number;
+  position_y: number;
+  energy: number;
+  type: string;
+  death_tick: number;
+}
 
 /**
  * The living organisms in our ecosystem.

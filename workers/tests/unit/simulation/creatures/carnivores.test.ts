@@ -100,6 +100,81 @@ describe('simulation/creatures/carnivores', () => {
     expect(prey.energy).toBe(0);
   });
 
+  it('sets huntTargetId on entity when engaging prey', async () => {
+    const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 50 });
+    const prey = buildHerbivore({ id: 'prey-target', position: { x: 20, y: 0 } });
+
+    await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [prey],
+      createFakeEventLogger()
+    );
+
+    expect(carnivore.huntTargetId).toBe('prey-target');
+    expect(carnivore.huntTicksOnTarget).toBeGreaterThanOrEqual(1);
+  });
+
+  it('increments huntTicksOnTarget on the same prey each tick', async () => {
+    const prey = buildHerbivore({ id: 'prey-persistent', position: { x: 20, y: 0 }, energy: 5, health: 100 });
+    const carnivore = buildCarnivore({
+      position: { x: 0, y: 0 },
+      energy: 50,
+      movementSpeed: 1,
+      huntTargetId: 'prey-persistent',
+      huntTicksOnTarget: 3
+    } as any);
+
+    await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [prey],
+      createFakeEventLogger()
+    );
+
+    expect(carnivore.huntTargetId).toBe('prey-persistent');
+    expect(carnivore.huntTicksOnTarget).toBe(4);
+  });
+
+  it('resets hunt state to null after killing prey', async () => {
+    const carnivore = buildCarnivore({ position: { x: 0, y: 0 }, energy: 50 });
+    const prey = buildHerbivore({ id: 'prey-kill', position: { x: 0, y: 0 }, energy: 20, health: 100 });
+
+    await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [prey],
+      createFakeEventLogger()
+    );
+
+    expect(prey.isAlive).toBe(false);
+    expect(carnivore.huntTargetId).toBeNull();
+    expect(carnivore.huntTicksOnTarget).toBe(0);
+  });
+
+  it('clears hunt state when no prey is in perception radius', async () => {
+    const carnivore = buildCarnivore({
+      position: { x: 0, y: 0 },
+      energy: 50,
+      perceptionRadius: 30
+    });
+    // Seed hunt state from a prior tick — prey is now out of range
+    (carnivore as any).huntTargetId = 'old-prey';
+    (carnivore as any).huntTicksOnTarget = 5;
+
+    const farPrey = buildHerbivore({ id: 'old-prey', position: { x: 200, y: 0 } });
+
+    await processCarnivoreBehaviorDuringTick(
+      carnivore,
+      buildEnvironment(),
+      [farPrey],
+      createFakeEventLogger()
+    );
+
+    expect(carnivore.huntTargetId).toBeNull();
+    expect(carnivore.huntTicksOnTarget).toBe(0);
+  });
+
   it('does not reproduce after max reproductive age', async () => {
     const carnivore = buildCarnivore({
       age: 170,

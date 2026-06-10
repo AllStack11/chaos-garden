@@ -1,4 +1,4 @@
-import type { Entity } from '@chaos-garden/shared';
+import type { DeadMatter, Entity } from '@chaos-garden/shared';
 
 const BASE_POSITION = { x: 100, y: 100 };
 const BASE_TIMESTAMPS = {
@@ -73,6 +73,17 @@ export function buildCarnivore(overrides: Partial<Entity> = {}): Entity {
     ...BASE_TIMESTAMPS,
     ...overrides
   } as Entity;
+}
+
+export function buildDeadMatter(overrides: Partial<DeadMatter> = {}): DeadMatter {
+  return {
+    id: 'dead-1',
+    position: { x: 100, y: 100 },
+    energy: 50,
+    type: 'herbivore',
+    deathTick: 1,
+    ...overrides
+  };
 }
 
 export function buildFungus(overrides: Partial<Entity> = {}): Entity {

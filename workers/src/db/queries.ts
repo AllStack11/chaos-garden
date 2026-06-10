@@ -12,6 +12,8 @@
 import type {
   GardenState,
   Entity,
+  DeadMatter,
+  DeadMatterRow,
   SimulationEvent,
   SimulationEventType,
   EventSeverity,
@@ -235,24 +237,126 @@ export async function getAllLivingEntitiesFromDatabase(
   return rows.map(mapRowToEntity);
 }
 
+// ==========================================
+// Dead Matter Queries
+// ==========================================
+
 /**
- * Load dead entities that still contain decomposable energy.
- * These remain in-garden dead matter across ticks.
+ * Load all current dead matter (corpses awaiting decomposition or TTL expiry).
  */
-export async function getAllDecomposableDeadEntitiesFromDatabase(
+export async function getDeadMatterFromDatabase(
   db: D1Database
-): Promise<Entity[]> {
-  const rows = await queryAll<EntityRow>(
+): Promise<DeadMatter[]> {
+  const rows = await queryAll<DeadMatterRow>(
     db,
-    `SELECT id, garden_state_id, born_at_tick, death_tick, is_alive, type, name, species, position_x, position_y,
-            energy, health, age, traits, lineage, created_at, updated_at
-     FROM entities
-     WHERE is_alive = 0
-       AND energy > 0
-     ORDER BY death_tick ASC, born_at_tick ASC, id ASC`
+    `SELECT id, position_x, position_y, energy, type, death_tick
+     FROM dead_matter
+     ORDER BY death_tick ASC, id ASC`
   );
 
-  return rows.map(mapRowToEntity);
+  return rows.map(mapRowToDeadMatter);
+}
+
+/**
+ * Insert new dead matter rows for entities that died this tick.
+ */
+export async function createDeadMatterBatchInDatabase(
+  db: D1Database,
+  items: DeadMatter[]
+): Promise<void> {
+  if (items.length === 0) return;
+
+  const statements = items.map(item => ({
+    query: `INSERT OR IGNORE INTO dead_matter (id, position_x, position_y, energy, type, death_tick)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [item.id, item.position.x, item.position.y, item.energy, item.type, item.deathTick]
+  }));
+
+  await executeBatch(db, statements);
+}
+
+/**
+ * Update energy on partially-decomposed dead matter items.
+ */
+export async function updateDeadMatterEnergyBatchInDatabase(
+  db: D1Database,
+  items: DeadMatter[]
+): Promise<void> {
+  if (items.length === 0) return;
+
+  const statements = items.map(item => ({
+    query: `UPDATE dead_matter SET energy = ? WHERE id = ?`,
+    params: [item.energy, item.id]
+  }));
+
+  await executeBatch(db, statements);
+}
+
+/**
+ * Delete fully-decomposed dead matter items (energy reached 0).
+ */
+export async function deleteDeadMatterBatchInDatabase(
+  db: D1Database,
+  ids: string[]
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const statements = ids.map(id => ({
+    query: `DELETE FROM dead_matter WHERE id = ?`,
+    params: [id]
+  }));
+
+  await executeBatch(db, statements);
+}
+
+/**
+ * Delete garden_state rows older than a tick threshold.
+ * Cascades automatically to simulation_events (ON DELETE CASCADE FK).
+ * Call once per tick to keep historical storage bounded forever.
+ */
+export async function pruneOldGardenStatesFromDatabase(
+  db: D1Database,
+  keepAfterTick: number
+): Promise<void> {
+  if (keepAfterTick <= 0) return;
+  await executeQuery(
+    db,
+    `DELETE FROM garden_state WHERE tick < ?`,
+    [keepAfterTick]
+  );
+}
+
+/**
+ * Delete dead matter rows older than the TTL threshold.
+ * Handles corpses that fungi never reached.
+ */
+export async function purgeExpiredDeadMatterFromDatabase(
+  db: D1Database,
+  beforeTick: number
+): Promise<void> {
+  await executeQuery(
+    db,
+    `DELETE FROM dead_matter WHERE death_tick < ?`,
+    [beforeTick]
+  );
+}
+
+/**
+ * Remove specific entities from the entities table.
+ * Called when living entities die — they either move to dead_matter or disappear.
+ */
+export async function deleteEntitiesByIdsFromDatabase(
+  db: D1Database,
+  ids: string[]
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const statements = ids.map(id => ({
+    query: `DELETE FROM entities WHERE id = ?`,
+    params: [id]
+  }));
+
+  await executeBatch(db, statements);
 }
 
 /**
@@ -603,7 +707,7 @@ function mapRowToGardenState(row: GardenStateRow): GardenState {
  * Convert a database row to an Entity object.
  */
 function mapRowToEntity(row: EntityRow): Entity {
-  const traits = JSON.parse(row.traits);
+  const traits = safeParseJson<Record<string, unknown>>(row.traits, {});
   return {
     id: row.id,
     gardenStateId: row.garden_state_id || undefined,
@@ -625,6 +729,19 @@ function mapRowToEntity(row: EntityRow): Entity {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   } as Entity;
+}
+
+/**
+ * Convert a dead_matter database row to a DeadMatter object.
+ */
+function mapRowToDeadMatter(row: DeadMatterRow): DeadMatter {
+  return {
+    id: row.id,
+    position: { x: row.position_x, y: row.position_y },
+    energy: row.energy,
+    type: row.type as DeadMatter['type'],
+    deathTick: row.death_tick
+  };
 }
 
 /**

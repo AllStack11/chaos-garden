@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Entity, Environment } from '@chaos-garden/shared';
 import { DEFAULT_SIMULATION_CONFIG } from '@chaos-garden/shared';
 import { processEntitiesForTick } from '../../../src/simulation/tick/tickHelpers/processEntitiesForTick';
+import { maybeSpawnWildFungus } from '../../../src/simulation/tick/tickHelpers/maybeSpawnWildFungus';
+import { maybeSpawnWildPlants } from '../../../src/simulation/tick/tickHelpers/maybeSpawnWildPlants';
+import { maybeSpawnWildHerbivores } from '../../../src/simulation/tick/tickHelpers/maybeSpawnWildHerbivores';
+import { maybeSpawnWildCarnivore } from '../../../src/simulation/tick/tickHelpers/maybeSpawnWildCarnivore';
 import { createFakeEventLogger } from '../../helpers/fake-event-logger';
 import { createFakeApplicationLogger } from '../../helpers/fake-application-logger';
 import { buildEnvironment } from '../../fixtures/environment';
@@ -190,6 +194,7 @@ async function runTickWithEnvironment(
 ): Promise<Entity[]> {
   const eventLogger = createFakeEventLogger();
   const appLogger = createFakeApplicationLogger();
+  const gardenStateId = 1;
 
   const livingBeforeTick = entities.filter((entity) => entity.isAlive);
   for (const entity of livingBeforeTick) {
@@ -199,11 +204,27 @@ async function runTickWithEnvironment(
     }
   }
 
+  // Mirror the wild-spawn logic from tick.ts so the integration test sees the same
+  // recovery mechanisms that production runs benefit from.
+  const plantCount = livingBeforeTick.filter(e => e.type === 'plant').length;
+  const herbivoreCount = livingBeforeTick.filter(e => e.type === 'herbivore').length;
+  const carnivoreCount = livingBeforeTick.filter(e => e.type === 'carnivore').length;
+  const fungiCount = livingBeforeTick.filter(e => e.type === 'fungus').length;
+
+  const wildFungi = await maybeSpawnWildFungus(gardenStateId, fungiCount, eventLogger, appLogger);
+  livingBeforeTick.push(...wildFungi);
+  const wildPlants = await maybeSpawnWildPlants(gardenStateId, plantCount, eventLogger, appLogger);
+  livingBeforeTick.push(...wildPlants);
+  const wildHerbivores = await maybeSpawnWildHerbivores(gardenStateId, herbivoreCount, plantCount, eventLogger, appLogger);
+  livingBeforeTick.push(...wildHerbivores);
+  const wildCarnivore = await maybeSpawnWildCarnivore(gardenStateId, carnivoreCount, herbivoreCount, eventLogger, appLogger);
+  if (wildCarnivore) livingBeforeTick.push(wildCarnivore);
+
   const decomposableDeadBeforeTick = entities.filter((entity) => !entity.isAlive && entity.energy > 0);
 
   const processingResult = await processEntitiesForTick(
     livingBeforeTick,
-    decomposableDeadBeforeTick,
+    decomposableDeadBeforeTick as any,
     environment,
     eventLogger,
     appLogger,

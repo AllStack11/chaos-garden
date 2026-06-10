@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.6.0';
+export const CURRENT_SCHEMA_VERSION = '1.8.0';
 
 /**
  * Check if the database schema is up to date.
@@ -84,6 +84,8 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
     } else if (currentVersion === '1.0.0') {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
@@ -91,26 +93,43 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
     } else if (currentVersion === '1.1.0') {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
     } else if (currentVersion === '1.3.0') {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
     } else if (currentVersion === '1.4.0') {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
     } else if (currentVersion === '1.5.0') {
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
     } else if (currentVersion === '1.5.1') {
       await migrateToV1_6_0(db);
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
+    } else if (currentVersion === '1.6.0') {
+      await migrateToV1_7_0(db);
+      await migrateToV1_8_0(db);
+    } else if (currentVersion === '1.7.0') {
+      await migrateToV1_8_0(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
@@ -391,6 +410,90 @@ async function migrateToV1_6_0(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 1.7.0.
+ * Introduces the dead_matter table for lightweight corpse tracking.
+ * Dead entities are no longer kept in the entities table with is_alive=0;
+ * instead a minimal dead_matter row is created and TTL-expired automatically.
+ * Any existing is_alive=0 rows are purged from entities as part of this migration.
+ */
+async function migrateToV1_7_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.7.0...');
+
+  const createTableResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS dead_matter (
+      id TEXT PRIMARY KEY,
+      position_x REAL NOT NULL,
+      position_y REAL NOT NULL,
+      energy REAL NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('plant', 'herbivore', 'carnivore', 'fungus')),
+      death_tick INTEGER NOT NULL
+    )`
+  );
+  if (!createTableResult.success) {
+    throw new Error(`Failed to create dead_matter table: ${createTableResult.error}`);
+  }
+
+  const createIndexResult = await executeRaw(
+    db,
+    `CREATE INDEX IF NOT EXISTS idx_dead_matter_death_tick ON dead_matter(death_tick)`
+  );
+  if (!createIndexResult.success) {
+    throw new Error(`Failed to create dead_matter index: ${createIndexResult.error}`);
+  }
+
+  // Purge dead entity rows that were stored under the old scheme.
+  // On a fresh restart the entities table is already clean, but this handles
+  // any existing deployment that has accumulated is_alive=0 rows.
+  const purgeResult = await executeRaw(
+    db,
+    `DELETE FROM entities WHERE is_alive = 0`
+  );
+  if (!purgeResult.success) {
+    throw new Error(`Failed to purge dead entities: ${purgeResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '1.7.0', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.7.0 complete');
+}
+
+/**
+ * Migration to version 1.8.0.
+ * Adds a composite index on entities(is_alive, born_at_tick) to cover the
+ * per-tick query: WHERE is_alive = 1 ORDER BY born_at_tick ASC/DESC.
+ */
+async function migrateToV1_8_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.8.0...');
+
+  const createIndexResult = await executeRaw(
+    db,
+    `CREATE INDEX IF NOT EXISTS idx_entities_alive_age ON entities(is_alive, born_at_tick)`
+  );
+  if (!createIndexResult.success) {
+    throw new Error(`Failed to create idx_entities_alive_age: ${createIndexResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '1.8.0', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.8.0 complete');
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  * 
@@ -421,6 +524,8 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_5_0(db);
     await migrateToV1_5_1(db);
     await migrateToV1_6_0(db);
+    await migrateToV1_7_0(db);
+    await migrateToV1_8_0(db);
 
     console.log('Database initialization complete');
     return true;

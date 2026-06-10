@@ -11,9 +11,12 @@ import {
   moveEntityAwayFromTarget,
   isEntityNearGardenBoundary,
   generateExplorationTarget,
-  findCompetingCarnivores
+  findCompetingCarnivores,
+  extractTraits,
+  copyTraitsWithPossibleMutations,
+  countEntitiesByType
 } from '../../../../src/simulation/environment/helpers';
-import { buildHerbivore, buildPlant, buildCarnivore } from '../../../fixtures/entities';
+import { buildHerbivore, buildPlant, buildCarnivore, buildDeadMatter } from '../../../fixtures/entities';
 
 describe('simulation/environment/helpers', () => {
   it('calculates euclidean distance between entities', () => {
@@ -65,6 +68,124 @@ describe('simulation/environment/helpers', () => {
     const source = buildHerbivore();
 
     expect(findNearestEntity(source, [], 'plant')).toBeNull();
+  });
+
+  describe('extractTraits', () => {
+    it('includes huntTargetId and huntTicksOnTarget for carnivores', () => {
+      const carnivore = buildCarnivore() as any;
+      carnivore.huntTargetId = 'prey-abc';
+      carnivore.huntTicksOnTarget = 7;
+
+      const traits = extractTraits(carnivore);
+
+      expect((traits as any).huntTargetId).toBe('prey-abc');
+      expect((traits as any).huntTicksOnTarget).toBe(7);
+    });
+
+    it('defaults hunt fields to null/0 when absent on carnivore', () => {
+      const carnivore = buildCarnivore();
+      const traits = extractTraits(carnivore);
+
+      expect((traits as any).huntTargetId).toBeNull();
+      expect((traits as any).huntTicksOnTarget).toBe(0);
+    });
+
+    it('does not include hunt fields for non-carnivore entities', () => {
+      const plant = buildPlant();
+      const traits = extractTraits(plant);
+
+      expect((traits as any).huntTargetId).toBeUndefined();
+      expect((traits as any).huntTicksOnTarget).toBeUndefined();
+    });
+  });
+
+  describe('copyTraitsWithPossibleMutations TRAIT_BOUNDS', () => {
+    it('clamps reproductionRate to minimum bound after mutation', () => {
+      // Force a downward mutation by mocking Math.random
+      const original = Math.random;
+      Math.random = () => 0; // always mutate downward at max range
+      try {
+        const plant = buildPlant({ reproductionRate: 0.0001 });
+        const traits = copyTraitsWithPossibleMutations(plant) as any;
+        expect(traits.reproductionRate).toBeGreaterThanOrEqual(0.001);
+      } finally {
+        Math.random = original;
+      }
+    });
+
+    it('clamps perceptionRadius to minimum bound after mutation', () => {
+      const original = Math.random;
+      Math.random = () => 0;
+      try {
+        const carnivore = buildCarnivore({ perceptionRadius: 1 });
+        const traits = copyTraitsWithPossibleMutations(carnivore) as any;
+        expect(traits.perceptionRadius).toBeGreaterThanOrEqual(10);
+      } finally {
+        Math.random = original;
+      }
+    });
+
+    it('clamps metabolismEfficiency to maximum bound after mutation', () => {
+      const original = Math.random;
+      Math.random = () => 1; // always mutate upward at max range
+      try {
+        const carnivore = buildCarnivore({ metabolismEfficiency: 2.9 });
+        const traits = copyTraitsWithPossibleMutations(carnivore) as any;
+        expect(traits.metabolismEfficiency).toBeLessThanOrEqual(3.0);
+      } finally {
+        Math.random = original;
+      }
+    });
+
+    it('does not include huntTargetId or huntTicksOnTarget in offspring traits', () => {
+      const carnivore = buildCarnivore() as any;
+      carnivore.huntTargetId = 'some-prey';
+      carnivore.huntTicksOnTarget = 10;
+
+      const traits = copyTraitsWithPossibleMutations(carnivore) as any;
+
+      expect(traits.huntTargetId).toBeUndefined();
+      expect(traits.huntTicksOnTarget).toBeUndefined();
+    });
+  });
+
+  describe('countEntitiesByType with DeadMatter', () => {
+    it('counts living entities and dead matter separately', () => {
+      const plant = buildPlant();
+      const herbivore = buildHerbivore();
+      const deadPlant = buildDeadMatter({ id: 'dp1', type: 'plant' });
+      const deadHerbivore = buildDeadMatter({ id: 'dh1', type: 'herbivore' });
+      const deadHerbivore2 = buildDeadMatter({ id: 'dh2', type: 'herbivore' });
+
+      const summary = countEntitiesByType([plant, herbivore], [deadPlant, deadHerbivore, deadHerbivore2]);
+
+      expect(summary.plants).toBe(1);
+      expect(summary.herbivores).toBe(1);
+      expect(summary.deadPlants).toBe(1);
+      expect(summary.deadHerbivores).toBe(2);
+      expect(summary.totalLiving).toBe(2);
+      expect(summary.totalDead).toBe(3);
+      expect(summary.total).toBe(5);
+    });
+
+    it('returns zeros for dead matter when no dead matter is provided', () => {
+      const plant = buildPlant();
+      const summary = countEntitiesByType([plant]);
+
+      expect(summary.deadPlants).toBe(0);
+      expect(summary.deadHerbivores).toBe(0);
+      expect(summary.deadCarnivores).toBe(0);
+      expect(summary.deadFungi).toBe(0);
+      expect(summary.totalDead).toBe(0);
+    });
+
+    it('does not count dead entities from living array in dead totals', () => {
+      const deadPlant = buildPlant({ isAlive: false, energy: 10 });
+      const summary = countEntitiesByType([deadPlant], []);
+
+      // The old API would have counted this; the new one only counts DeadMatter rows
+      expect(summary.deadPlants).toBe(0);
+    });
   });
 
   describe('Predator-Prey Perception', () => {

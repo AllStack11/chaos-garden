@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS entities (
 CREATE INDEX IF NOT EXISTS idx_entities_garden_state ON entities(garden_state_id);
 CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
 CREATE INDEX IF NOT EXISTS idx_entities_position ON entities(position_x, position_y);
+-- Covers the core per-tick query: WHERE is_alive = 1 ORDER BY born_at_tick ASC
+CREATE INDEX IF NOT EXISTS idx_entities_alive_age ON entities(is_alive, born_at_tick);
 
 -- ==========================================
 -- Simulation Events Table
@@ -140,6 +142,25 @@ INSERT OR REPLACE INTO simulation_control (id, last_completed_tick, updated_at)
 VALUES (1, 0, datetime('now'));
 
 -- ==========================================
+-- Dead Matter Table
+-- ==========================================
+-- Lightweight records for decomposable corpses.
+-- Created on entity death (if energy > threshold), removed on full decomposition
+-- or after DEAD_MATTER_TTL_TICKS ticks, whichever comes first.
+-- Replaces the old pattern of keeping is_alive=0 rows in the entities table.
+
+CREATE TABLE IF NOT EXISTS dead_matter (
+  id TEXT PRIMARY KEY,
+  position_x REAL NOT NULL,
+  position_y REAL NOT NULL,
+  energy REAL NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('plant', 'herbivore', 'carnivore', 'fungus')),
+  death_tick INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dead_matter_death_tick ON dead_matter(death_tick);
+
+-- ==========================================
 -- Metadata Table (for future migrations)
 -- ==========================================
 -- Tracks schema version and other system metadata.
@@ -151,8 +172,8 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 );
 
 -- Insert initial schema version
-INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-VALUES ('schema_version', '1.6.0', datetime('now'));
+INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+VALUES ('schema_version', '1.8.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding

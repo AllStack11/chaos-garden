@@ -89,7 +89,8 @@ export async function processPlantBehaviorDuringTick(
 ): Promise<Entity[]> {
   if (plant.type !== 'plant') return [];
   const offspring: Entity[] = [];
-  
+  const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
+
   // Photosynthesis
   const energyGained = calculatePlantEnergyGainFromPhotosynthesis(plant, environment);
   plant.energy = clampValueToRange(plant.energy + energyGained, 0, MAX_ENERGY);
@@ -103,17 +104,9 @@ export async function processPlantBehaviorDuringTick(
   }
   
   // Reproduction
-  if (
-    doesPlantHaveEnoughEnergyToReproduce(plant) &&
-    canPlantReproduceInLocalDensity(plant, allEntities)
-  ) {
-    if (willRandomEventOccur(plant.reproductionRate)) {
-      const child = await attemptPlantReproduction(
-        plant,
-        plant.gardenStateId ?? 0,
-        allEntities,
-        eventLogger
-      );
+  if (doesPlantHaveEnoughEnergyToReproduce(plant)) {
+    if (willRandomEventOccur(plant.reproductionRate * weatherModifiers.reproductionModifier)) {
+      const child = await attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
       if (child) {
         offspring.push(child);
       }

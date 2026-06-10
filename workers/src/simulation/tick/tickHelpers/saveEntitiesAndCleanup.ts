@@ -1,16 +1,15 @@
 import type { Entity } from '@chaos-garden/shared';
 import type { ApplicationLogger } from '../../../logging/application-logger';
 import type { D1Database } from '../../../types/worker';
-import { markEntitiesAsDeadInDatabase, saveEntitiesToDatabase } from '../../../db/queries';
+import { saveEntitiesToDatabase, deleteEntitiesByIdsFromDatabase } from '../../../db/queries';
 
 export async function saveEntitiesAndCleanup(
   db: D1Database,
   gardenStateId: number,
   tickNumber: number,
   newEntities: Entity[],
-  deadEntities: Entity[],
+  deadEntityIds: string[],
   livingEntities: Entity[],
-  updatedDeadEntities: Entity[],
   appLogger: ApplicationLogger
 ): Promise<void> {
   for (const entity of newEntities) {
@@ -18,22 +17,21 @@ export async function saveEntitiesAndCleanup(
     entity.gardenStateId = gardenStateId;
   }
 
+  // Deduplicate by ID in case the same entity appears in multiple arrays.
   const entitiesToSaveById = new Map<string, Entity>();
-  for (const entity of [...newEntities, ...livingEntities, ...deadEntities, ...updatedDeadEntities]) {
+  for (const entity of [...newEntities, ...livingEntities]) {
     entitiesToSaveById.set(entity.id, entity);
   }
   const entitiesToSave = [...entitiesToSaveById.values()];
   await saveEntitiesToDatabase(db, entitiesToSave);
 
-  await appLogger.debug('entities_saved', `Saved ${entitiesToSave.length} entities at tick ${tickNumber}`, {
+  // Remove dead entities from the entities table entirely.
+  // Their dead_matter rows (if any) are created separately in tick.ts.
+  await deleteEntitiesByIdsFromDatabase(db, deadEntityIds);
+
+  await appLogger.debug('entities_saved', `Saved ${entitiesToSave.length} entities, deleted ${deadEntityIds.length} dead at tick ${tickNumber}`, {
     newCount: newEntities.length,
     livingCount: livingEntities.length,
-    totalSaved: entitiesToSave.length
-  });
-
-  const deadEntityIds = deadEntities.map(e => e.id);
-  await markEntitiesAsDeadInDatabase(db, deadEntityIds, tickNumber);
-  await appLogger.debug('dead_marked', `Marked ${deadEntities.length} entities as dead`, {
-    deadCount: deadEntities.length
+    deletedCount: deadEntityIds.length
   });
 }

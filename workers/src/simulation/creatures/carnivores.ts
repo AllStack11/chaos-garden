@@ -62,12 +62,6 @@ const HUNT_MOVEMENT_COST_MULTIPLIER = 0.65;
 const SEARCH_MOVEMENT_COST_MULTIPLIER = 0.55;
 const STARVATION_HEALTH_DECAY_PER_TICK = 1;
 
-// State tracking for hunting behavior (ephemeral, not persisted)
-const carnivoreHuntingState = new Map<string, {
-  currentTargetId: string | null;
-  ticksSpentHunting: number;
-}>();
-
 /**
  * Create a new carnivore entity.
  */
@@ -122,15 +116,6 @@ export async function processCarnivoreBehaviorDuringTick(
   const weatherModifiers = getEffectiveWeatherModifiersFromEnvironment(environment);
   const effectiveMovementSpeed = calculateEffectiveCarnivoreSpeed(carnivore, weatherModifiers.movementModifier);
 
-  // Initialize or get hunting state for this carnivore
-  if (!carnivoreHuntingState.has(carnivore.id)) {
-    carnivoreHuntingState.set(carnivore.id, {
-      currentTargetId: null,
-      ticksSpentHunting: 0
-    });
-  }
-  const huntState = carnivoreHuntingState.get(carnivore.id)!;
-
   // 1. Check if high energy and should rest (conserve energy)
   if (carnivore.energy >= RESTING_ENERGY_THRESHOLD) {
     // Check for immediate prey within ambush range
@@ -147,19 +132,21 @@ export async function processCarnivoreBehaviorDuringTick(
         DEFAULT_SIMULATION_CONFIG.gardenWidth,
         DEFAULT_SIMULATION_CONFIG.gardenHeight
       );
-      moveEntityTowardTarget(carnivore, restingTarget, effectiveMovementSpeed * RESTING_SPEED_MULTIPLIER);
-      carnivore.energy -= BASE_METABOLISM_COST * RESTING_METABOLISM_MULTIPLIER;
+      const restingSpeed = effectiveMovementSpeed * RESTING_SPEED_MULTIPLIER;
+      const restingDistance = calculateDistanceBetweenEntities(carnivore, { ...carnivore, position: restingTarget });
+      moveEntityTowardTarget(carnivore, restingTarget, restingSpeed);
+      const movedRestingDistance = Math.min(restingDistance, restingSpeed);
+      carnivore.energy -= calculateMovementEnergyCost(movedRestingDistance, carnivore.metabolismEfficiency) * SEARCH_MOVEMENT_COST_MULTIPLIER;
 
       // Skip hunting behavior and continue to reproduction/death checks
-      huntState.currentTargetId = null;
-      huntState.ticksSpentHunting = 0;
+      carnivore.huntTargetId = null;
+      carnivore.huntTicksOnTarget = 0;
     } else {
       // Immediate prey - engage hunt
       performHuntingBehavior(
         carnivore,
         allEntities,
         effectiveMovementSpeed,
-        huntState,
         consumed
       );
     }
@@ -169,7 +156,6 @@ export async function processCarnivoreBehaviorDuringTick(
       carnivore,
       allEntities,
       effectiveMovementSpeed,
-      huntState,
       consumed
     );
   }
@@ -221,7 +207,6 @@ function performHuntingBehavior(
   carnivore: Entity,
   allEntities: Entity[],
   effectiveMovementSpeed: number,
-  huntState: { currentTargetId: string | null; ticksSpentHunting: number },
   consumed: string[]
 ): void {
   if (carnivore.type !== 'carnivore') return;
@@ -234,8 +219,6 @@ function performHuntingBehavior(
   );
 
   if (targetPreyInPerception) {
-    const distance = calculateDistanceBetweenEntities(carnivore, targetPreyInPerception);
-
     // Check for pack coordination (avoid competing carnivores)
     const allCarnivores = allEntities.filter(e => e.type === 'carnivore');
     const competingCarnivores = findCompetingCarnivores(
@@ -247,7 +230,6 @@ function performHuntingBehavior(
 
     // If too much competition, look for alternative prey
     if (competingCarnivores.length >= 2) {
-      // Find second-best target
       const allPreyInRange = allEntities.filter(e =>
         e.type === 'herbivore' &&
         e.id !== targetPreyInPerception.id &&
@@ -257,21 +239,20 @@ function performHuntingBehavior(
       );
 
       if (allPreyInRange.length > 0) {
-        // Switch to alternative prey
-        const alternativePrey = allPreyInRange[0];
-        engageHunt(carnivore, alternativePrey, effectiveMovementSpeed, huntState, consumed);
+        engageHunt(carnivore, allPreyInRange[0], effectiveMovementSpeed, consumed);
         return;
       }
     }
 
     // Check for hunt abandonment
-    if (huntState.currentTargetId === targetPreyInPerception.id) {
-      huntState.ticksSpentHunting++;
+    if (carnivore.huntTargetId === targetPreyInPerception.id) {
+      const ticksOnTarget = (carnivore.huntTicksOnTarget ?? 0) + 1;
+      carnivore.huntTicksOnTarget = ticksOnTarget;
 
-      if (huntState.ticksSpentHunting >= HUNT_ABANDONMENT_TICKS) {
+      if (ticksOnTarget >= HUNT_ABANDONMENT_TICKS) {
         // Abandon hunt - too many ticks chasing this prey
-        huntState.currentTargetId = null;
-        huntState.ticksSpentHunting = 0;
+        carnivore.huntTargetId = null;
+        carnivore.huntTicksOnTarget = 0;
 
         // Enter exploration mode
         const explorationTarget = generateExplorationTarget(
@@ -279,22 +260,24 @@ function performHuntingBehavior(
           DEFAULT_SIMULATION_CONFIG.gardenWidth,
           DEFAULT_SIMULATION_CONFIG.gardenHeight
         );
-        moveEntityTowardTarget(carnivore, explorationTarget, effectiveMovementSpeed * RESTING_SPEED_MULTIPLIER);
-        carnivore.energy -= BASE_METABOLISM_COST * RESTING_METABOLISM_MULTIPLIER;
+        const abandonSpeed = effectiveMovementSpeed * RESTING_SPEED_MULTIPLIER;
+        const abandonDistance = calculateDistanceBetweenEntities(carnivore, { ...carnivore, position: explorationTarget });
+        moveEntityTowardTarget(carnivore, explorationTarget, abandonSpeed);
+        const movedAbandonDistance = Math.min(abandonDistance, abandonSpeed);
+        carnivore.energy -= calculateMovementEnergyCost(movedAbandonDistance, carnivore.metabolismEfficiency) * SEARCH_MOVEMENT_COST_MULTIPLIER;
         return;
       }
     } else {
       // New target
-      huntState.currentTargetId = targetPreyInPerception.id;
-      huntState.ticksSpentHunting = 1;
+      carnivore.huntTargetId = targetPreyInPerception.id;
+      carnivore.huntTicksOnTarget = 1;
     }
 
-    // Engage hunt
-    engageHunt(carnivore, targetPreyInPerception, effectiveMovementSpeed, huntState, consumed);
+    engageHunt(carnivore, targetPreyInPerception, effectiveMovementSpeed, consumed);
   } else {
     // No prey in perception - explore instead of omniscient search
-    huntState.currentTargetId = null;
-    huntState.ticksSpentHunting = 0;
+    carnivore.huntTargetId = null;
+    carnivore.huntTicksOnTarget = 0;
 
     const explorationTarget = generateExplorationTarget(
       carnivore,
@@ -309,8 +292,7 @@ function performHuntingBehavior(
 
     moveEntityTowardTarget(carnivore, explorationTarget, searchSpeed);
     const movedDistance = Math.min(distance, searchSpeed);
-    const movementCost = calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency);
-    carnivore.energy -= movementCost * SEARCH_MOVEMENT_COST_MULTIPLIER;
+    carnivore.energy -= calculateMovementEnergyCost(movedDistance, carnivore.metabolismEfficiency) * SEARCH_MOVEMENT_COST_MULTIPLIER;
   }
 }
 
@@ -360,7 +342,6 @@ function engageHunt(
   carnivore: Entity,
   prey: Entity,
   effectiveMovementSpeed: number,
-  huntState: { currentTargetId: string | null; ticksSpentHunting: number },
   consumed: string[]
 ): void {
   if (carnivore.type !== 'carnivore') return;
@@ -371,8 +352,8 @@ function engageHunt(
     // Kill prey
     huntHerbivore(carnivore, prey);
     consumed.push(prey.id);
-    huntState.currentTargetId = null;
-    huntState.ticksSpentHunting = 0;
+    carnivore.huntTargetId = null;
+    carnivore.huntTicksOnTarget = 0;
   } else if (distance <= AMBUSH_RADIUS) {
     // Ambush range - stalk slowly for energy efficiency
     const stalkingSpeed = effectiveMovementSpeed * STALKING_SPEED_MULTIPLIER;

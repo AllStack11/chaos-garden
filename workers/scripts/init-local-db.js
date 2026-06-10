@@ -21,7 +21,7 @@ const DEFAULT_PRODUCTION_WRANGLER_CONFIG = 'wrangler.jsonc';
 const DEFAULT_PERSIST_PATH = '.wrangler/local-state';
 const WORKERS_DIR = path.resolve(__dirname, '..');
 const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
-const CURRENT_SCHEMA_VERSION = '1.6.0';
+const CURRENT_SCHEMA_VERSION = '1.8.0';
 const DEFAULT_SEED = 20260210;
 const DEFAULT_SEED_TIMESTAMP = '2026-01-01T00:00:00.000Z';
 
@@ -36,19 +36,27 @@ const PLANT_ARCHETYPES = [
 ];
 
 const HERBIVORE_ARCHETYPES = [
-  { name: 'fast', count: 4, movementSpeed: 2.8, metabolismEfficiency: 0.95, reproductionRate: 0.03, perceptionRadius: 105 },
-  { name: 'efficient', count: 4, movementSpeed: 1.7, metabolismEfficiency: 1.2, reproductionRate: 0.03, perceptionRadius: 95 },
-  { name: 'balanced', count: 4, movementSpeed: 2.1, metabolismEfficiency: 1.0, reproductionRate: 0.03, perceptionRadius: 100 },
-  { name: 'scout', count: 3, movementSpeed: 2.4, metabolismEfficiency: 0.95, reproductionRate: 0.02, perceptionRadius: 130 }
+  { name: 'fast',      count: 4, movementSpeed: 2.8, metabolismEfficiency: 0.95, reproductionRate: 0.03, perceptionRadius: 105, threatDetectionRadius: 150 },
+  { name: 'efficient', count: 4, movementSpeed: 1.7, metabolismEfficiency: 1.2,  reproductionRate: 0.03, perceptionRadius: 95,  threatDetectionRadius: 135 },
+  { name: 'balanced',  count: 4, movementSpeed: 2.1, metabolismEfficiency: 1.0,  reproductionRate: 0.03, perceptionRadius: 100, threatDetectionRadius: 140 },
+  { name: 'scout',     count: 3, movementSpeed: 2.4, metabolismEfficiency: 0.95, reproductionRate: 0.02, perceptionRadius: 130, threatDetectionRadius: 185 }
 ];
 
+// 5 carnivores for 15 herbivores → ratio 3.0, within the production minimum of 2.5
 const CARNIVORE_ARCHETYPES = [
-  { name: 'sprinter', count: 1, movementSpeed: 3.8, metabolismEfficiency: 1.0, reproductionRate: 0.02, perceptionRadius: 155 },
-  { name: 'patient', count: 1, movementSpeed: 3.0, metabolismEfficiency: 1.2, reproductionRate: 0.02, perceptionRadius: 165 }
+  { name: 'sprinter',   count: 1, movementSpeed: 3.8, metabolismEfficiency: 1.0,  reproductionRate: 0.02,  perceptionRadius: 155 },
+  { name: 'patient',    count: 1, movementSpeed: 3.0, metabolismEfficiency: 1.2,  reproductionRate: 0.02,  perceptionRadius: 165 },
+  { name: 'stalker',    count: 1, movementSpeed: 2.8, metabolismEfficiency: 1.3,  reproductionRate: 0.018, perceptionRadius: 185 },
+  { name: 'ambush',     count: 1, movementSpeed: 3.5, metabolismEfficiency: 1.05, reproductionRate: 0.02,  perceptionRadius: 140 },
+  { name: 'generalist', count: 1, movementSpeed: 3.2, metabolismEfficiency: 1.1,  reproductionRate: 0.02,  perceptionRadius: 160 }
 ];
 
-// Start with no fungi; spores now enter the garden dynamically during simulation ticks.
-const FUNGUS_ARCHETYPES = [];
+// Seed 3 fungi; more spores drift in dynamically during simulation ticks.
+const FUNGUS_ARCHETYPES = [
+  { name: 'decomposer', count: 1, decompositionRate: 1.1, metabolismEfficiency: 1.1,  reproductionRate: 0.04, perceptionRadius: 60 },
+  { name: 'spreader',   count: 1, decompositionRate: 0.9, metabolismEfficiency: 1.2,  reproductionRate: 0.05, perceptionRadius: 50 },
+  { name: 'consumer',   count: 1, decompositionRate: 1.3, metabolismEfficiency: 0.95, reproductionRate: 0.03, perceptionRadius: 70 }
+];
 
 function createSeededRandom(seed) {
   let state = seed >>> 0;
@@ -281,7 +289,8 @@ function generateSeedEntities(seed, gardenStateId = 1, timestamp = DEFAULT_SEED_
           reproductionRate: archetype.reproductionRate,
           movementSpeed: archetype.movementSpeed,
           metabolismEfficiency: archetype.metabolismEfficiency,
-          perceptionRadius: archetype.perceptionRadius
+          perceptionRadius: archetype.perceptionRadius,
+          threatDetectionRadius: archetype.threatDetectionRadius
         },
         lineage: 'origin',
         created_at: timestamp,
@@ -365,7 +374,7 @@ function getExpectedSeedCounts() {
     carnivoreCount,
     fungusCount,
     totalLivingCount: plantCount + herbivoreCount + carnivoreCount + fungusCount,
-    eventCount: 4
+    eventCount: 5
   };
 }
 
@@ -424,7 +433,8 @@ INSERT INTO simulation_events (
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', 'The Chaos Garden was created', '[]', '["genesis", "birth"]', 'LOW', '{"source": "initialization", "seed": ${seed}}'),
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.plantCount} plants sprouted from the fertile soil', '[]', '["biology", "plant", "birth"]', 'LOW', '{"count": ${counts.plantCount}, "type": "plants"}'),
   (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.herbivoreCount} herbivores wandered into the garden', '[]', '["biology", "herbivore", "birth"]', 'LOW', '{"count": ${counts.herbivoreCount}, "type": "herbivores"}'),
-  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.carnivoreCount} carnivores claimed their territories', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${counts.carnivoreCount}, "type": "carnivores"}');
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.carnivoreCount} carnivores claimed their territories', '[]', '["biology", "carnivore", "birth"]', 'LOW', '{"count": ${counts.carnivoreCount}, "type": "carnivores"}'),
+  (1, 0, '${DEFAULT_SEED_TIMESTAMP}', 'BIRTH', '${counts.fungusCount} fungi took root in the soil', '[]', '["biology", "fungus", "birth"]', 'LOW', '{"count": ${counts.fungusCount}, "type": "fungi"}');
 `;
 }
 
@@ -504,14 +514,14 @@ function runVerification(schemaOnly, commandOptions) {
     `SELECT COUNT(*) AS table_count
      FROM sqlite_master
      WHERE type = 'table'
-       AND name IN ('garden_state', 'entities', 'simulation_events', 'simulation_control', 'system_metadata')`,
+       AND name IN ('garden_state', 'entities', 'simulation_events', 'simulation_control', 'system_metadata', 'dead_matter')`,
     'Verifying required tables',
     commandOptions
   );
   assertVerification(
     'required tables',
-    tableCheck?.table_count === 5,
-    `Expected 5, got ${tableCheck?.table_count ?? 'null'}.`
+    tableCheck?.table_count === 6,
+    `Expected 6, got ${tableCheck?.table_count ?? 'null'}.`
   );
 
   const weatherColumnCheck = executeSqlCommandJson(
@@ -596,6 +606,7 @@ function createCleanupSql() {
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS simulation_events;
 DROP TABLE IF EXISTS entities;
+DROP TABLE IF EXISTS dead_matter;
 DROP TABLE IF EXISTS garden_state;
 DROP TABLE IF EXISTS simulation_control;
 DROP TABLE IF EXISTS system_metadata;
