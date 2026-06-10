@@ -188,10 +188,3 @@ At a high level:
 3. Deploy the Worker with `npm run deploy:workers`
 4. Set `PUBLIC_API_URL` for the frontend deployment
 5. Deploy the frontend with `npm run deploy:frontend`
-
-## Current review notes
-
-The app structure is solid and the README was mainly behind the implementation, but two issues surfaced during review:
-
-1. `npm run test:all` currently fails in [`shared/types.test.ts`](/C:/Users/saadm/Documents/repos/chaos-garden/shared/types.test.ts:11) because `plantReproductionThreshold` is `69` while the test still expects plant < herbivore < carnivore thresholds.
-2. The shared [`GardenResponse`](/C:/Users/saadm/Documents/repos/chaos-garden/shared/types.ts:450) contract is stale relative to the real `/api/garden` payload in [`workers/src/index.ts`](/C:/Users/saadm/Documents/repos/chaos-garden/workers/src/index.ts:244), which now returns `gardenState`, `entities`, `deadMatter`, and `events`.
