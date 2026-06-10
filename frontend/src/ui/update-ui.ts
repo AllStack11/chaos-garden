@@ -1,4 +1,4 @@
-import type { Entity, GardenState, SimulationEvent } from '../env.d.ts';
+import type { DeadMatter, Entity, GardenState, SimulationEvent } from '../env.d.ts';
 import { ENTITY_ICON_BY_TYPE } from '../constants/ui';
 import { positionSelectionTooltip } from './selectionPosition';
 import type { GardenAppState } from './gardenAppState';
@@ -40,6 +40,7 @@ function updateCanvas(root: HTMLElement, state: GardenAppState) {
   const canvas = root.querySelector('garden-canvas') as {
     updateState?: (
       entities: Entity[],
+      deadMatter: DeadMatter[],
       selected: Entity | null,
       gardenState: GardenState | null,
       events: SimulationEvent[],
@@ -48,7 +49,13 @@ function updateCanvas(root: HTMLElement, state: GardenAppState) {
   };
 
   if (canvas && typeof canvas.updateState === 'function') {
-    canvas.updateState(state.entities, state.selectedEntity, state.gardenState, state.recentEvents);
+    canvas.updateState(
+      state.entities,
+      state.deadMatter,
+      state.selectedEntity,
+      state.gardenState,
+      state.recentEvents,
+    );
   }
 }
 

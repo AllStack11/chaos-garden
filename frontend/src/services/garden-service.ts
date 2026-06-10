@@ -7,18 +7,12 @@
 
 import { ApiClient } from './api-client';
 import type {
-  GardenState,
-  Entity,
-  SimulationEvent,
+  GardenResponse,
   HealthStatus,
   GardenStatsResponse
 } from '../env.d.ts';
 
-export interface GardenData {
-  gardenState: GardenState;
-  entities: Entity[];
-  events: SimulationEvent[];
-}
+export type GardenData = GardenResponse['data'];
 
 export class GardenService {
   private client: ApiClient;

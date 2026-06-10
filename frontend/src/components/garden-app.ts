@@ -19,6 +19,7 @@ export class GardenApp extends HTMLElement {
   private state: GardenAppState = {
     gardenState: null,
     entities: [],
+    deadMatter: [],
     selectedEntity: null,
     recentEvents: [],
     isLoading: true,
@@ -213,6 +214,7 @@ export class GardenApp extends HTMLElement {
         const selectedEntityId = this.state.selectedEntity?.id;
         this.state.gardenState = data.gardenState;
         this.state.entities = data.entities;
+        this.state.deadMatter = data.deadMatter;
         this.state.recentEvents = data.events;
         this.state.selectedEntity = selectedEntityId
           ? this.state.entities.find((entity) => entity.id === selectedEntityId) ?? null

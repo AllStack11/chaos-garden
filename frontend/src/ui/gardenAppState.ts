@@ -1,8 +1,9 @@
-import type { Entity, GardenState, HealthStatus, SimulationEvent } from '../env.d.ts';
+import type { DeadMatter, Entity, GardenState, HealthStatus, SimulationEvent } from '../env.d.ts';
 
 export interface GardenAppState {
   gardenState: GardenState | null;
   entities: Entity[];
+  deadMatter: DeadMatter[];
   selectedEntity: Entity | null;
   recentEvents: SimulationEvent[];
   isLoading: boolean;

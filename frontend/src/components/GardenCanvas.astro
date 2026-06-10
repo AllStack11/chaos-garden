@@ -23,7 +23,7 @@ const {
 </garden-canvas>
 
 <script>
-  import type { Entity, GardenState, SimulationEvent } from '../env.d.ts';
+  import type { DeadMatter, Entity, GardenState, SimulationEvent } from '../env.d.ts';
   import {
     createBackgroundAnimationState,
     resizeBackgroundAnimationState,
@@ -61,6 +61,7 @@ const {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D | null;
     private entities: Entity[] = [];
+    private deadMatter: DeadMatter[] = [];
     private selectedEntity: Entity | null = null;
     private hoveredEntity: Entity | null = null;
     private gardenState: GardenState | null = null;
@@ -246,11 +247,13 @@ const {
 
     public updateState(
       entities: Entity[],
+      deadMatter: DeadMatter[],
       selectedEntity: Entity | null,
       gardenState?: GardenState | null,
       recentEvents?: SimulationEvent[],
     ) {
       this.entities = entities;
+      this.deadMatter = deadMatter;
       this.selectedEntity = selectedEntity;
       this.gardenState = gardenState ?? this.gardenState;
       this.recentEvents = recentEvents ?? this.recentEvents;
@@ -368,6 +371,7 @@ const {
 
         if (pass === 'entitiesBase') {
           this.entityRenderer.renderEntitiesBase(this.ctx!, this.entities, entityConfig);
+          this.renderDeadMatter();
           return;
         }
 
@@ -416,6 +420,48 @@ const {
       });
     }
 
+    private renderDeadMatter() {
+      if (!this.ctx) return;
+
+      const sortedDeadMatter = [...this.deadMatter].sort((left, right) => left.position.y - right.position.y);
+      sortedDeadMatter.forEach((remains) => {
+        const screenPosition = this.worldToScreen(remains.position.x, remains.position.y);
+        const energyFactor = Math.max(0, Math.min(1, remains.energy / 100));
+        const radius = Math.max(2, (2.5 + energyFactor * 4.5) * screenPosition.scale);
+        const hue = getDeadMatterHue(remains.type);
+        const alpha = 0.22 + energyFactor * 0.26;
+
+        this.ctx!.save();
+        this.ctx!.fillStyle = `hsla(${hue}, 22%, 28%, ${alpha})`;
+        this.ctx!.beginPath();
+        this.ctx!.ellipse(
+          screenPosition.x,
+          screenPosition.y + radius * 0.2,
+          radius * 1.15,
+          radius * 0.62,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        this.ctx!.fill();
+
+        this.ctx!.strokeStyle = `hsla(${hue}, 18%, 44%, ${0.08 + energyFactor * 0.18})`;
+        this.ctx!.lineWidth = Math.max(1, screenPosition.scale * 0.8);
+        this.ctx!.beginPath();
+        this.ctx!.ellipse(
+          screenPosition.x,
+          screenPosition.y + radius * 0.2,
+          radius * 1.15,
+          radius * 0.62,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        this.ctx!.stroke();
+        this.ctx!.restore();
+      });
+    }
+
     private recalculateWorldTransform() {
       this.worldScale = Math.min(this.viewport.width / this.simWidth, this.viewport.height / this.simHeight) * 0.9;
       this.worldOffsetX = (this.viewport.width - this.simWidth * this.worldScale) / 2;
@@ -425,5 +471,18 @@ const {
 
   if (!customElements.get('garden-canvas')) {
     customElements.define('garden-canvas', GardenCanvas);
+  }
+
+  function getDeadMatterHue(type: DeadMatter['type']): number {
+    switch (type) {
+      case 'plant':
+        return 90;
+      case 'herbivore':
+        return 38;
+      case 'carnivore':
+        return 12;
+      case 'fungus':
+        return 280;
+    }
   }
 </script>

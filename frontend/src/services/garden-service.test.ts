@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HealthStatus, GardenStatsResponse } from '@chaos-garden/shared';
+import type { GardenResponse, HealthStatus, GardenStatsResponse } from '@chaos-garden/shared';
 import { ApiClient } from './api-client';
 import { GardenService, type GardenData } from './garden-service';
 
@@ -50,14 +50,26 @@ describe('services/GardenService', () => {
         }
       },
       entities: [],
-      events: []
+      deadMatter: [
+        {
+          id: 'remains-1',
+          position: { x: 40, y: 90 },
+          energy: 22,
+          type: 'herbivore',
+          deathTick: 9,
+        }
+      ],
+      events: [],
+      timestamp: '2026-01-01T00:00:00.000Z',
     };
 
-    const getSpy = vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
+    const responsePayload: GardenResponse = {
       success: true,
       data: responseData,
       timestamp: '2026-01-01T00:00:00.000Z'
-    });
+    };
+
+    const getSpy = vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue(responsePayload);
 
     const service = GardenService.getInstance('https://api.example');
     const result = await service.fetchGardenData();

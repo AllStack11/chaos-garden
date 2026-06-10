@@ -14,7 +14,8 @@ import type {
   GardenInsight as SharedGardenInsight,
   EventTypeBreakdown as SharedEventTypeBreakdown,
   EventSeverityBreakdown as SharedEventSeverityBreakdown,
-  GardenEntityVitals as SharedGardenEntityVitals
+  GardenEntityVitals as SharedGardenEntityVitals,
+  DeadMatter as SharedDeadMatter
 } from '../../shared/types';
 
 /**
@@ -37,6 +38,7 @@ interface ImportMeta {
 // Re-export shared types for use in frontend components
 export type GardenState = SharedGardenState;
 export type Entity = SharedEntity;
+export type DeadMatter = SharedDeadMatter;
 export type SimulationEvent = SharedSimulationEvent;
 export type PopulationSummary = SharedPopulationSummary;
 export type HealthStatus = SharedHealthStatus;
