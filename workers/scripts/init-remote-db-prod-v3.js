@@ -24,6 +24,7 @@ const DEFAULT_DATABASE_NAME = 'chaos-garden-db';
 const DEFAULT_WRANGLER_CONFIG = 'wrangler.jsonc';
 const WORKERS_DIR = path.resolve(__dirname, '..');
 const SCHEMA_PATH = path.resolve(WORKERS_DIR, 'schema.sql');
+const CURRENT_SCHEMA_VERSION = '1.8.0';
 
 const GARDEN_WIDTH = 800;
 const GARDEN_HEIGHT = 600;
@@ -905,6 +906,7 @@ function createCleanupSql() {
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS simulation_events;
 DROP TABLE IF EXISTS entities;
+DROP TABLE IF EXISTS dead_matter;
 DROP TABLE IF EXISTS garden_state;
 DROP TABLE IF EXISTS simulation_control;
 DROP TABLE IF EXISTS system_metadata;
@@ -915,6 +917,13 @@ DROP INDEX IF EXISTS idx_application_logs_component;
 DROP INDEX IF EXISTS idx_application_logs_tick;
 DROP INDEX IF EXISTS idx_application_logs_entity;
 PRAGMA foreign_keys = ON;
+`;
+}
+
+function createSchemaVersionNormalizationSql() {
+  return `
+INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+VALUES ('schema_version', '${CURRENT_SCHEMA_VERSION}', datetime('now'));
 `;
 }
 
@@ -989,6 +998,34 @@ INSERT INTO simulation_events (
 
 function runVerification(commandOptions) {
   console.log('🔍 Verifying production database invariants...');
+
+  const tableCheck = executeSqlCommandJson(
+    `SELECT COUNT(*) AS table_count
+     FROM sqlite_master
+     WHERE type = 'table'
+       AND name IN ('garden_state', 'entities', 'simulation_events', 'simulation_control', 'system_metadata', 'dead_matter')`,
+    'Verifying required tables',
+    commandOptions
+  );
+  assertVerification(
+    'required tables',
+    tableCheck?.table_count === 6,
+    `Expected 6, got ${tableCheck?.table_count ?? 'null'}.`
+  );
+
+  const versionCheck = executeSqlCommandJson(
+    `SELECT value AS schema_version
+     FROM system_metadata
+     WHERE key = 'schema_version'
+     LIMIT 1`,
+    'Verifying schema version',
+    commandOptions
+  );
+  assertVerification(
+    'schema version',
+    versionCheck?.schema_version === CURRENT_SCHEMA_VERSION,
+    `Expected ${CURRENT_SCHEMA_VERSION}, got ${versionCheck?.schema_version ?? 'null'}.`
+  );
 
   const population = executeSqlCommandJson(
     'SELECT plants, herbivores, carnivores, fungi, total_living FROM garden_state WHERE tick = 0 LIMIT 1',
@@ -1105,6 +1142,7 @@ function initializeProductionDatabase(options) {
 
   executeSqlPhase(createCleanupSql(), 'Dropping existing schema artifacts', commandOptions);
   executeSqlPhase(fs.readFileSync(SCHEMA_PATH, 'utf-8'), 'Applying schema.sql', commandOptions);
+  executeSqlPhase(createSchemaVersionNormalizationSql(), 'Normalizing schema version', commandOptions);
   executeSqlPhase(createSeedSql(seedData, options.seed), 'Applying production seed data', commandOptions);
 
   runVerification(commandOptions);
