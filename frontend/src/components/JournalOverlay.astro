@@ -11,7 +11,7 @@ export interface Props {}
   <div data-overlay-backdrop class="absolute inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity duration-300"></div>
 
   <div data-panel-shell class="relative h-full overflow-y-auto opacity-0 translate-y-4 scale-[0.985] transition-all duration-300 ease-out">
-    <div class="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-7xl px-4 pb-36 pt-6 sm:px-6 lg:px-8">
       <header class="sticky top-0 z-20 mb-6 rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -29,16 +29,6 @@ export interface Props {}
               <button type="button" data-view-button="gallery" class="journal-tab">Gallery</button>
               <button type="button" data-view-button="signals" class="journal-tab">Signals</button>
             </div>
-          </div>
-        </div>
-
-        <div class="mt-4 space-y-2">
-          <div class="journal-chip-row" data-severity-filters></div>
-          <div class="journal-chip-row" data-type-filters></div>
-          <div class="journal-chip-row" data-tag-filters></div>
-          <div class="flex items-center gap-2">
-            <button type="button" data-clear-filters class="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs uppercase tracking-[0.14em] text-white/70 hover:bg-white/10">Clear filters</button>
-            <span data-filter-state class="text-xs text-white/55">Showing all events</span>
           </div>
         </div>
       </header>
@@ -83,6 +73,24 @@ export interface Props {}
           <div data-snapshot class="mt-3 text-sm text-white/82"></div>
         </article>
       </section>
+
+      <footer class="pointer-events-none sticky bottom-4 z-20 mt-8">
+        <div class="pointer-events-auto rounded-[1.75rem] border border-white/10 bg-black/45 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-[11px] uppercase tracking-[0.24em] text-garden-green-200/80">Filter Drift</p>
+              <p data-filter-state class="mt-1 text-xs text-white/55">Showing all events</p>
+            </div>
+            <button type="button" data-clear-filters class="self-start rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs uppercase tracking-[0.14em] text-white/70 hover:bg-white/10">Clear filters</button>
+          </div>
+
+          <div class="mt-4 grid gap-3">
+            <div class="journal-floating-lane" data-severity-filters></div>
+            <div class="journal-floating-lane" data-type-filters></div>
+            <div class="journal-floating-lane" data-tag-filters></div>
+          </div>
+        </div>
+      </footer>
     </div>
   </div>
 </journal-overlay>
@@ -122,6 +130,78 @@ export interface Props {}
     align-items: center;
   }
 
+  .journal-floating-lane {
+    position: relative;
+    min-height: 2.85rem;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+      radial-gradient(circle at 20% 50%, rgba(74, 222, 128, 0.12), transparent 36%),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  }
+
+  .journal-floating-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.85rem;
+    width: max-content;
+    padding: 0.35rem 0.7rem;
+    animation-name: journal-track-drift;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-delay: var(--track-delay, 0s);
+    animation-duration: var(--track-duration, 20s);
+    transform: translate3d(105%, 0, 0);
+    will-change: transform, opacity, filter;
+  }
+
+  .journal-floating-chip {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    animation-name: journal-chip-bob;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-duration: var(--chip-duration, 4.5s);
+    animation-delay: var(--chip-delay, 0s);
+    transform: translateY(0);
+    will-change: transform;
+  }
+
+  @keyframes journal-track-drift {
+    0% {
+      opacity: 0;
+      filter: blur(6px);
+      transform: translate3d(105%, 0, -120px) scale(0.86);
+    }
+    10% {
+      opacity: 0.92;
+      filter: blur(0);
+      transform: translate3d(76%, 0, 0) scale(1);
+    }
+    88% {
+      opacity: 0.88;
+      filter: blur(0);
+      transform: translate3d(-72%, 0, 0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      filter: blur(8px);
+      transform: translate3d(calc(-100% - 4rem), 0, -180px) scale(0.8);
+    }
+  }
+
+  @keyframes journal-chip-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(var(--chip-bob, -4px));
+    }
+  }
+
   .journal-chip[data-active='true'] {
     border-color: rgba(74, 222, 128, 0.45);
     background: rgba(74, 222, 128, 0.2);
@@ -154,6 +234,10 @@ export interface Props {}
   const MAX_RENDER_EVENTS = 180;
   const FEED_PAGE_SIZE = 7;
   const TAG_FALLBACK = 'untagged';
+  const FLOATING_TRACK_BASE_DURATION_SECONDS = 18;
+  const FLOATING_TRACK_DURATION_VARIANCE_SECONDS = 8;
+  const FLOATING_CHIP_BASE_BOB_SECONDS = 4;
+  const FLOATING_CHIP_BOB_VARIANCE_SECONDS = 2.5;
 
   class JournalOverlay extends HTMLElement {
     private readonly closeTransitionMs = 300;
@@ -382,6 +466,7 @@ export interface Props {}
       const container = this.querySelector('[data-severity-filters]');
       if (!container) return;
       container.textContent = '';
+      const track = this.createFloatingTrack(container);
 
       const severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
       severities.forEach((severity) => {
@@ -393,7 +478,8 @@ export interface Props {}
           this.feedPage = 0;
           this.scheduleRender();
         });
-        container.appendChild(chip);
+        this.decorateFloatingChip(chip);
+        track.appendChild(chip);
       });
     }
 
@@ -401,11 +487,12 @@ export interface Props {}
       const container = this.querySelector('[data-type-filters]');
       if (!container) return;
       container.textContent = '';
+      const track = this.createFloatingTrack(container);
 
       const typeCounts = new Map<string, number>();
       this.events.forEach((event) => typeCounts.set(event.eventType, (typeCounts.get(event.eventType) ?? 0) + 1));
 
-      Array.from(typeCounts.entries())
+      this.shuffleEntries(Array.from(typeCounts.entries()))
         .sort((firstEntry, secondEntry) => secondEntry[1] - firstEntry[1])
         .slice(0, 10)
         .forEach(([eventType, count]) => {
@@ -414,7 +501,8 @@ export interface Props {}
             this.feedPage = 0;
             this.scheduleRender();
           });
-          container.appendChild(chip);
+          this.decorateFloatingChip(chip);
+          track.appendChild(chip);
         });
     }
 
@@ -422,13 +510,14 @@ export interface Props {}
       const container = this.querySelector('[data-tag-filters]');
       if (!container) return;
       container.textContent = '';
+      const track = this.createFloatingTrack(container);
 
       const tagCounts = new Map<string, number>();
       this.events.forEach((event) => {
         this.getTags(event).forEach((tag) => tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1));
       });
 
-      Array.from(tagCounts.entries())
+      this.shuffleEntries(Array.from(tagCounts.entries()))
         .sort((firstEntry, secondEntry) => secondEntry[1] - firstEntry[1])
         .slice(0, 18)
         .forEach(([tag, count]) => {
@@ -437,7 +526,8 @@ export interface Props {}
             this.feedPage = 0;
             this.scheduleRender();
           });
-          container.appendChild(chip);
+          this.decorateFloatingChip(chip);
+          track.appendChild(chip);
         });
     }
 
@@ -449,6 +539,45 @@ export interface Props {}
       button.textContent = label;
       button.addEventListener('click', onClick);
       return button;
+    }
+
+    private decorateFloatingChip(chip: HTMLButtonElement) {
+      chip.classList.add('journal-floating-chip');
+      const duration = `${(FLOATING_CHIP_BASE_BOB_SECONDS + this.randomBetween(0, FLOATING_CHIP_BOB_VARIANCE_SECONDS)).toFixed(2)}s`;
+      const delay = `${(-1 * this.randomBetween(0, FLOATING_CHIP_BASE_BOB_SECONDS + FLOATING_CHIP_BOB_VARIANCE_SECONDS)).toFixed(2)}s`;
+      const bob = `${this.randomBetween(-5, -1.5).toFixed(1)}px`;
+
+      chip.style.setProperty('--chip-duration', duration);
+      chip.style.setProperty('--chip-delay', delay);
+      chip.style.setProperty('--chip-bob', bob);
+    }
+
+    private createFloatingTrack(container: Element): HTMLDivElement {
+      const track = document.createElement('div');
+      track.className = 'journal-floating-track';
+
+      const duration = `${(FLOATING_TRACK_BASE_DURATION_SECONDS + this.randomBetween(0, FLOATING_TRACK_DURATION_VARIANCE_SECONDS)).toFixed(2)}s`;
+      const delay = `${(-1 * this.randomBetween(0, FLOATING_TRACK_BASE_DURATION_SECONDS + FLOATING_TRACK_DURATION_VARIANCE_SECONDS)).toFixed(2)}s`;
+
+      track.style.setProperty('--track-duration', duration);
+      track.style.setProperty('--track-delay', delay);
+      container.appendChild(track);
+      return track;
+    }
+
+    private shuffleEntries<T>(entries: T[]): T[] {
+      const shuffledEntries = [...entries];
+
+      for (let currentIndex = shuffledEntries.length - 1; currentIndex > 0; currentIndex -= 1) {
+        const randomIndex = Math.floor(this.randomBetween(0, currentIndex + 1));
+        [shuffledEntries[currentIndex], shuffledEntries[randomIndex]] = [shuffledEntries[randomIndex], shuffledEntries[currentIndex]];
+      }
+
+      return shuffledEntries;
+    }
+
+    private randomBetween(minimum: number, maximum: number): number {
+      return minimum + Math.random() * (maximum - minimum);
     }
 
     private renderFeed() {

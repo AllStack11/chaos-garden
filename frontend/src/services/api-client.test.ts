@@ -16,6 +16,9 @@ describe('services/ApiClient', () => {
     };
 
     const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
       json: async () => payload
     }));
     vi.stubGlobal('fetch', fetchMock);
@@ -35,6 +38,9 @@ describe('services/ApiClient', () => {
     };
 
     const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
       json: async () => payload
     }));
     vi.stubGlobal('fetch', fetchMock);
@@ -58,5 +64,29 @@ describe('services/ApiClient', () => {
     expect(response.success).toBe(false);
     expect(response.error).toBe('network down');
     expect(response.timestamp).toBeTypeOf('string');
+  });
+
+  it('returns a structured error response for non-ok HTTP responses', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      json: async () => ({
+        success: false,
+        error: 'Rate limit exceeded',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      }),
+    })));
+
+    const client = new ApiClient('https://example.com');
+    const response = await client.get('/api/garden');
+
+    expect(response).toEqual({
+      success: false,
+      error: 'Rate limit exceeded',
+      details: undefined,
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
+    expect(console.error).toHaveBeenCalled();
   });
 });

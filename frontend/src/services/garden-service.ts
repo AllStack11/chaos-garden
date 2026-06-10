@@ -30,36 +30,35 @@ export class GardenService {
     return GardenService.instance;
   }
 
-  /**
-   * Fetch the complete current state of the garden.
-   */
-  async fetchGardenData(): Promise<GardenData | null> {
-    const response = await this.client.get<GardenData>('/api/garden');
+  private unwrapResponse<T>(resourceName: string, response: { success: boolean; data?: T; error?: string }): T {
     if (response.success && response.data) {
       return response.data;
     }
-    return null;
+
+    throw new Error(response.error ?? `Failed to fetch ${resourceName}`);
+  }
+
+  /**
+   * Fetch the complete current state of the garden.
+   */
+  async fetchGardenData(): Promise<GardenData> {
+    const response = await this.client.get<GardenData>('/api/garden');
+    return this.unwrapResponse('garden data', response);
   }
 
   /**
    * Check the health of the API.
    */
-  async checkHealth(): Promise<HealthStatus | null> {
+  async checkHealth(): Promise<HealthStatus> {
     const response = await this.client.get<HealthStatus>('/api/health');
-    if (response.success && response.data) {
-      return response.data;
-    }
-    return null;
+    return this.unwrapResponse('health status', response);
   }
 
   /**
    * Fetch aggregated and historical statistics for the dashboard.
    */
-  async fetchGardenStats(windowTicks: number = 120): Promise<GardenStatsResponse | null> {
+  async fetchGardenStats(windowTicks: number = 120): Promise<GardenStatsResponse> {
     const response = await this.client.get<GardenStatsResponse>(`/api/garden/stats?windowTicks=${windowTicks}`);
-    if (response.success && response.data) {
-      return response.data;
-    }
-    return null;
+    return this.unwrapResponse('garden stats', response);
   }
 }

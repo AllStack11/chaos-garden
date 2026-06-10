@@ -78,7 +78,7 @@ describe('services/GardenService', () => {
     expect(result).toEqual(responseData);
   });
 
-  it('returns null when garden endpoint returns failure', async () => {
+  it('throws when garden endpoint returns failure', async () => {
     vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
       success: false,
       error: 'unavailable',
@@ -86,9 +86,7 @@ describe('services/GardenService', () => {
     });
 
     const service = GardenService.getInstance('https://api.example');
-    const result = await service.fetchGardenData();
-
-    expect(result).toBeNull();
+    await expect(service.fetchGardenData()).rejects.toThrow('unavailable');
   });
 
   it('returns health status when health endpoint succeeds', async () => {
@@ -194,5 +192,16 @@ describe('services/GardenService', () => {
 
     expect(getSpy).toHaveBeenCalledWith('/api/garden/stats?windowTicks=120');
     expect(result).toEqual(stats);
+  });
+
+  it('throws when health endpoint returns failure', async () => {
+    vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
+      success: false,
+      error: 'System unhealthy',
+      timestamp: '2026-01-01T00:00:00.000Z',
+    });
+
+    const service = GardenService.getInstance('https://api.example');
+    await expect(service.checkHealth()).rejects.toThrow('System unhealthy');
   });
 });
