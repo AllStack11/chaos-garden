@@ -77,7 +77,7 @@ export async function processEntitiesForTick(
   for (const plant of plants) {
     if (isPlantDead(plant)) continue;
 
-    const offspring = await processPlantBehaviorDuringTick(plant, environment, eventLogger);
+    const offspring = await processPlantBehaviorDuringTick(plant, environment, entities, eventLogger);
     for (const child of offspring) child.lineage = plant.id;
     const accepted = offspring.filter(() => {
       if (plantCount >= DEFAULT_SIMULATION_CONFIG.maxPlants) return false;

@@ -105,8 +105,11 @@ export async function processPlantBehaviorDuringTick(
   
   // Reproduction
   if (doesPlantHaveEnoughEnergyToReproduce(plant)) {
-    if (willRandomEventOccur(plant.reproductionRate * weatherModifiers.reproductionModifier)) {
-      const child = await attemptPlantReproduction(plant, plant.gardenStateId ?? 0, eventLogger);
+    if (
+      canPlantReproduceInLocalDensity(plant, allEntities) &&
+      willRandomEventOccur(plant.reproductionRate * weatherModifiers.reproductionModifier)
+    ) {
+      const child = await attemptPlantReproduction(plant, plant.gardenStateId ?? 0, allEntities, eventLogger);
       if (child) {
         offspring.push(child);
       }
