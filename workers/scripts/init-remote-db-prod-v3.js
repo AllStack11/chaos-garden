@@ -865,12 +865,21 @@ function executeSqlPhase(sql, phaseName, commandOptions) {
     try {
       runWranglerExecute([`--file=${tempFileName}`], phaseName, commandOptions);
     } catch (error) {
-      if (!isRemoteImportAuthenticationError(error)) {
-        throw error;
-      }
+      const warningMessage = isRemoteImportAuthenticationError(error)
+        ? '⚠️ Remote SQL file import rejected by Cloudflare auth. Retrying as statement-by-statement execution.'
+        : '⚠️ Remote SQL file execution failed. Retrying as statement-by-statement execution.';
 
-      console.warn('⚠️ Remote SQL file import rejected by Cloudflare auth. Retrying as statement-by-statement execution.');
-      executeSqlStatementsIndividually(sql, phaseName, commandOptions);
+      console.warn(warningMessage);
+
+      try {
+        executeSqlStatementsIndividually(sql, phaseName, commandOptions);
+      } catch (statementError) {
+        if (!isRemoteImportAuthenticationError(error)) {
+          throw error;
+        }
+
+        throw statementError;
+      }
     }
     console.log(`✅ ${phaseName} complete`);
   } finally {
@@ -881,7 +890,9 @@ function executeSqlPhase(sql, phaseName, commandOptions) {
 }
 
 function executeSqlCommandJson(command, description, commandOptions) {
-  const output = runWranglerExecute([`--command=${command}`, '--json'], description, commandOptions);
+  const normalizedCommand = command.replace(/\s+/g, ' ').trim();
+  const escapedCommand = normalizedCommand.replace(/"/g, '\\"');
+  const output = runWranglerExecute([`--command="${escapedCommand}"`, '--json'], description, commandOptions);
   const parsedOutput = JSON.parse(output);
   const [firstResult] = Array.isArray(parsedOutput) ? parsedOutput : [];
   const [firstRow] = firstResult?.results || [];
@@ -889,7 +900,9 @@ function executeSqlCommandJson(command, description, commandOptions) {
 }
 
 function executeSqlRowsJson(command, description, commandOptions) {
-  const output = runWranglerExecute([`--command=${command}`, '--json'], description, commandOptions);
+  const normalizedCommand = command.replace(/\s+/g, ' ').trim();
+  const escapedCommand = normalizedCommand.replace(/"/g, '\\"');
+  const output = runWranglerExecute([`--command="${escapedCommand}"`, '--json'], description, commandOptions);
   const parsedOutput = JSON.parse(output);
   const [firstResult] = Array.isArray(parsedOutput) ? parsedOutput : [];
   return firstResult?.results || [];
