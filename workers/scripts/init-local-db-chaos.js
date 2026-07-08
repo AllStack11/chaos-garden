@@ -19,7 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const spawn = require('cross-spawn');
 
 const DEFAULT_DATABASE_NAME = 'chaos-garden-db';
 const DEFAULT_LOCAL_WRANGLER_CONFIG = 'wrangler.local.jsonc';
@@ -389,7 +389,7 @@ function runWranglerExecute(extraArgs, description, commandOptions) {
   }
 
   const commandArgs = [...baseArgs, ...extraArgs];
-  const result = spawnSync('npx', commandArgs, {
+  const result = spawn.sync('npx', commandArgs, {
     cwd: WORKERS_DIR,
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe']

@@ -13,7 +13,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const spawn = require('cross-spawn');
 
 const DEFAULT_DATABASE_NAME = 'chaos-garden-db';
 const DEFAULT_LOCAL_WRANGLER_CONFIG = 'wrangler.local.jsonc';
@@ -455,7 +455,7 @@ function runWranglerExecute(extraArgs, description, commandOptions) {
   }
 
   const commandArgs = [...baseArgs, ...extraArgs];
-  const result = spawnSync('npx', commandArgs, {
+  const result = spawn.sync('npx', commandArgs, {
     cwd: WORKERS_DIR,
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe']
@@ -493,7 +493,8 @@ function executeSqlPhase(sql, phaseName, commandOptions) {
 }
 
 function executeSqlCommandJson(command, description, commandOptions) {
-  const output = runWranglerExecute([`--command=${command}`, '--json'], description, commandOptions);
+  const singleLineCommand = command.replace(/\s+/g, ' ').trim();
+  const output = runWranglerExecute([`--command=${singleLineCommand}`, '--json'], description, commandOptions);
   const parsedOutput = JSON.parse(output);
   const [firstResult] = Array.isArray(parsedOutput) ? parsedOutput : [];
   const [firstRow] = firstResult?.results || [];
