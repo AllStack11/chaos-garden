@@ -1,0 +1,30 @@
+{
+  "name": "@chaos-garden/shared",
+  "version": "2.0.0",
+  "description": "Cross-layer types, mathematical utilities, and API contracts for Chaos Garden",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "clean": "echo '🧹 Shared: Nothing to clean'"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vitest": "^3.2.4"
+  }
+}
+
