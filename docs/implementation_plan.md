@@ -9,6 +9,8 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 ## 🚦 Project Status & Progress Tracker
 
 | Phase          | Milestone                                       | Scope                                                                                        | Status           |
+| :------------- | :---------------------------------------------- | :------------------------------------------------------------------------------------------- | :--------------- |
+| **Foundation** | **Agent Roles & Dispatcher**                    | `AGENTS.md`, `agents/architect.md`, `agents/coder.md`, machine-agnostic rules                | ✅ **COMPLETED** |
 | **Foundation** | **Agent Roles & Dispatcher**                    | `AGENTS.md`, `docs/agents/architect.md`, `docs/agents/coder.md`, machine-agnostic rules      | ✅ **COMPLETED** |
 | **Phase 1**    | **Shared Contracts (`@chaos-garden/shared`)**   | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
 | **Phase 2**    | **Simulation Engine (`@chaos-garden/engine`)**  | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI      | ⏳ **UP NEXT**   |
@@ -22,6 +24,8 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 ### ✅ Foundation: Agent Role Infrastructure & Machine-Agnostic Dispatcher
 
 - **Core Dispatcher**: [`AGENTS.md`](../AGENTS.md) serves as the lean starting point, instructing agents to load only their specific role context file.
+- **Architect Role Context**: [`agents/architect.md`](../agents/architect.md) documents subsystem boundaries, consensus models, zero-allocation memory envelopes, GPU draw-call budgets, and a 7-point review rubric.
+- **Coder Role Context**: [`agents/coder.md`](../agents/coder.md) provides concrete implementation patterns (SoA memory layout, Craig Reynolds steering formulas, Svelte 5 Runes idioms, PixiJS batching).
 - **Architect Role Context**: [`docs/agents/architect.md`](agents/architect.md) documents subsystem boundaries, consensus models, zero-allocation memory envelopes, GPU draw-call budgets, and a 7-point review rubric.
 - **Coder Role Context**: [`docs/agents/coder.md`](agents/coder.md) provides concrete implementation patterns (SoA memory layout, Craig Reynolds steering formulas, Svelte 5 Runes idioms, PixiJS batching).
 - **Universal Agnostic Invariant**: All paths and scripts are strictly workspace-relative and cross-platform (supporting Windows PowerShell, macOS, and Linux).
@@ -61,6 +65,7 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 ```
 chaos-garden/
 ├── docs/               # Architecture documents and implementation plans
+├── agents/             # Role context files (architect.md, coder.md)
 │   └── agents/         # Role context files (architect.md, coder.md)
 ├── packages/
 │   ├── shared/         # [COMPLETED] Cross-layer types, math, PRNG, binary stride, contracts
