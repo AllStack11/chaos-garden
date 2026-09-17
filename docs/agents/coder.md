@@ -160,3 +160,9 @@ After writing or modifying code:
    ```bash
    npm run sim:run -- --seed=42 --ticks=500 --headless
    ```
+
+---
+
+## 5. Non-Negotiable Git Protocol
+
+- **No Pushing Without Explicit Approval**: You are NEVER allowed to run `git push` without explicit, unambiguous permission from the user. Staging and committing locally is permitted when instructed, but pushing to remote branches is strictly prohibited unless directly authorized by the user.

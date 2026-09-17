@@ -8,19 +8,19 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 
 ## 🚦 Project Status & Progress Tracker
 
-| Phase | Milestone | Scope | Status |
-| :--- | :--- | :--- | :--- |
-| **Foundation** | **Agent Roles & Dispatcher** | `AGENTS.md`, `docs/agents/architect.md`, `docs/agents/coder.md`, machine-agnostic rules | ✅ **COMPLETED** |
-| **Phase 1** | **Shared Contracts (`@chaos-garden/shared`)** | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
-| **Phase 2** | **Simulation Engine (`@chaos-garden/engine`)** | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI | ⏳ **UP NEXT** |
-| **Phase 3** | **Client App (`@chaos-garden/client`)** | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge | 📋 Queued |
-| **Phase 4** | **Cloudflare Backend (`@chaos-garden/server`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics | 📋 Queued |
+| Phase          | Milestone                                       | Scope                                                                                        | Status           |
+| **Foundation** | **Agent Roles & Dispatcher**                    | `AGENTS.md`, `docs/agents/architect.md`, `docs/agents/coder.md`, machine-agnostic rules      | ✅ **COMPLETED** |
+| **Phase 1**    | **Shared Contracts (`@chaos-garden/shared`)**   | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
+| **Phase 2**    | **Simulation Engine (`@chaos-garden/engine`)**  | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI      | ⏳ **UP NEXT**   |
+| **Phase 3**    | **Client App (`@chaos-garden/client`)**         | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge                      | 📋 Queued        |
+| **Phase 4**    | **Cloudflare Backend (`@chaos-garden/server`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics                  | 📋 Queued        |
 
 ---
 
 ## Completed Milestones Detail
 
 ### ✅ Foundation: Agent Role Infrastructure & Machine-Agnostic Dispatcher
+
 - **Core Dispatcher**: [`AGENTS.md`](../AGENTS.md) serves as the lean starting point, instructing agents to load only their specific role context file.
 - **Architect Role Context**: [`docs/agents/architect.md`](agents/architect.md) documents subsystem boundaries, consensus models, zero-allocation memory envelopes, GPU draw-call budgets, and a 7-point review rubric.
 - **Coder Role Context**: [`docs/agents/coder.md`](agents/coder.md) provides concrete implementation patterns (SoA memory layout, Craig Reynolds steering formulas, Svelte 5 Runes idioms, PixiJS batching).
@@ -28,6 +28,7 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 - **Subagents**: Registered `architect` and `coder` subagents.
 
 ### ✅ Phase 1: Shared Package & Core Contracts (`packages/shared/`)
+
 - **Biological Taxonomy & Genetics**:
   - Four kingdoms (`plant`, `herbivore`, `carnivore`, `fungus`) with numeric `EntityTypeCode` enums.
   - Genetic chromosomes (`PlantGenome`, `HerbivoreGenome`, `CarnivoreGenome`, `FungusGenome`) supporting mutation and speciation.
@@ -89,6 +90,7 @@ chaos-garden/
 Create a framework-agnostic, zero-dependency ECS simulation engine capable of running inside a browser Web Worker, Node.js unit tests, or headless CLI runners.
 
 #### 1. Core ECS Architecture
+
 - **`packages/engine/src/ecs/ComponentStorage.ts`**:
   - Struct-of-Arrays (SoA) pre-allocated TypedArray columns (`positionsX`, `positionsY`, `velocitiesX`, `velocitiesY`, `energies`, `healths`, `ages`, `typeCodes`).
   - Generational index free-list pooling: dead slots pushed to a free-list stack, births pop from the stack. **0 bytes allocated during continuous life/death cycles**.
@@ -96,6 +98,7 @@ Create a framework-agnostic, zero-dependency ECS simulation engine capable of ru
   - Coordinates system execution sequence, entity lifecycle, and fixed-timestep clock (default 60 TPS with variable time-scale multiplier: 0.5x, 1x, 2x, 5x, 10x).
 
 #### 2. Spatial Partitioning & Living Terrain
+
 - **`packages/engine/src/spatial/SpatialHashGrid.ts`**:
   - $O(1)$ grid-bucket partitioning for rapid proximity queries (predator detection, food sensing, mate seeking).
 - **`packages/engine/src/terrain/SoilNutrientGrid.ts`**:
@@ -103,21 +106,24 @@ Create a framework-agnostic, zero-dependency ECS simulation engine capable of ru
   - Plants absorb local nutrients; fungi break down corpses into local nitrates; rain adds moisture.
 
 #### 3. Behavioral Systems
+
 - **`packages/engine/src/systems/SensorySystem.ts`**: Queries the spatial hash grid to populate perceived neighbor lists.
 - **`packages/engine/src/systems/SteeringSystem.ts`**: Computes Craig Reynolds autonomous forces:
-  - *Herbivores*: Separation, Alignment, Cohesion + Fleeing predators + Seeking plants.
-  - *Carnivores*: Pack coordination + Stalking/Pursuit + Obstacle avoidance.
-  - *Plants & Fungi*: Seed dispersal and spore drift.
+  - _Herbivores_: Separation, Alignment, Cohesion + Fleeing predators + Seeking plants.
+  - _Carnivores_: Pack coordination + Stalking/Pursuit + Obstacle avoidance.
+  - _Plants & Fungi_: Seed dispersal and spore drift.
 - **`packages/engine/src/systems/MetabolismSystem.ts`**: Metabolic drain, hunger decay, aging, and death.
 - **`packages/engine/src/systems/GeneticsSystem.ts`**: Mutation and crossover algorithms for newborn offspring.
 - **`packages/engine/src/systems/EventSystem.ts`**: Detects and records macro events (speciation, population booms, apex predator emergence, droughts).
 
 #### 4. Observability & Diagnostics
+
 - **`packages/engine/src/diagnostics/FlightRecorder.ts`**: 300-tick circular ring buffer tracking population deltas, genetic drift, and critical events.
 - **`packages/engine/src/diagnostics/StructuredLogger.ts`**: JSONL structured logger with component tagging.
 - **`packages/engine/src/diagnostics/InvariantChecker.ts`**: Automated physical invariant verification (mass conservation, coordinate limits).
 
 #### 5. Headless CLI & Web Worker Harness
+
 - **`packages/engine/src/cli/runHeadless.ts`**: CLI runner supporting `npm run sim:run -- --seed=<N> --ticks=<N> --headless` and `npm run sim:replay -- --snapshot=<file>`.
 - **`packages/engine/src/cli/auditEngine.ts`**: 1-second terminal health check for AI agents (`npm run audit:sim`).
 - **`packages/engine/src/worker/SimulationWorker.ts`**: Web Worker harness executing the engine loop, managing the double-buffered transferable `Float32Array` pipeline, and dispatching throttled telemetry to Svelte.
@@ -168,10 +174,12 @@ Streamline Cloudflare Workers and D1 database to serve as the source of truth fo
 ## Verification Plan
 
 ### Automated Tests
+
 1. **Engine Unit & Invariant Tests** (`packages/engine`):
    ```bash
    npm run test -w @chaos-garden/engine
    ```
+
    - Zero memory allocation during 10,000 tick life/death cycles.
    - Steering force calculation bounds and boundary containment.
    - Soil grid diffusion conservation of mass.
@@ -192,6 +200,7 @@ Streamline Cloudflare Workers and D1 database to serve as the source of truth fo
    ```
 
 ### Manual Verification
+
 1. **LLM Diagnostic Workflow**: Click "Audit / LLM Export" in Curator HUD; verify clipboard contains clean Markdown diagnostic summary with seed, FPS, and ecological vitals.
 2. **60 FPS Performance Profiling**: Verify steady 60+ FPS with 2,000+ living organisms with zero GC sawteeth in Chrome DevTools.
 3. **Battery / Background Tab Throttling**: Verify CPU drops to near-zero when tab is blurred and smoothly resumes on focus.
@@ -200,4 +209,3 @@ Streamline Cloudflare Workers and D1 database to serve as the source of truth fo
 6. **Curator Agency**: Play/Pause, speed scrubbing (1x–10x), follow-cam, nutrient drops, and soil watering.
 7. **Procedural Audio**: Reactive procedural chords shifting with daylight and weather.
 8. **Canonical Synchronization**: Clean bootstrapping from Cloudflare D1 and authorized curator checkpoint commits.
-

@@ -8,8 +8,8 @@ This is the primary entry point for all AI agents working in the `Chaos Garden` 
 
 Before taking action, identify which role you are assigned for your current task, and **read only that specific role context file** (relative to the workspace root):
 
-| Role                                | Responsibility                                                                                                                                                      | Role Context File                                   |
-| :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------- |
+| Role                                | Responsibility                                                                                                                                                      | Role Context File                                             |
+| :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------ |
 | **System Architect**                | High-level system design, consensus models, data bus architecture, memory budgets, Cloudflare free-tier cost auditing, and plan reviews.                            | 👉 **[`docs/agents/architect.md`](docs/agents/architect.md)** |
 | **Coder / Implementation Engineer** | Writing clean, performant TypeScript code, ECS SoA algorithms, PixiJS v8 shaders/renderers, Svelte 5 Runes components, Web Audio synthesis, and Vitest test suites. | 👉 **[`docs/agents/coder.md`](docs/agents/coder.md)**         |
 
@@ -32,6 +32,7 @@ The following principles apply to all agents, regardless of role or host operati
   - Functions must clearly state their action: `isEntityReadyToReproduce`, `calculateDistanceBetweenEntities`.
 - **Ecosystem Simplicity**: Keep biological rules simple and let emergent complexity arise from composition.
 - **Git Hygiene**: Present-tense, clear commit messages. Keep changes tightly scoped to the assigned task.
+- **No Pushing Without Explicit Approval**: Agents are NEVER allowed to execute `git push` without explicit user permission. Staging and committing locally is permitted when tasked, but pushing to remote branches strictly requires direct, prior confirmation from the user.
 
 ---
 

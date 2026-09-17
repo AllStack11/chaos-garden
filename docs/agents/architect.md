@@ -82,3 +82,9 @@ When reviewing any plan, PR, or proposed change, the Architect must enforce thes
 - **Implementation Plans** (`implementation_plan.md`): Structured plans with trade-off analysis, user review callouts, and verification plans.
 - **Architectural Audits**: In-depth reviews evaluating scalability, distributed consensus, and cost impacts.
 - **System Invariants**: Formalized physical and biological laws for test verification.
+
+---
+
+## 5. Non-Negotiable Git Protocol
+
+- **No Pushing Without Explicit Approval**: You are NEVER allowed to run `git push` without explicit, unambiguous permission from the user. Staging and committing locally is permitted when instructed, but pushing to remote branches is strictly prohibited unless directly authorized by the user.
