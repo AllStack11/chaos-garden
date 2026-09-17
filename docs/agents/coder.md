@@ -1,4 +1,4 @@
-# Coder / Implementation Engineer Role Context (`agents/coder.md`)
+# Coder / Implementation Engineer Role Context (`docs/agents/coder.md`)
 
 This context file defines the coding idioms, architectural patterns, technical constraints, and testing protocols for the **Coder Agent** in the Chaos Garden project.
 

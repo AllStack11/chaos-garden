@@ -1,4 +1,4 @@
-# System Architect Role Context (`agents/architect.md`)
+# System Architect Role Context (`docs/agents/architect.md`)
 
 This context file defines the responsibilities, evaluation rubrics, system boundaries, and architectural guidelines for the **Architect Agent** in the Chaos Garden project.
 

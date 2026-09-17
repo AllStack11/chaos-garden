@@ -10,8 +10,8 @@ Before taking action, identify which role you are assigned for your current task
 
 | Role                                | Responsibility                                                                                                                                                      | Role Context File                                   |
 | :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------- |
-| **System Architect**                | High-level system design, consensus models, data bus architecture, memory budgets, Cloudflare free-tier cost auditing, and plan reviews.                            | 👉 **[`agents/architect.md`](agents/architect.md)** |
-| **Coder / Implementation Engineer** | Writing clean, performant TypeScript code, ECS SoA algorithms, PixiJS v8 shaders/renderers, Svelte 5 Runes components, Web Audio synthesis, and Vitest test suites. | 👉 **[`agents/coder.md`](agents/coder.md)**         |
+| **System Architect**                | High-level system design, consensus models, data bus architecture, memory budgets, Cloudflare free-tier cost auditing, and plan reviews.                            | 👉 **[`docs/agents/architect.md`](docs/agents/architect.md)** |
+| **Coder / Implementation Engineer** | Writing clean, performant TypeScript code, ECS SoA algorithms, PixiJS v8 shaders/renderers, Svelte 5 Runes components, Web Audio synthesis, and Vitest test suites. | 👉 **[`docs/agents/coder.md`](docs/agents/coder.md)**         |
 
 > [!IMPORTANT]
 > **Context Optimization Rule**: Load only the specific role file for the task at hand. Do not load both role contexts simultaneously unless explicitly performing a cross-role design review.
