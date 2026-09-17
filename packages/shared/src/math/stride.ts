@@ -61,6 +61,34 @@ export function packEntityToStride(
 }
 
 /**
+ * Directly writes an entity's scalar fields into the flat render buffer
+ * without allocating an intermediate EntityRenderData object (0-allocation).
+ */
+export function packEntityFieldsToStride(
+  buffer: Float32Array,
+  entityIndex: number,
+  idHash: number,
+  x: number,
+  y: number,
+  rotation: number,
+  size: number,
+  type: number,
+  healthRatio: number,
+  energyRatio: number
+): void {
+  const base = entityIndex * STRIDE_FLOAT_COUNT;
+  buffer[base + RENDER_STRIDE_OFFSET.ID] = idHash;
+  buffer[base + RENDER_STRIDE_OFFSET.POS_X] = x;
+  buffer[base + RENDER_STRIDE_OFFSET.POS_Y] = y;
+  buffer[base + RENDER_STRIDE_OFFSET.ROTATION] = rotation;
+  buffer[base + RENDER_STRIDE_OFFSET.SIZE] = size;
+  buffer[base + RENDER_STRIDE_OFFSET.TYPE] = type;
+  buffer[base + RENDER_STRIDE_OFFSET.HEALTH] = healthRatio;
+  buffer[base + RENDER_STRIDE_OFFSET.ENERGY] = energyRatio;
+}
+
+
+/**
  * Reads an entity stride from the flat render buffer.
  */
 export function unpackStrideToEntity(

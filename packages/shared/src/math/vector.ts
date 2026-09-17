@@ -91,3 +91,84 @@ export function wrap(value: number, min: number, max: number): number {
   return result + min;
 }
 
+/**
+ * In-place addition mutating `out` vector to avoid GC allocation.
+ * Returns `out` for chaining.
+ */
+export function addMut(out: Vector2D, a: Vector2D, b: Vector2D): Vector2D {
+  out.x = a.x + b.x;
+  out.y = a.y + b.y;
+  return out;
+}
+
+/**
+ * In-place subtraction mutating `out` vector to avoid GC allocation.
+ * Returns `out` for chaining.
+ */
+export function subMut(out: Vector2D, a: Vector2D, b: Vector2D): Vector2D {
+  out.x = a.x - b.x;
+  out.y = a.y - b.y;
+  return out;
+}
+
+/**
+ * In-place scalar multiplication mutating `out` vector.
+ * Returns `out` for chaining.
+ */
+export function scaleMut(out: Vector2D, v: Vector2D, scalar: number): Vector2D {
+  out.x = v.x * scalar;
+  out.y = v.y * scalar;
+  return out;
+}
+
+/**
+ * In-place magnitude clamping mutating `out` vector.
+ * Returns `out` for chaining.
+ */
+export function limitMut(out: Vector2D, v: Vector2D, max: number): Vector2D {
+  const mSq = v.x * v.x + v.y * v.y;
+  if (mSq > max * max) {
+    const m = Math.sqrt(mSq);
+    out.x = (v.x / m) * max;
+    out.y = (v.y / m) * max;
+    return out;
+  }
+  out.x = v.x;
+  out.y = v.y;
+  return out;
+}
+
+/**
+ * In-place vector normalization mutating `out` vector.
+ * Returns `out` for chaining.
+ */
+export function normalizeMut(out: Vector2D, v: Vector2D): Vector2D {
+  const mSq = v.x * v.x + v.y * v.y;
+  if (mSq === 0) {
+    out.x = 0;
+    out.y = 0;
+    return out;
+  }
+  const m = Math.sqrt(mSq);
+  out.x = v.x / m;
+  out.y = v.y / m;
+  return out;
+}
+
+/**
+ * Scalar distance squared between two coordinates without creating Vector2D objects.
+ */
+export function distSq(x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x1 - x2;
+  const dy = y1 - y2;
+  return dx * dx + dy * dy;
+}
+
+/**
+ * Scalar distance between two coordinates without creating Vector2D objects.
+ */
+export function dist(x1: number, y1: number, x2: number, y2: number): number {
+  return Math.sqrt(distSq(x1, y1, x2, y2));
+}
+
+

@@ -8,14 +8,12 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 
 ## 🚦 Project Status & Progress Tracker
 
-| Phase          | Milestone                                       | Scope                                                                                        | Status           |
-| :------------- | :---------------------------------------------- | :------------------------------------------------------------------------------------------- | :--------------- |
-| **Foundation** | **Agent Roles & Dispatcher**                    | `AGENTS.md`, `agents/architect.md`, `agents/coder.md`, machine-agnostic rules                | ✅ **COMPLETED** |
-| **Foundation** | **Agent Roles & Dispatcher**                    | `AGENTS.md`, `docs/agents/architect.md`, `docs/agents/coder.md`, machine-agnostic rules      | ✅ **COMPLETED** |
-| **Phase 1**    | **Shared Contracts (`@chaos-garden/shared`)**   | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
-| **Phase 2**    | **Simulation Engine (`@chaos-garden/engine`)**  | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI      | ⏳ **UP NEXT**   |
-| **Phase 3**    | **Client App (`@chaos-garden/client`)**         | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge                      | 📋 Queued        |
-| **Phase 4**    | **Cloudflare Backend (`@chaos-garden/server`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics                  | 📋 Queued        |
+| Phase | Milestone | Scope | Status |
+| **Foundation** | **Agent Roles & Dispatcher** | `AGENTS.md`, `docs/agents/architect.md`, `docs/agents/coder.md`, machine-agnostic rules | ✅ **COMPLETED** |
+| **Phase 1** | **Shared Contracts (`@chaos-garden/shared`)** | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
+| **Phase 2** | **Simulation Engine (`@chaos-garden/engine`)** | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI | ✅ **COMPLETED** |
+| **Phase 3** | **Client App (`@chaos-garden/client`)** | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge | ⏳ **UP NEXT** |
+| **Phase 4** | **Cloudflare Backend (`@chaos-garden/server`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics | 📋 Queued |
 
 ---
 
@@ -24,8 +22,6 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 ### ✅ Foundation: Agent Role Infrastructure & Machine-Agnostic Dispatcher
 
 - **Core Dispatcher**: [`AGENTS.md`](../AGENTS.md) serves as the lean starting point, instructing agents to load only their specific role context file.
-- **Architect Role Context**: [`agents/architect.md`](../agents/architect.md) documents subsystem boundaries, consensus models, zero-allocation memory envelopes, GPU draw-call budgets, and a 7-point review rubric.
-- **Coder Role Context**: [`agents/coder.md`](../agents/coder.md) provides concrete implementation patterns (SoA memory layout, Craig Reynolds steering formulas, Svelte 5 Runes idioms, PixiJS batching).
 - **Architect Role Context**: [`docs/agents/architect.md`](agents/architect.md) documents subsystem boundaries, consensus models, zero-allocation memory envelopes, GPU draw-call budgets, and a 7-point review rubric.
 - **Coder Role Context**: [`docs/agents/coder.md`](agents/coder.md) provides concrete implementation patterns (SoA memory layout, Craig Reynolds steering formulas, Svelte 5 Runes idioms, PixiJS batching).
 - **Universal Agnostic Invariant**: All paths and scripts are strictly workspace-relative and cross-platform (supporting Windows PowerShell, macOS, and Linux).
@@ -54,9 +50,35 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
   - Canonical world state schemas, curator lease tokens, checkpoint submissions, and chronicle events.
   - Universal physical constants with trophically ordered reproduction thresholds: `plant (55) < herbivore (65) < carnivore (75)`.
 - **Validation**:
-  - 6 test suites and 29 unit tests pass in **70ms** (`npx vitest run`).
+  - 6 test suites and 36 unit tests pass in **70ms** (`npm run test -w @chaos-garden/shared`).
   - Strict TypeScript compilation (`tsc --noEmit` and `npm run build` exit code `0`).
   - Compiled output generated in `packages/shared/dist/`.
+
+### ✅ Phase 2: Standalone ECS Simulation Engine (`packages/engine/`)
+
+- **Struct-of-Arrays (SoA) & Generational Pooling**:
+  - `EntityPool`: $O(1)$ generational free-list entity allocation with dense index compaction swap.
+  - `ComponentStorage`: Flat `TypedArray` arrays for spatial, vitals, taxonomy, chromosomes, and kingdom traits with zero per-tick allocations.
+- **Environmental & Spatial Partitioning**:
+  - `SoilGrid`: $100 \times 75$ scalar field modeling soil moisture and decomposed nitrate diffusion via explicit 2D Laplacian operator ($D_m = 0.04$) with toroidal boundary wrapping and zero-copy pointer swapping.
+  - `SpatialHashGrid`: $50 \times 38$ spatial hash bucket structure with linked-list storage and pre-allocated query buffers.
+- **Biological & Physical Subsystems**:
+  - `SteeringSystem`: Craig Reynolds autonomous behaviors (Separation, Alignment, Cohesion, Seek, Flee, Wander).
+  - `PhysicsSystem`: Velocity clamping, acceleration integration, sessile organism bypass, and toroidal garden wrapping.
+  - `MetabolismSystem`: Trophic energy dynamics (photosynthesis, herbivore grazing, carnivore predation, fungal decomposition, starvation).
+  - `GeneticsSystem`: Strict trophic reproduction thresholds (`plant 55 < herbivore 65 < carnivore 75`), 50% parent-offspring energy splitting, PRNG mutation drift, and pigment hue drift.
+  - `MortalitySystem`: Senescence and health decay, backward iteration deallocation, and corpse nitrate recycling back to `SoilGrid`.
+- **Pipeline & Observability**:
+  - `World`: 10-step tick execution pipeline with primordial ecosystem bootstrap.
+  - `RenderPackingSystem`: Inlined zero-copy flat 32-byte stride serializer for Web Worker and PixiJS consumption.
+  - `FlightRecorder`: 300-tick pre-allocated circular ring buffer for ecological timeseries and markdown diagnostic export.
+  - Headless CLI tools (`npm run sim:run`, `npm run audit:sim`).
+- **Validation**:
+  - 16 test suites, 41 unit & invariant tests passing in `@chaos-garden/engine` (`npm run test -w @chaos-garden/engine`).
+  - Zero heap allocation verified over 1,000 continuous ticks with `--expose-gc`.
+  - Bit-identical PRNG determinism verified across 1,000 ticks.
+  - 2,000-entity benchmark: avg tick time ~2.1ms (clearing 2.5ms budget).
+  - Invariant auditor passes all 5 physical invariants in 68ms (0.27ms avg tick time).
 
 ---
 
@@ -65,17 +87,17 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 ```
 chaos-garden/
 ├── docs/               # Architecture documents and implementation plans
-├── agents/             # Role context files (architect.md, coder.md)
 │   └── agents/         # Role context files (architect.md, coder.md)
 ├── packages/
 │   ├── shared/         # [COMPLETED] Cross-layer types, math, PRNG, binary stride, contracts
-│   ├── engine/         # [NEXT] Pure ECS engine (SoA + Generational Free-List, Boids, Soil)
-│   │   ├── ecs/        # World, Entity pool, Bitmask component storage, System scheduler
-│   │   ├── systems/    # Sensory (Spatial Grid), Steering (Boids), Soil, Metabolism, Genetics
-│   │   ├── terrain/    # 2D diffusion grid for soil moisture & decomposed nutrients
-│   │   ├── diagnostics/# Flight Recorder, structured JSONL logger, invariant checkers
-│   │   └── cli/        # Headless simulation runner (sim:run, sim:replay, audit:sim)
-│   ├── client/         # [QUEUED] Vite + Svelte 5 (Runes) + Tailwind CSS + PixiJS v8 + Web Audio
+│   ├── engine/         # [COMPLETED] Pure ECS engine (SoA + Generational Free-List, Boids, Soil)
+│   │   ├── ecs/        # World, Entity pool, Component storage, System scheduler
+│   │   ├── systems/    # Steering, Physics, Metabolism, Genetics, Mortality, RenderPacking
+│   │   ├── environment/# 2D diffusion grid for soil moisture & decomposed nitrates
+│   │   ├── spatial/    # SpatialHashGrid bucket partitioning
+│   │   ├── diagnostics/# Flight Recorder, ring buffer metrics, invariant auditors
+│   │   └── cli/        # Headless simulation runner (sim:run, audit:sim)
+│   ├── client/         # [NEXT] Vite + Svelte 5 (Runes) + Tailwind CSS + PixiJS v8 + Web Audio
 │   │   ├── worker/     # Web Worker hosting @chaos-garden/engine (Zero-copy Transferable Buffers)
 │   │   ├── renderer/   # PixiJS v8 batched renderers, dynamic soil texture, fullscreen bloom
 │   │   ├── audio/      # Web Audio API generative procedural synthesizer & soundscape
@@ -90,7 +112,7 @@ chaos-garden/
 
 ## Upcoming Phases & Specifications
 
-### Phase 2: Standalone ECS Simulation Engine (`packages/engine`) — UP NEXT
+### Phase 2: Standalone ECS Simulation Engine (`packages/engine`) — COMPLETED
 
 Create a framework-agnostic, zero-dependency ECS simulation engine capable of running inside a browser Web Worker, Node.js unit tests, or headless CLI runners.
 
@@ -135,7 +157,7 @@ Create a framework-agnostic, zero-dependency ECS simulation engine capable of ru
 
 ---
 
-### Phase 3: Client Application (`packages/client`)
+### Phase 3: Client Application (`packages/client`) — UP NEXT
 
 Replace legacy Astro frontend with a Vite + Svelte 5 + PixiJS v8 single-page application.
 
@@ -181,6 +203,7 @@ Streamline Cloudflare Workers and D1 database to serve as the source of truth fo
 ### Automated Tests
 
 1. **Engine Unit & Invariant Tests** (`packages/engine`):
+
    ```bash
    npm run test -w @chaos-garden/engine
    ```
@@ -190,6 +213,7 @@ Streamline Cloudflare Workers and D1 database to serve as the source of truth fo
    - Soil grid diffusion conservation of mass.
    - Genetic mutation constraints and inheritance.
    - Flight Recorder ring buffer rollover under load.
+
 2. **Headless CLI Simulation**:
    ```bash
    npm run sim:run -- --seed=123 --ticks=1000 --headless

@@ -22,6 +22,12 @@ export function createSeededRandom(seed: number): PRNG {
   };
 }
 
+/**
+ * Alias for createSeededRandom using standard Mulberry32 algorithm.
+ */
+export const createMulberry32 = createSeededRandom;
+
+
 export function randomRange(random: PRNG, min: number, max: number): number {
   return min + random() * (max - min);
 }

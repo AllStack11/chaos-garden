@@ -10,6 +10,7 @@ import {
   allocateRenderBuffer,
   hashIdToFloat,
   packEntityToStride,
+  packEntityFieldsToStride,
   unpackStrideToEntity,
   unpackAllEntitiesFromStride,
   MAX_SAFE_FLOAT32_INT,
@@ -89,5 +90,47 @@ describe('Binary Render Stride Protocol', () => {
     expect(all[2].type).toBe(EntityTypeCode.CARNIVORE);
     expect(all[3].size).toBe(8);
   });
+
+  it('packs directly via packEntityFieldsToStride matching packEntityToStride output', () => {
+    const buffer1 = allocateRenderBuffer(2);
+    const buffer2 = allocateRenderBuffer(2);
+
+    const sample: EntityRenderData = {
+      idHash: 7654321,
+      x: 123.45,
+      y: 678.9,
+      rotation: 2.34,
+      size: 12.0,
+      type: EntityTypeCode.CARNIVORE,
+      healthRatio: 0.75,
+      energyRatio: 0.65,
+    };
+
+    packEntityToStride(buffer1, 0, sample);
+    packEntityFieldsToStride(
+      buffer2,
+      0,
+      sample.idHash,
+      sample.x,
+      sample.y,
+      sample.rotation,
+      sample.size,
+      sample.type,
+      sample.healthRatio,
+      sample.energyRatio
+    );
+
+    for (let i = 0; i < STRIDE_FLOAT_COUNT; i++) {
+      expect(buffer2[i]).toBe(buffer1[i]);
+    }
+
+    const unpacked1 = unpackStrideToEntity(buffer1, 0);
+    const unpacked2 = unpackStrideToEntity(buffer2, 0);
+    expect(unpacked2).toEqual(unpacked1);
+    expect(unpacked2.idHash).toBe(sample.idHash);
+    expect(unpacked2.x).toBeCloseTo(sample.x);
+    expect(unpacked2.y).toBeCloseTo(sample.y);
+  });
 });
+
 

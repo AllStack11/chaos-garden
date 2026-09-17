@@ -17,6 +17,13 @@ import {
   clamp,
   lerp,
   wrap,
+  addMut,
+  subMut,
+  scaleMut,
+  limitMut,
+  normalizeMut,
+  distSq,
+  dist,
 } from '../src/math/vector.js';
 
 describe('Vector Math Primitives', () => {
@@ -102,5 +109,71 @@ describe('Vector Math Primitives', () => {
     expect(wrap(-5, 0, 100)).toBe(95);
     expect(wrap(50, 0, 100)).toBe(50);
   });
+
+  describe('In-Place Vector Mutations (Zero Allocation)', () => {
+    it('mutates target vector with addMut', () => {
+      const out = vec2(0, 0);
+      const a = vec2(3, 4);
+      const b = vec2(1, 2);
+      const res = addMut(out, a, b);
+      expect(res).toBe(out);
+      expect(out.x).toBe(4);
+      expect(out.y).toBe(6);
+    });
+
+    it('mutates target vector with subMut', () => {
+      const out = vec2(0, 0);
+      const a = vec2(5, 7);
+      const b = vec2(2, 3);
+      const res = subMut(out, a, b);
+      expect(res).toBe(out);
+      expect(out.x).toBe(3);
+      expect(out.y).toBe(4);
+    });
+
+    it('mutates target vector with scaleMut', () => {
+      const out = vec2(3, 4);
+      const res = scaleMut(out, out, 2.5);
+      expect(res).toBe(out);
+      expect(out.x).toBe(7.5);
+      expect(out.y).toBe(10);
+    });
+
+    it('mutates target vector with limitMut', () => {
+      const out = vec2(30, 40); // magnitude 50
+      const res = limitMut(out, out, 10);
+      expect(res).toBe(out);
+      expect(magnitude(out)).toBeCloseTo(10);
+      expect(out.x).toBeCloseTo(6);
+      expect(out.y).toBeCloseTo(8);
+
+      const small = vec2(1, 1);
+      limitMut(small, small, 10);
+      expect(small.x).toBe(1);
+      expect(small.y).toBe(1);
+    });
+
+    it('mutates target vector with normalizeMut', () => {
+      const out = vec2(3, 4);
+      const res = normalizeMut(out, out);
+      expect(res).toBe(out);
+      expect(out.x).toBeCloseTo(0.6);
+      expect(out.y).toBeCloseTo(0.8);
+      expect(magnitude(out)).toBeCloseTo(1.0);
+
+      const zero = vec2(0, 0);
+      normalizeMut(zero, zero);
+      expect(zero.x).toBe(0);
+      expect(zero.y).toBe(0);
+    });
+
+    it('computes scalar distance and distance squared without Vector2D allocations', () => {
+      expect(distSq(1, 2, 4, 6)).toBe(25);
+      expect(dist(1, 2, 4, 6)).toBe(5);
+      expect(distSq(0, 0, 0, 0)).toBe(0);
+      expect(dist(0, 0, 0, 0)).toBe(0);
+    });
+  });
 });
+
 
