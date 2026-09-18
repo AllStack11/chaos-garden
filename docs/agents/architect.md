@@ -87,22 +87,28 @@ When reviewing any plan, PR, or proposed change, the Architect must enforce thes
 
 ## 5. Pull Request Audit & Review Protocol (`gh`)
 
-The Architect conducts rigorous code audits on open Pull Requests following [`docs/branching_strategy.md`](../branching_strategy.md):
+The Architect conducts rigorous code audits on open Pull Requests following [`docs/agents/branching_strategy.md`](branching_strategy.md):
 
 ### 1. Diff Inspection
+
 Inspect the full diff of the PR:
+
 ```powershell
 gh pr diff <PR_NUMBER>
 ```
 
 ### 2. Structured Audit Comment
+
 Evaluate the code strictly against the **7 Architect Rubrics** (Section 3). Post the structured review via GitHub CLI:
+
 ```powershell
 gh pr review <PR_NUMBER> --comment --body "### 🏛️ Architect Audit Findings (PR #<N>)`n`n- **Zero-Allocation**: ...`n- **Main-Thread Decoupling**: ...`n- **Consensus Safety**: ...`n- **Trophic Invariance**: ...`n- **PRNG Determinism**: ...`n- **Battery/Thermal**: ...`n- **Offline Resilience & Cost**: ...`n`n**Status**: [ACTION REQUIRED / ALL CLEAR]"
 ```
 
 ### 3. Re-Audit & Architectural Clearance
+
 After the Coder pushes corrections:
+
 1. Re-inspect diff: `gh pr diff <PR_NUMBER>`
 2. Submit official clearance:
    ```powershell
@@ -119,4 +125,3 @@ After the Coder pushes corrections:
   ```powershell
   gh pr merge <PR_NUMBER> --squash --delete-branch
   ```
-
