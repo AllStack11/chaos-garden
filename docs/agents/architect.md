@@ -85,6 +85,38 @@ When reviewing any plan, PR, or proposed change, the Architect must enforce thes
 
 ---
 
-## 5. Non-Negotiable Git Protocol
+## 5. Pull Request Audit & Review Protocol (`gh`)
 
-- **No Pushing Without Explicit Approval**: You are NEVER allowed to run `git push` without explicit, unambiguous permission from the user. Staging and committing locally is permitted when instructed, but pushing to remote branches is strictly prohibited unless directly authorized by the user.
+The Architect conducts rigorous code audits on open Pull Requests following [`docs/branching_strategy.md`](../branching_strategy.md):
+
+### 1. Diff Inspection
+Inspect the full diff of the PR:
+```powershell
+gh pr diff <PR_NUMBER>
+```
+
+### 2. Structured Audit Comment
+Evaluate the code strictly against the **7 Architect Rubrics** (Section 3). Post the structured review via GitHub CLI:
+```powershell
+gh pr review <PR_NUMBER> --comment --body "### 🏛️ Architect Audit Findings (PR #<N>)`n`n- **Zero-Allocation**: ...`n- **Main-Thread Decoupling**: ...`n- **Consensus Safety**: ...`n- **Trophic Invariance**: ...`n- **PRNG Determinism**: ...`n- **Battery/Thermal**: ...`n- **Offline Resilience & Cost**: ...`n`n**Status**: [ACTION REQUIRED / ALL CLEAR]"
+```
+
+### 3. Re-Audit & Architectural Clearance
+After the Coder pushes corrections:
+1. Re-inspect diff: `gh pr diff <PR_NUMBER>`
+2. Submit official clearance:
+   ```powershell
+   gh pr review <PR_NUMBER> --comment --body "### 🏛️ Architectural Clearance: APPROVED`n`nAll 7 architectural rubrics are satisfied. Invariants verified clean.`nReady for final User review and merge."
+   ```
+3. Notify the user that PR is approved and awaiting their merge decision.
+
+---
+
+## 6. Non-Negotiable Git Protocol
+
+- **`main` Direct Push Prohibition**: You are strictly forbidden from executing `git push origin main` or committing directly to `main`.
+- **Merge Authority**: You are strictly prohibited from merging a PR (`gh pr merge`) without explicit, direct confirmation from the user. When approved, execute squash merge:
+  ```powershell
+  gh pr merge <PR_NUMBER> --squash --delete-branch
+  ```
+

@@ -163,6 +163,49 @@ After writing or modifying code:
 
 ---
 
-## 5. Non-Negotiable Git Protocol
+## 5. Feature Branching & Pull Request Protocol
 
-- **No Pushing Without Explicit Approval**: You are NEVER allowed to run `git push` without explicit, unambiguous permission from the user. Staging and committing locally is permitted when instructed, but pushing to remote branches is strictly prohibited unless directly authorized by the user.
+Follow the official repository branching strategy in [`docs/branching_strategy.md`](../branching_strategy.md):
+
+### 1. Branch Creation
+Never commit directly to `main`. Sync `origin/main` and branch out using `<category>/<package>-<slug>`:
+```powershell
+git checkout main
+git pull origin main
+git checkout -b <category>/<package>-<slug>
+```
+Categories: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `chore`.
+Packages: `shared`, `engine`, `workers`, `frontend`, `repo`.
+
+### 2. Pre-Push Verification Gate
+Before pushing any code, run the mandatory verification suite:
+```powershell
+npm run type-check:all
+npm run test:all
+npm run sim:run -- --seed=42 --ticks=500 --headless
+```
+
+### 3. Scoped Push & PR Creation
+Push the feature branch to `origin` and open a PR with GitHub CLI:
+```powershell
+git push -u origin <branch-name>
+gh pr create --base main --head <branch-name> --title "<type>(<package>): <concise description>" --body "..."
+```
+
+### 4. Resolving Review Feedback
+When the Architect Agent reviews the PR:
+1. View comments: `gh pr view <PR_NUMBER> --comments`
+2. Address all rubric findings and code corrections locally.
+3. Re-run verification (`npm run type-check:all && npm run test:all`).
+4. Commit fixes: `git commit -m "fix(<pkg>): address architect review feedback"`
+5. Push update: `git push origin <branch-name>`
+6. Post resolution note: `gh pr comment <PR_NUMBER> --body "Addressed architect audit findings in commit <sha>."`
+
+---
+
+## 6. Non-Negotiable Git Protocol
+
+- **`main` Direct Push Prohibition**: You are strictly forbidden from running `git push origin main` or committing directly to `main`.
+- **Scoped Push Permission**: You are authorized to execute `git push` ONLY to your designated feature branch (`feat/*`, `fix/*`, etc.) to open and update Pull Requests.
+- **Merge Authority**: You are NEVER allowed to merge a PR (`gh pr merge`) without direct, explicit instructions from the user.
+

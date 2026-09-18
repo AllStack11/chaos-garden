@@ -10,8 +10,8 @@ Before taking action, identify which role you are assigned for your current task
 
 | Role                                | Responsibility                                                                                                                                                      | Role Context File                                             |
 | :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------ |
-| **System Architect**                | High-level system design, consensus models, data bus architecture, memory budgets, Cloudflare free-tier cost auditing, and plan reviews.                            | 👉 **[`docs/agents/architect.md`](docs/agents/architect.md)** |
-| **Coder / Implementation Engineer** | Writing clean, performant TypeScript code, ECS SoA algorithms, PixiJS v8 shaders/renderers, Svelte 5 Runes components, Web Audio synthesis, and Vitest test suites. | 👉 **[`docs/agents/coder.md`](docs/agents/coder.md)**         |
+| **System Architect**                | High-level system design, consensus models, data bus architecture, memory budgets, Cloudflare free-tier auditing, plan reviews, and PR architectural audits (`gh pr review`). | 👉 **[`docs/agents/architect.md`](docs/agents/architect.md)** |
+| **Coder / Implementation Engineer** | Writing clean, performant TypeScript code, ECS SoA algorithms, PixiJS v8 shaders, Svelte 5 Runes, Vitest suites, opening feature PRs, and resolving audit feedback.    | 👉 **[`docs/agents/coder.md`](docs/agents/coder.md)**         |
 
 > [!IMPORTANT]
 > **Context Optimization Rule**: Load only the specific role file for the task at hand. Do not load both role contexts simultaneously unless explicitly performing a cross-role design review.
@@ -31,8 +31,9 @@ The following principles apply to all agents, regardless of role or host operati
   - `UPPER_SNAKE_CASE` for constants.
   - Functions must clearly state their action: `isEntityReadyToReproduce`, `calculateDistanceBetweenEntities`.
 - **Ecosystem Simplicity**: Keep biological rules simple and let emergent complexity arise from composition.
-- **Git Hygiene**: Present-tense, clear commit messages. Keep changes tightly scoped to the assigned task.
-- **No Pushing Without Explicit Approval**: Agents are NEVER allowed to execute `git push` without explicit user permission. Staging and committing locally is permitted when tasked, but pushing to remote branches strictly requires direct, prior confirmation from the user.
+- **Git Hygiene & Branching**: Follow the repository branching strategy in [`docs/branching_strategy.md`](docs/branching_strategy.md). Never commit directly to `main`. Create feature branches using the taxonomy `<category>/<package>-<slug>` (e.g. `feat/engine-spatial-hash`). Present-tense, clear commit messages.
+- **Scoped Push Permission**: Agents are authorized to execute `git push` ONLY to designated feature branches (`feat/*`, `fix/*`, `perf/*`, etc.) to open and update Pull Requests. Pushing directly to `main` is strictly forbidden under all circumstances.
+- **Merge Authority**: Merges to `main` are performed via Pull Requests using Squash and Merge (`gh pr merge --squash --delete-branch`). Agents are NEVER allowed to execute merges without explicit user direction.
 
 ---
 
