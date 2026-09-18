@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { SpatialHashGrid } from '../../src/spatial/SpatialHashGrid.js';
+import { describe, it, expect } from "vitest";
+import { SpatialHashGrid } from "../../src/spatial/SpatialHashGrid.js";
 
-describe('SpatialHashGrid (O(1) Proximity Queries)', () => {
-  it('inserts and queries neighbors within radius', () => {
+describe("SpatialHashGrid (O(1) Proximity Queries)", () => {
+  it("inserts and queries neighbors within radius", () => {
     const grid = new SpatialHashGrid({
       worldWidth: 500,
       worldHeight: 500,
@@ -24,7 +24,7 @@ describe('SpatialHashGrid (O(1) Proximity Queries)', () => {
     expect(found).not.toContain(2);
   });
 
-  it('handles multiple entities in same cell', () => {
+  it("handles multiple entities in same cell", () => {
     const grid = new SpatialHashGrid({
       worldWidth: 200,
       worldHeight: 200,
@@ -47,7 +47,7 @@ describe('SpatialHashGrid (O(1) Proximity Queries)', () => {
     expect(found).toContain(2);
   });
 
-  it('queries across toroidal boundaries', () => {
+  it("queries across toroidal boundaries", () => {
     const grid = new SpatialHashGrid({
       worldWidth: 200,
       worldHeight: 200,
@@ -71,7 +71,7 @@ describe('SpatialHashGrid (O(1) Proximity Queries)', () => {
     expect(found).toContain(1);
   });
 
-  it('clears all entities without new allocations', () => {
+  it("clears all entities without new allocations", () => {
     const grid = new SpatialHashGrid({
       worldWidth: 100,
       worldHeight: 100,
@@ -89,5 +89,23 @@ describe('SpatialHashGrid (O(1) Proximity Queries)', () => {
 
     expect(found.length).toBe(0);
   });
-});
 
+  it("allocates 32 slots in queryBuffer and populates up to 32 neighbors without closure allocation", () => {
+    const grid = new SpatialHashGrid({
+      worldWidth: 200,
+      worldHeight: 200,
+      cellSize: 50,
+      maxEntities: 50,
+    });
+
+    expect(grid.queryBuffer.length).toBe(32);
+
+    // Insert 35 entities in same cell
+    for (let i = 0; i < 35; i++) {
+      grid.insert(i, 25, 25);
+    }
+
+    const count = grid.query(25, 25, 10);
+    expect(count).toBe(32); // capped at queryBuffer length 32
+  });
+});

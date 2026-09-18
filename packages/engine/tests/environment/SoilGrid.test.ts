@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { SoilGrid } from '../../src/environment/SoilGrid.js';
+import { describe, it, expect } from "vitest";
+import { SoilGrid } from "../../src/environment/SoilGrid.js";
 
-describe('SoilGrid (Laplacian Diffusion & Nutrient Management)', () => {
-  it('initializes with default dimensions and baseline values', () => {
+describe("SoilGrid (Laplacian Diffusion & Nutrient Management)", () => {
+  it("initializes with default dimensions and baseline values", () => {
     const soil = new SoilGrid({
       cols: 20,
       rows: 15,
@@ -20,7 +20,7 @@ describe('SoilGrid (Laplacian Diffusion & Nutrient Management)', () => {
     expect(soil.getNitrates(100, 100)).toBeCloseTo(0.3);
   });
 
-  it('diffuses nutrients smoothly to adjacent cells', () => {
+  it("diffuses nutrients smoothly to adjacent cells", () => {
     const soil = new SoilGrid({
       cols: 10,
       rows: 10,
@@ -48,7 +48,7 @@ describe('SoilGrid (Laplacian Diffusion & Nutrient Management)', () => {
     expect(soil.getNitrates(55, 65)).toBeGreaterThan(0);
   });
 
-  it('conserves mass during closed diffusion without evaporation', () => {
+  it("conserves mass during closed diffusion without evaporation", () => {
     const soil = new SoilGrid({
       cols: 10,
       rows: 10,
@@ -71,7 +71,7 @@ describe('SoilGrid (Laplacian Diffusion & Nutrient Management)', () => {
     expect(sumAfter).toBeCloseTo(sumBefore, 4);
   });
 
-  it('handles toroidal edge wrapping seamlessly', () => {
+  it("handles toroidal edge wrapping seamlessly", () => {
     const soil = new SoilGrid({
       cols: 10,
       rows: 10,
@@ -91,7 +91,7 @@ describe('SoilGrid (Laplacian Diffusion & Nutrient Management)', () => {
     expect(soil.getNitrates(95, 50)).toBeGreaterThan(0);
   });
 
-  it('consumes and deposits nutrients correctly', () => {
+  it("consumes and deposits nutrients correctly", () => {
     const soil = new SoilGrid({
       cols: 10,
       rows: 10,
@@ -109,5 +109,32 @@ describe('SoilGrid (Laplacian Diffusion & Nutrient Management)', () => {
     soil.depositNitrates(50, 50, 0.4);
     expect(soil.getNitrates(50, 50)).toBeCloseTo(0.7);
   });
-});
 
+  it("correctly uses independent buffers in asymmetric moisture and nitrate operations", () => {
+    const soil = new SoilGrid({
+      cols: 10,
+      rows: 10,
+      cellSize: 10,
+      worldWidth: 100,
+      worldHeight: 100,
+    });
+
+    // High moisture (0.9), low nitrates (0.1)
+    soil.reset(0.9, 0.1);
+
+    // Consuming 0.5 nitrates must be bounded by available nitrates (0.1), NOT moisture (0.9)
+    const consumedNitrates = soil.consumeNitrates(50, 50, 0.5);
+    expect(consumedNitrates).toBeCloseTo(0.1);
+    expect(soil.getNitrates(50, 50)).toBeCloseTo(0.0);
+    // Moisture must remain completely untouched at 0.9
+    expect(soil.getMoisture(50, 50)).toBeCloseTo(0.9);
+
+    // Reverse asymmetry: low moisture (0.1), high nitrates (0.8)
+    soil.reset(0.1, 0.8);
+    const consumedMoisture = soil.consumeMoisture(50, 50, 0.5);
+    expect(consumedMoisture).toBeCloseTo(0.1);
+    expect(soil.getMoisture(50, 50)).toBeCloseTo(0.0);
+    // Nitrates must remain completely untouched at 0.8
+    expect(soil.getNitrates(50, 50)).toBeCloseTo(0.8);
+  });
+});

@@ -1,6 +1,6 @@
 /**
  * Chaos Garden - Craig Reynolds Steering Behaviors System
- * 
+ *
  * Computes autonomous steering forces:
  * - Separation (repulsion from close neighbors, inversely proportional to distance squared)
  * - Alignment (matching velocity of flockmates)
@@ -8,27 +8,31 @@
  * - Seeking (moving towards nearest edible food/prey)
  * - Fleeing (moving away from predators within perception radius)
  * - Wander (subtle deterministic pseudo-random drift)
- * 
+ *
  * Implemented using pure scalar arithmetic on SoA columns with zero heap allocations.
  */
 
-import { EntityTypeCode, type PRNG } from '@chaos-garden/shared';
-import type { EntityPool } from '../ecs/EntityPool.js';
-import type { ComponentStorage } from '../ecs/ComponentStorage.js';
-import type { SpatialHashGrid } from '../spatial/SpatialHashGrid.js';
+import { EntityTypeCode, type PRNG } from "@chaos-garden/shared";
+import type { EntityPool } from "../ecs/EntityPool.js";
+import type { ComponentStorage } from "../ecs/ComponentStorage.js";
+import type { SpatialHashGrid } from "../spatial/SpatialHashGrid.js";
 
 export class SteeringSystem {
   /**
-   * Updates steering acceleration forces for all active mobile entities.
+   * Updates steering acceleration forces for all active mobile entities with toroidal boundary wrapping.
    */
   update(
     pool: EntityPool,
     storage: ComponentStorage,
     spatialGrid: SpatialHashGrid,
-    prng: PRNG
+    prng: PRNG,
+    gardenWidth: number = 1600,
+    gardenHeight: number = 1200,
   ): void {
     const activeCount = pool.denseCount;
     const dense = pool.denseEntities;
+    const halfW = gardenWidth * 0.5;
+    const halfH = gardenHeight * 0.5;
 
     for (let i = 0; i < activeCount; i++) {
       const idx = dense[i];
@@ -59,15 +63,17 @@ export class SteeringSystem {
       let flockmatesCount = 0;
 
       let nearestTargetDistSq = Infinity;
-      let targetX = 0;
-      let targetY = 0;
+      let targetDx = 0;
+      let targetDy = 0;
       let hasTarget = false;
 
       let nearestPredatorDistSq = Infinity;
-      let predatorX = 0;
-      let predatorY = 0;
+      let predatorDx = 0;
+      let predatorDy = 0;
       let hasPredator = false;
 
+      const perceptionRadiusSq = perceptionRadius * perceptionRadius;
+      const fleeRadiusSq = fleeRadius * fleeRadius;
       const searchRadius = Math.max(perceptionRadius, fleeRadius);
       const searchRadiusSq = searchRadius * searchRadius;
       const neighborCount = spatialGrid.query(posX, posY, searchRadius);
@@ -78,48 +84,55 @@ export class SteeringSystem {
         if (otherIdx === idx) continue;
 
         const otherX = storage.positionsX[otherIdx];
-        const otherY = storage.positionsY[otherIdx];
-        const otherType = storage.typeCodes[otherIdx];
+        let dx = otherX - posX;
+        if (dx > halfW) dx -= gardenWidth;
+        else if (dx < -halfW) dx += gardenWidth;
+        const dxSq = dx * dx;
+        if (dxSq > searchRadiusSq) continue;
 
-        const dx = otherX - posX;
-        const dy = otherY - posY;
-        const distSq = dx * dx + dy * dy;
+        const otherY = storage.positionsY[otherIdx];
+        let dy = otherY - posY;
+        if (dy > halfH) dy -= gardenHeight;
+        else if (dy < -halfH) dy += gardenHeight;
+        const distSq = dxSq + dy * dy;
 
         if (distSq === 0 || distSq > searchRadiusSq) continue;
 
+        const otherType = storage.typeCodes[otherIdx];
 
         // 1. Separation from any entity that is too close (collision avoidance)
         const personalSpace = (entitySize + storage.sizes[otherIdx]) * 1.2;
         if (distSq < personalSpace * personalSpace) {
-          const invDist = 1 / Math.sqrt(distSq);
-          // Inverse-square repulsion
-          sepX -= (dx * invDist) / distSq;
-          sepY -= (dy * invDist) / distSq;
+          const dist = Math.sqrt(distSq);
+          const invCube = 1 / (distSq * dist);
+          sepX -= dx * invCube;
+          sepY -= dy * invCube;
         }
 
         // 2. Flocking behaviors (same species / kingdom)
-        if (otherType === type && distSq < perceptionRadius * perceptionRadius) {
+        if (flockWeight > 0 && otherType === type && distSq < perceptionRadiusSq) {
           flockmatesCount++;
           alignX += storage.velocitiesX[otherIdx];
           alignY += storage.velocitiesY[otherIdx];
-          cohX += otherX;
-          cohY += otherY;
+          // Accumulate relative displacement vector to flockmate
+          cohX += dx;
+          cohY += dy;
         }
 
         // 3. Herbivore targeting (seek plants) & predator avoidance (flee carnivores)
         if (type === EntityTypeCode.HERBIVORE) {
-          if (otherType === EntityTypeCode.PLANT && distSq < perceptionRadius * perceptionRadius) {
+          if (otherType === EntityTypeCode.PLANT && distSq < perceptionRadiusSq) {
             if (distSq < nearestTargetDistSq) {
               nearestTargetDistSq = distSq;
-              targetX = otherX;
-              targetY = otherY;
+              targetDx = dx;
+              targetDy = dy;
               hasTarget = true;
             }
-          } else if (otherType === EntityTypeCode.CARNIVORE && distSq < fleeRadius * fleeRadius) {
+          } else if (otherType === EntityTypeCode.CARNIVORE && distSq < fleeRadiusSq) {
             if (distSq < nearestPredatorDistSq) {
               nearestPredatorDistSq = distSq;
-              predatorX = otherX;
-              predatorY = otherY;
+              predatorDx = dx;
+              predatorDy = dy;
               hasPredator = true;
             }
           }
@@ -127,11 +140,11 @@ export class SteeringSystem {
 
         // 4. Carnivore targeting (hunt herbivores)
         if (type === EntityTypeCode.CARNIVORE) {
-          if (otherType === EntityTypeCode.HERBIVORE && distSq < perceptionRadius * perceptionRadius) {
+          if (otherType === EntityTypeCode.HERBIVORE && distSq < perceptionRadiusSq) {
             if (distSq < nearestTargetDistSq) {
               nearestTargetDistSq = distSq;
-              targetX = otherX;
-              targetY = otherY;
+              targetDx = dx;
+              targetDy = dy;
               hasTarget = true;
             }
           }
@@ -159,9 +172,9 @@ export class SteeringSystem {
           totalSteerY += (alignY / alignLen) * maxSpeed * flockWeight;
         }
 
-        // Cohesion
-        cohX = cohX / flockmatesCount - posX;
-        cohY = cohY / flockmatesCount - posY;
+        // Cohesion towards toroidal centroid
+        cohX /= flockmatesCount;
+        cohY /= flockmatesCount;
         const cohLen = Math.sqrt(cohX * cohX + cohY * cohY);
         if (cohLen > 0) {
           totalSteerX += (cohX / cohLen) * maxSpeed * flockWeight * 0.8;
@@ -171,21 +184,19 @@ export class SteeringSystem {
 
       // Apply Seeking target force (edible prey or plant)
       if (hasTarget) {
-        const seekDx = targetX - posX;
-        const seekDy = targetY - posY;
-        const seekDist = Math.sqrt(seekDx * seekDx + seekDy * seekDy);
+        const seekDist = Math.sqrt(nearestTargetDistSq);
         if (seekDist > 0) {
-          totalSteerX += (seekDx / seekDist) * maxSpeed * 1.2;
-          totalSteerY += (seekDy / seekDist) * maxSpeed * 1.2;
+          totalSteerX += (targetDx / seekDist) * maxSpeed * 1.2;
+          totalSteerY += (targetDy / seekDist) * maxSpeed * 1.2;
         }
       }
 
       // Apply Fleeing predator force (high priority emergency repulsion)
       if (hasPredator) {
-        const fleeDx = posX - predatorX;
-        const fleeDy = posY - predatorY;
-        const fleeDist = Math.sqrt(fleeDx * fleeDx + fleeDy * fleeDy);
+        const fleeDist = Math.sqrt(nearestPredatorDistSq);
         if (fleeDist > 0) {
+          const fleeDx = -predatorDx;
+          const fleeDy = -predatorDy;
           totalSteerX += (fleeDx / fleeDist) * maxSpeed * 2.5;
           totalSteerY += (fleeDy / fleeDist) * maxSpeed * 2.5;
         }

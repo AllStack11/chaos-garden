@@ -1,6 +1,6 @@
 /**
  * Chaos Garden - Render Stride Packing System
- * 
+ *
  * Serializes active entities directly from SoA typed array columns
  * into flat binary Float32Array buffers using packEntityFieldsToStride.
  * Operates with exactly 0 byte heap allocations during continuous frames.
@@ -10,9 +10,9 @@ import {
   STRIDE_FLOAT_COUNT,
   packEntityFieldsToStride,
   allocateRenderBuffer,
-} from '@chaos-garden/shared';
-import type { EntityPool } from '../ecs/EntityPool.js';
-import type { ComponentStorage } from '../ecs/ComponentStorage.js';
+} from "@chaos-garden/shared";
+import type { EntityPool } from "../ecs/EntityPool.js";
+import type { ComponentStorage } from "../ecs/ComponentStorage.js";
 
 export class RenderPackingSystem {
   readonly maxEntities: number;
@@ -38,6 +38,18 @@ export class RenderPackingSystem {
   pack(pool: EntityPool, storage: ComponentStorage): number {
     const count = pool.denseCount;
     const dense = pool.denseEntities;
+
+    // Replenish active buffer if it was detached during a zero-copy transfer
+    if (this._activeBuffer.byteLength === 0) {
+      const freshBuffer = allocateRenderBuffer(this.maxEntities);
+      if (this._activeBuffer === this._bufferA) {
+        this._bufferA = freshBuffer;
+      } else {
+        this._bufferB = freshBuffer;
+      }
+      this._activeBuffer = freshBuffer;
+    }
+
     const buffer = this._activeBuffer;
     const inv100 = 0.01;
     let base = 0;
@@ -64,6 +76,24 @@ export class RenderPackingSystem {
    * Swaps double buffers for zero-copy rendering thread transfers.
    */
   swapBuffers(): void {
-    this._activeBuffer = this._activeBuffer === this._bufferA ? this._bufferB : this._bufferA;
+    this._activeBuffer =
+      this._activeBuffer === this._bufferA ? this._bufferB : this._bufferA;
+  }
+
+  /**
+   * Reclaims a transferred render buffer back into the double-buffering pool.
+   */
+  returnBuffer(buffer: Float32Array): void {
+    if (this._bufferA.byteLength === 0) {
+      this._bufferA = buffer;
+      if (this._activeBuffer.byteLength === 0) {
+        this._activeBuffer = buffer;
+      }
+    } else if (this._bufferB.byteLength === 0) {
+      this._bufferB = buffer;
+      if (this._activeBuffer.byteLength === 0) {
+        this._activeBuffer = buffer;
+      }
+    }
   }
 }

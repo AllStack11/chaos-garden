@@ -1,6 +1,6 @@
 /**
  * Chaos Garden - Spatial Hash Grid
- * 
+ *
  * Partitions 2D world space into uniform buckets to accelerate proximity,
  * flocking, grazing, and predation queries from O(N^2) to O(1) average time.
  * Uses zero-allocation linked-list arrays (cellHead and nextEntity).
@@ -51,6 +51,7 @@ export class SpatialHashGrid {
     this.cellHead = new Int32Array(this.numBuckets);
     this.nextEntity = new Int32Array(this.maxEntities);
     this.queryBuffer = new Int32Array(16);
+    this.queryBuffer = new Int32Array(32);
 
     this.clear();
   }
@@ -73,8 +74,14 @@ export class SpatialHashGrid {
     let wy = y % this.worldHeight;
     if (wy < 0) wy += this.worldHeight;
 
-    const col = Math.min(Math.max(Math.floor(wx / this.cellSize), 0), this.cols - 1);
-    const row = Math.min(Math.max(Math.floor(wy / this.cellSize), 0), this.rows - 1);
+    const col = Math.min(
+      Math.max(Math.floor(wx / this.cellSize), 0),
+      this.cols - 1,
+    );
+    const row = Math.min(
+      Math.max(Math.floor(wy / this.cellSize), 0),
+      this.rows - 1,
+    );
 
     return row * this.cols + col;
   }
@@ -100,7 +107,7 @@ export class SpatialHashGrid {
     x: number,
     y: number,
     radius: number,
-    callback: (neighborIndex: number) => void
+    callback: (neighborIndex: number) => void,
   ): void {
     const minCol = Math.floor((x - radius) / this.cellSize);
     const maxCol = Math.floor((x + radius) / this.cellSize);
@@ -135,7 +142,7 @@ export class SpatialHashGrid {
    * Queries nearby entities and stores up to queryBuffer.length indices
    * in queryBuffer with exactly 0 byte heap allocations and no closure creation.
    * Optimized with a branchless fast-path for interior queries.
-   * 
+   *
    * @returns Number of neighbor entities populated into queryBuffer.
    */
   query(x: number, y: number, radius: number): number {
@@ -191,5 +198,3 @@ export class SpatialHashGrid {
     return count;
   }
 }
-
-

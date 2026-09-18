@@ -1,5 +1,4 @@
 {
-  "name": "@chaos-garden/shared",
   "name": "@chaos-garden/shared-legacy",
   "version": "1.0.0",
   "description": "Shared TypeScript types for Chaos Garden ecosystem",

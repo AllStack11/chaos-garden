@@ -33,6 +33,10 @@ export class GeneticsSystem {
     const activeCount = pool.denseCount;
     const dense = pool.denseEntities;
 
+    if (activeCount >= this.config.maxTotalEntities || activeCount >= pool.capacity) {
+      return;
+    }
+
     // Count existing populations to respect ceilings
     let plantCount = 0;
     let herbivoreCount = 0;

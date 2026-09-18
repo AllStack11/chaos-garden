@@ -56,12 +56,12 @@ export class PhysicsSystem {
       let px = storage.positionsX[idx] + vx * dt;
       let py = storage.positionsY[idx] + vy * dt;
 
-      // Toroidal boundary wrapping
-      if (px < 0) px = (px % width) + width;
-      else if (px >= width) px %= width;
+      // Toroidal boundary wrapping (fast addition/subtraction)
+      if (px < 0) px += width;
+      else if (px >= width) px -= width;
 
-      if (py < 0) py = (py % height) + height;
-      else if (py >= height) py %= height;
+      if (py < 0) py += height;
+      else if (py >= height) py -= height;
 
       storage.positionsX[idx] = px;
       storage.positionsY[idx] = py;

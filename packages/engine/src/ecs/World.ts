@@ -1,6 +1,6 @@
 /**
  * Chaos Garden - ECS World Simulation Engine
- * 
+ *
  * Orchestrates the fixed-timestep simulation loop strictly following
  * the 10-step execution pipeline.
  * Operates with 0 bytes of heap memory allocated per tick.
@@ -13,17 +13,17 @@ import {
   createSeededRandom,
   EntityTypeCode,
   type PopulationSummary,
-} from '@chaos-garden/shared';
-import { EntityPool } from './EntityPool.js';
-import { ComponentStorage } from './ComponentStorage.js';
-import { SoilGrid } from '../environment/SoilGrid.js';
-import { SpatialHashGrid } from '../spatial/SpatialHashGrid.js';
-import { SteeringSystem } from '../systems/SteeringSystem.js';
-import { PhysicsSystem } from '../systems/PhysicsSystem.js';
-import { MetabolismSystem } from '../systems/MetabolismSystem.js';
-import { GeneticsSystem } from '../systems/GeneticsSystem.js';
-import { MortalitySystem } from '../systems/MortalitySystem.js';
-import { RenderPackingSystem } from '../systems/RenderPackingSystem.js';
+} from "@chaos-garden/shared";
+import { EntityPool } from "./EntityPool.js";
+import { ComponentStorage } from "./ComponentStorage.js";
+import { SoilGrid } from "../environment/SoilGrid.js";
+import { SpatialHashGrid } from "../spatial/SpatialHashGrid.js";
+import { SteeringSystem } from "../systems/SteeringSystem.js";
+import { PhysicsSystem } from "../systems/PhysicsSystem.js";
+import { MetabolismSystem } from "../systems/MetabolismSystem.js";
+import { GeneticsSystem } from "../systems/GeneticsSystem.js";
+import { MortalitySystem } from "../systems/MortalitySystem.js";
+import { RenderPackingSystem } from "../systems/RenderPackingSystem.js";
 
 export interface WorldOptions {
   seed?: number;
@@ -69,10 +69,13 @@ export class World {
     });
 
     this.steeringSystem = new SteeringSystem();
-    this.physicsSystem = new PhysicsSystem(this.config.gardenWidth, this.config.gardenHeight);
+    this.physicsSystem = new PhysicsSystem(
+      this.config.gardenWidth,
+      this.config.gardenHeight,
+    );
     this.metabolismSystem = new MetabolismSystem(
       this.config.basePhotosynthesisRate,
-      0.5
+      0.5,
     );
     this.geneticsSystem = new GeneticsSystem(this.config);
     this.mortalitySystem = new MortalitySystem();
@@ -103,17 +106,34 @@ export class World {
     const dense = this.pool.denseEntities;
     for (let i = 0; i < activeCount; i++) {
       const idx = dense[i];
-      this.spatialGrid.insert(idx, this.storage.positionsX[idx], this.storage.positionsY[idx]);
+      this.spatialGrid.insert(
+        idx,
+        this.storage.positionsX[idx],
+        this.storage.positionsY[idx],
+      );
     }
 
     // 3 & 4. Sensory Perception & Craig Reynolds Steering
-    this.steeringSystem.update(this.pool, this.storage, this.spatialGrid, this.prng);
+    this.steeringSystem.update(
+      this.pool,
+      this.storage,
+      this.spatialGrid,
+      this.prng,
+      this.config.gardenWidth,
+      this.config.gardenHeight,
+    );
 
     // 5. Physics Integration & Toroidal Boundary Wrap
     this.physicsSystem.update(dt, this.pool, this.storage);
 
     // 6. Metabolism, Grazing, Predation & Decomposition
-    this.metabolismSystem.update(dt, this.pool, this.storage, this.spatialGrid, this.soil);
+    this.metabolismSystem.update(
+      dt,
+      this.pool,
+      this.storage,
+      this.spatialGrid,
+      this.soil,
+    );
 
     // 7. Reproduction & Genetics
     this.geneticsSystem.update(this._tick, this.pool, this.storage, this.prng);
@@ -143,7 +163,7 @@ export class World {
       pigmentBase: number,
       speed: number,
       force: number,
-      threshold: number
+      threshold: number,
     ): void => {
       for (let i = 0; i < count; i++) {
         const idx = this.pool.allocate();
@@ -170,17 +190,21 @@ export class World {
           parentIndex: -1,
           bornAtTick: 0,
           lifespan: 1200 + Math.floor(prng() * 600),
-          metabolismRate: this.config.baseEnergyCostPerTick * (0.8 + prng() * 0.4),
+          metabolismRate:
+            this.config.baseEnergyCostPerTick * (0.8 + prng() * 0.4),
           reproductionThreshold: threshold,
           mutationRate: this.config.mutationMagnitude,
 
           // Kingdom traits
-          photosynthesisRate: type === EntityTypeCode.PLANT ? 1.0 + prng() * 0.5 : 0,
-          seedDispersionRadius: type === EntityTypeCode.PLANT ? 40 + prng() * 30 : 0,
+          photosynthesisRate:
+            type === EntityTypeCode.PLANT ? 1.0 + prng() * 0.5 : 0,
+          seedDispersionRadius:
+            type === EntityTypeCode.PLANT ? 40 + prng() * 30 : 0,
           moistureAffinity: 0.5,
           maxSpeed: speed,
           maxForce: force,
-          perceptionRadius: type === EntityTypeCode.PLANT ? 0 : 50 + prng() * 30,
+          perceptionRadius:
+            type === EntityTypeCode.PLANT ? 0 : 50 + prng() * 30,
           fleeRadius: type === EntityTypeCode.HERBIVORE ? 80 + prng() * 30 : 0,
           flockingWeight: type === EntityTypeCode.HERBIVORE ? 0.8 : 0.4,
           packWeight: type === EntityTypeCode.CARNIVORE ? 1.2 : 0,
@@ -197,7 +221,7 @@ export class World {
       120, // Green hue
       0,
       0,
-      this.config.plantReproductionThreshold
+      this.config.plantReproductionThreshold,
     );
 
     spawnKingdom(
@@ -207,7 +231,7 @@ export class World {
       200, // Cyan/Blue hue
       22.0,
       4.0,
-      this.config.herbivoreReproductionThreshold
+      this.config.herbivoreReproductionThreshold,
     );
 
     spawnKingdom(
@@ -217,7 +241,7 @@ export class World {
       0, // Red hue
       30.0,
       6.0,
-      this.config.carnivoreReproductionThreshold
+      this.config.carnivoreReproductionThreshold,
     );
 
     spawnKingdom(
@@ -227,7 +251,7 @@ export class World {
       280, // Purple hue
       0,
       0,
-      this.config.fungusReproductionThreshold
+      this.config.fungusReproductionThreshold,
     );
   }
 
@@ -280,12 +304,41 @@ export class World {
   /**
    * Retrieves the current binary render frame buffer.
    */
-  getRenderFrame(): { tick: number; entityCount: number; buffer: Float32Array } {
+  getRenderFrame(): {
+    tick: number;
+    entityCount: number;
+    buffer: Float32Array;
+  } {
     return {
       tick: this._tick,
       entityCount: this.pool.denseCount,
       buffer: this.renderPackingSystem.currentBuffer,
     };
   }
-}
 
+  /**
+   * Retrieves the current binary render frame buffer and swaps double buffers
+   * so the returned buffer can be safely transferred to a Web Worker or rendering thread
+   * without interfering with the next simulation tick's packing pass.
+   */
+  getTransferableRenderFrame(): {
+    tick: number;
+    entityCount: number;
+    buffer: Float32Array;
+  } {
+    const frame = {
+      tick: this._tick,
+      entityCount: this.pool.denseCount,
+      buffer: this.renderPackingSystem.currentBuffer,
+    };
+    this.renderPackingSystem.swapBuffers();
+    return frame;
+  }
+
+  /**
+   * Reclaims a transferred render buffer back into the double-buffering pool.
+   */
+  returnRenderBuffer(buffer: Float32Array): void {
+    this.renderPackingSystem.returnBuffer(buffer);
+  }
+}

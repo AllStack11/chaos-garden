@@ -1,6 +1,6 @@
 /**
  * Chaos Garden - Living Soil Grid
- * 
+ *
  * 2D matrix modeling soil moisture and nitrogen/nutrient diffusion.
  * Employs double-buffered explicit 2D Laplacian diffusion with toroidal
  * boundary wrapping and zero per-tick memory allocation.
@@ -11,7 +11,7 @@ import {
   DEFAULT_SOIL_CONFIG,
   type SoilGridDimensions,
   type SoilDiffusionConfig,
-} from '@chaos-garden/shared';
+} from "@chaos-garden/shared";
 
 export class SoilGrid {
   readonly dimensions: SoilGridDimensions;
@@ -31,7 +31,7 @@ export class SoilGrid {
 
   constructor(
     dimensions: SoilGridDimensions = DEFAULT_SOIL_DIMENSIONS,
-    config: SoilDiffusionConfig = DEFAULT_SOIL_CONFIG
+    config: SoilDiffusionConfig = DEFAULT_SOIL_CONFIG,
   ) {
     this.dimensions = dimensions;
     this.config = config;
@@ -115,9 +115,12 @@ export class SoilGrid {
    */
   consumeNitrates(worldX: number, worldY: number, amount: number): number {
     const idx = this.getIndex(worldX, worldY);
-    const available = this._moistureCurrent[idx];
+    const available = this._nitratesCurrent[idx];
     const consumed = Math.min(available, amount);
-    this._nitratesCurrent[idx] = Math.max(0, this._nitratesCurrent[idx] - consumed);
+    this._nitratesCurrent[idx] = Math.max(
+      0,
+      this._nitratesCurrent[idx] - consumed,
+    );
     return consumed;
   }
 
@@ -126,7 +129,10 @@ export class SoilGrid {
    */
   depositNitrates(worldX: number, worldY: number, amount: number): void {
     const idx = this.getIndex(worldX, worldY);
-    this._nitratesCurrent[idx] = Math.min(1.0, this._nitratesCurrent[idx] + amount);
+    this._nitratesCurrent[idx] = Math.min(
+      1.0,
+      this._nitratesCurrent[idx] + amount,
+    );
   }
 
   /**
@@ -136,7 +142,10 @@ export class SoilGrid {
     const idx = this.getIndex(worldX, worldY);
     const available = this._moistureCurrent[idx];
     const consumed = Math.min(available, amount);
-    this._moistureCurrent[idx] = Math.max(0, this._moistureCurrent[idx] - consumed);
+    this._moistureCurrent[idx] = Math.max(
+      0,
+      this._moistureCurrent[idx] - consumed,
+    );
     return consumed;
   }
 
@@ -145,7 +154,10 @@ export class SoilGrid {
    */
   addMoisture(worldX: number, worldY: number, amount: number): void {
     const idx = this.getIndex(worldX, worldY);
-    this._moistureCurrent[idx] = Math.min(1.0, this._moistureCurrent[idx] + amount);
+    this._moistureCurrent[idx] = Math.min(
+      1.0,
+      this._moistureCurrent[idx] + amount,
+    );
   }
 
   /**
@@ -156,7 +168,7 @@ export class SoilGrid {
   diffuse(
     moistureRate: number = this.config.moistureDiffusionRate,
     nitrateRate: number = this.config.nitrateDiffusionRate,
-    evaporation: number = this.config.evaporationBaseRate
+    evaporation: number = this.config.evaporationBaseRate,
   ): void {
     const cols = this.dimensions.cols;
     const rows = this.dimensions.rows;
@@ -223,4 +235,3 @@ export class SoilGrid {
     this._nitratesNext = tempN;
   }
 }
-
