@@ -194,138 +194,131 @@ flowchart TD
   - [x] Unit tests verifying zero-object packing equivalence with `packEntityToStride` in `packages/shared/tests/stride.test.ts`
 - [x] **Verification**: Run `npm run test`, `npm run type-check`, and `npm run build` in `packages/shared`
 
-
 ### Phase 2B: Engine Scaffolding & Memory Architecture (`@chaos-garden/engine`)
 
-- [x] **Package Bootstrap**
-  - [x] Create `packages/engine/package.json` with dependencies on `@chaos-garden/shared`
-  - [x] Configure `packages/engine/tsconfig.json` (`strict: true`, ES2022 / NodeNext)
-  - [x] Configure `packages/engine/vitest.config.ts`
-  - [x] Update root `package.json` workspaces to include `packages/engine` and add engine script shortcuts
-  - [x] Create `packages/engine/src/index.ts` entry point
-- [x] **Generational Entity Pool** (`packages/engine/src/ecs/EntityPool.ts`)
-  - [x] Pre-allocate `generations: Uint16Array(maxEntities)`
-  - [x] Pre-allocate `freeList: Uint32Array(maxEntities)` and initialize free index stack
-  - [x] Pre-allocate `denseEntities: Uint32Array(maxEntities)` and `denseCount: number`
-  - [x] Implement $O(1)$ `allocate(): number` returning dense slot index (-1 on exhaustion)
-  - [x] Implement $O(1)$ `free(index: number): void` with dense array compaction swap and generation increment
-  - [x] Implement `isValid(index: number, generation: number): boolean`
-  - [x] Unit tests in `packages/engine/tests/ecs/EntityPool.test.ts` (allocation, recycling, generation bumps, compaction invariant)
-- [x] **Struct-of-Arrays (SoA) Component Storage** (`packages/engine/src/ecs/ComponentStorage.ts`)
-  - [x] Allocate spatial arrays: `positionsX`, `positionsY`, `velocitiesX`, `velocitiesY`, `accelerationsX`, `accelerationsY`, `rotations` (`Float32Array`)
-  - [x] Allocate vitals arrays: `energies`, `healths` (`Float32Array`), `ages`, `maxLifespans` (`Uint32Array`)
-  - [x] Allocate taxonomy arrays: `typeCodes` (`Uint8Array`), `sizes`, `pigments` (`Float32Array`), `generations` (`Uint16Array`)
-  - [x] Allocate chromosome arrays: `metabolismRates`, `reproductionThresholds`, `mutationRates` (`Float32Array`)
-  - [x] Allocate kingdom trait arrays: `photosynthesisRates`, `seedDispersionRadii`, `moistureAffinities`, `maxSpeeds`, `maxForces`, `perceptionRadii`, `fleeRadii`, `flockingWeights`, `packWeights`, `decompositionRates` (`Float32Array`)
-  - [x] Allocate identity arrays: `idHashes` (`Uint32Array`), `parentIndices` (`Int32Array`), `bornAtTicks` (`Uint32Array`)
-  - [x] Implement zero-allocation entity initialization helper `initEntity(index, typeCode, genome, ...)`
-  - [x] Unit tests in `packages/engine/tests/ecs/ComponentStorage.test.ts`
-
+- [ ] **Package Bootstrap**
+  - [ ] Create `packages/engine/package.json` with dependencies on `@chaos-garden/shared`
+  - [ ] Configure `packages/engine/tsconfig.json` (`strict: true`, ES2022 / NodeNext)
+  - [ ] Configure `packages/engine/vitest.config.ts`
+  - [ ] Update root `package.json` workspaces to include `packages/engine` and add engine script shortcuts
+  - [ ] Create `packages/engine/src/index.ts` entry point
+- [ ] **Generational Entity Pool** (`packages/engine/src/ecs/EntityPool.ts`)
+  - [ ] Pre-allocate `generations: Uint16Array(maxEntities)`
+  - [ ] Pre-allocate `freeList: Uint32Array(maxEntities)` and initialize free index stack
+  - [ ] Pre-allocate `denseEntities: Uint32Array(maxEntities)` and `denseCount: number`
+  - [ ] Implement $O(1)$ `allocate(): number` returning dense slot index (-1 on exhaustion)
+  - [ ] Implement $O(1)$ `free(index: number): void` with dense array compaction swap and generation increment
+  - [ ] Implement `isValid(index: number, generation: number): boolean`
+  - [ ] Unit tests in `packages/engine/test/ecs/EntityPool.test.ts` (allocation, recycling, generation bumps, compaction invariant)
+- [ ] **Struct-of-Arrays (SoA) Component Storage** (`packages/engine/src/ecs/ComponentStorage.ts`)
+  - [ ] Allocate spatial arrays: `positionsX`, `positionsY`, `velocitiesX`, `velocitiesY`, `accelerationsX`, `accelerationsY`, `rotations` (`Float32Array`)
+  - [ ] Allocate vitals arrays: `energies`, `healths` (`Float32Array`), `ages`, `maxLifespans` (`Uint32Array`)
+  - [ ] Allocate taxonomy arrays: `typeCodes` (`Uint8Array`), `sizes`, `pigments` (`Float32Array`), `generations` (`Uint16Array`)
+  - [ ] Allocate chromosome arrays: `metabolismRates`, `reproductionThresholds`, `mutationRates` (`Float32Array`)
+  - [ ] Allocate kingdom trait arrays: `photosynthesisRates`, `seedDispersionRadii`, `moistureAffinities`, `maxSpeeds`, `maxForces`, `perceptionRadii`, `fleeRadii`, `flockingWeights`, `packWeights`, `decompositionRates` (`Float32Array`)
+  - [ ] Allocate identity arrays: `idHashes` (`Uint32Array`), `parentIndices` (`Int32Array`), `bornAtTicks` (`Uint32Array`)
+  - [ ] Implement zero-allocation entity initialization helper `initEntity(index, typeCode, genome, ...)`
+  - [ ] Unit tests in `packages/engine/test/ecs/ComponentStorage.test.ts`
 
 ### Phase 2C: Environmental & Spatial Partitioning Subsystems
 
-- [x] **Living Soil Grid** (`packages/engine/src/environment/SoilGrid.ts`)
-  - [x] Dimension grid: $100 \times 75$ ($7,500$ cells, $16\text{px}$ resolution)
-  - [x] Allocate double-buffered flat `Float32Array`: `moistureCurrent`, `moistureNext`, `nitratesCurrent`, `nitratesNext`
-  - [x] Implement explicit 2D Laplacian diffusion step (`diffuse(diffusionRate = 0.04)`) with toroidal wrapping
-  - [x] Implement pointer/buffer swap (`swapBuffers()`) with 0 GC allocations
-  - [x] Implement coordinate-to-cell sampling helpers: `getMoisture(x, y)`, `getNitrates(x, y)`
-  - [x] Implement nutrient modification helpers: `consumeNitrates(x, y, amount)`, `depositNitrates(x, y, amount)`
-  - [x] Unit tests in `packages/engine/tests/environment/SoilGrid.test.ts` (conservation of mass, CFL stability, boundary wrap)
-- [x] **Spatial Hash Grid** (`packages/engine/src/spatial/SpatialHashGrid.ts`)
-  - [x] Dimension grid: $50 \times 38$ buckets ($32\text{px}$ cell size)
-  - [x] Allocate zero-allocation linked-list arrays: `cellHead: Int32Array(numBuckets)` and `nextEntity: Int32Array(maxEntities)`
-  - [x] Implement $O(N)$ tick rebuild: `clear()` and `insert(entityIndex, x, y)`
-  - [x] Implement neighbor query: `queryNeighbors(x, y, radius, callback: (neighborIndex: number) => void): void` (zero heap allocations)
-  - [x] Implement fast radial distance filtering within spatial buckets
-  - [x] Unit tests in `packages/engine/tests/spatial/SpatialHashGrid.test.ts` (query accuracy, entity distribution, boundary cases)
-
+- [ ] **Living Soil Grid** (`packages/engine/src/environment/SoilGrid.ts`)
+  - [ ] Dimension grid: $100 \times 75$ ($7,500$ cells, $16\text{px}$ resolution)
+  - [ ] Allocate double-buffered flat `Float32Array`: `moistureCurrent`, `moistureNext`, `nitratesCurrent`, `nitratesNext`
+  - [ ] Implement explicit 2D Laplacian diffusion step (`diffuse(diffusionRate = 0.04)`) with toroidal wrapping
+  - [ ] Implement pointer/buffer swap (`swapBuffers()`) with 0 GC allocations
+  - [ ] Implement coordinate-to-cell sampling helpers: `getMoisture(x, y)`, `getNitrates(x, y)`
+  - [ ] Implement nutrient modification helpers: `consumeNitrates(x, y, amount)`, `depositNitrates(x, y, amount)`
+  - [ ] Unit tests in `packages/engine/test/environment/SoilGrid.test.ts` (conservation of mass, CFL stability, boundary wrap)
+- [ ] **Spatial Hash Grid** (`packages/engine/src/spatial/SpatialHashGrid.ts`)
+  - [ ] Dimension grid: $50 \times 38$ buckets ($32\text{px}$ cell size)
+  - [ ] Allocate zero-allocation linked-list arrays: `cellHead: Int32Array(numBuckets)` and `nextEntity: Int32Array(maxEntities)`
+  - [ ] Implement $O(N)$ tick rebuild: `clear()` and `insert(entityIndex, x, y)`
+  - [ ] Implement neighbor query: `queryNeighbors(x, y, radius, callback: (neighborIndex: number) => void): void` (zero heap allocations)
+  - [ ] Implement fast radial distance filtering within spatial buckets
+  - [ ] Unit tests in `packages/engine/test/spatial/SpatialHashGrid.test.ts` (query accuracy, entity distribution, boundary cases)
 
 ### Phase 2D: Biological & Physical Simulation Subsystems
 
-- [x] **Perception & Craig Reynolds Steering** (`packages/engine/src/systems/SteeringSystem.ts`)
-  - [x] Implement separation force ($\vec{F}_{\text{sep}} \propto 1/r^2$ from neighbors within separation radius)
-  - [x] Implement alignment force ($\bar{\vec{v}}_{\text{flock}} - \vec{v}$) and cohesion force ($\bar{\vec{r}}_{\text{flock}} - \vec{r}$)
-  - [x] Implement pursuit/seeking force towards nearest food/prey
-  - [x] Implement evasion/fleeing force away from predators within `fleeRadius`
-  - [x] Implement wandering drift force using deterministic PRNG
-  - [x] Accumulate combined steering force into `accelerationsX`, `accelerationsY` clamped by `maxForce`
-  - [x] Unit tests in `packages/engine/tests/systems/SteeringSystem.test.ts`
-- [x] **Physics Integration & Boundary Wrapping** (`packages/engine/src/systems/PhysicsSystem.ts`)
-  - [x] Integrate accelerations into velocities: $v = v + a \cdot \Delta t$, clamped to `maxSpeed`
-  - [x] Integrate velocities into positions: $p = p + v \cdot \Delta t$
-  - [x] Update `rotations` heading angle: $\theta = \operatorname{atan2}(v_y, v_x)$
-  - [x] Apply toroidal coordinate wrapping across `[0, gardenWidth)` and `[0, gardenHeight)`
-  - [x] Clear `accelerationsX` and `accelerationsY` to zero
-  - [x] Unit tests in `packages/engine/tests/systems/PhysicsSystem.test.ts`
-- [x] **Metabolism, Grazing & Predation** (`packages/engine/src/systems/MetabolismSystem.ts`)
-  - [x] Apply basal metabolic drain: `energies[idx] -= metabolismRates[idx] * dt`
-  - [x] Plant photosynthesis: absorb solar energy + soil moisture/nitrates
-  - [x] Herbivore grazing: consume nearby plants, transferring energy and damaging/consuming plant entity
-  - [x] Carnivore predation: attack nearby herbivores, transferring energy upon kill
-  - [x] Fungi decomposition: absorb nutrients from organic detritus / corpses and deposit nitrates into `SoilGrid`
-  - [x] Energy depletion check: apply health decay when energy hits 0
-  - [x] Unit tests in `packages/engine/tests/systems/MetabolismSystem.test.ts`
-- [x] **Genetics & Reproduction** (`packages/engine/src/systems/GeneticsSystem.ts`)
-  - [x] Enforce trophic reproduction threshold checks: `Plant(55) < Herbivore(65) < Carnivore(75)`
-  - [x] Check population ceilings per kingdom from `SimulationConfig`
-  - [x] Parent energy split: 50% retained by parent, 50% given to offspring
-  - [x] Allocate offspring in `EntityPool` and initialize via SoA
-  - [x] Offspring trait mutation via seeded Mulberry32 PRNG (Gaussian drift around parent traits)
-  - [x] Pigment hue drift ($\pm 5^\circ$) for visual phylogeny lineage
-  - [x] Unit tests in `packages/engine/tests/systems/GeneticsSystem.test.ts` (trophic thresholds, energy conservation, mutation drift)
-- [x] **Senescence & Mortality Handling** (`packages/engine/src/systems/MortalitySystem.ts`)
-  - [x] Increment `ages[idx]` each tick
-  - [x] Flag entities for death when `ages[idx] >= maxLifespans[idx]` or `healths[idx] <= 0`
-  - [x] Dead biomass conversion: deposit nitrates into `SoilGrid` at entity coordinate
-  - [x] Deallocate dead slots from `EntityPool` with $O(1)$ dense swap
-  - [x] Unit tests in `packages/engine/tests/systems/MortalitySystem.test.ts`
-
+- [ ] **Perception & Craig Reynolds Steering** (`packages/engine/src/systems/SteeringSystem.ts`)
+  - [ ] Implement separation force ($\vec{F}_{\text{sep}} \propto 1/r^2$ from neighbors within separation radius)
+  - [ ] Implement alignment force ($\bar{\vec{v}}_{\text{flock}} - \vec{v}$) and cohesion force ($\bar{\vec{r}}_{\text{flock}} - \vec{r}$)
+  - [ ] Implement pursuit/seeking force towards nearest food/prey
+  - [ ] Implement evasion/fleeing force away from predators within `fleeRadius`
+  - [ ] Implement wandering drift force using deterministic PRNG
+  - [ ] Accumulate combined steering force into `accelerationsX`, `accelerationsY` clamped by `maxForce`
+  - [ ] Unit tests in `packages/engine/test/systems/SteeringSystem.test.ts`
+- [ ] **Physics Integration & Boundary Wrapping** (`packages/engine/src/systems/PhysicsSystem.ts`)
+  - [ ] Integrate accelerations into velocities: $v = v + a \cdot \Delta t$, clamped to `maxSpeed`
+  - [ ] Integrate velocities into positions: $p = p + v \cdot \Delta t$
+  - [ ] Update `rotations` heading angle: $\theta = \operatorname{atan2}(v_y, v_x)$
+  - [ ] Apply toroidal coordinate wrapping across `[0, gardenWidth)` and `[0, gardenHeight)`
+  - [ ] Clear `accelerationsX` and `accelerationsY` to zero
+  - [ ] Unit tests in `packages/engine/test/systems/PhysicsSystem.test.ts`
+- [ ] **Metabolism, Grazing & Predation** (`packages/engine/src/systems/MetabolismSystem.ts`)
+  - [ ] Apply basal metabolic drain: `energies[idx] -= metabolismRates[idx] * dt`
+  - [ ] Plant photosynthesis: absorb solar energy + soil moisture/nitrates
+  - [ ] Herbivore grazing: consume nearby plants, transferring energy and damaging/consuming plant entity
+  - [ ] Carnivore predation: attack nearby herbivores, transferring energy upon kill
+  - [ ] Fungi decomposition: absorb nutrients from organic detritus / corpses and deposit nitrates into `SoilGrid`
+  - [ ] Energy depletion check: apply health decay when energy hits 0
+  - [ ] Unit tests in `packages/engine/test/systems/MetabolismSystem.test.ts`
+- [ ] **Genetics & Reproduction** (`packages/engine/src/systems/GeneticsSystem.ts`)
+  - [ ] Enforce trophic reproduction threshold checks: `Plant(55) < Herbivore(65) < Carnivore(75)`
+  - [ ] Check population ceilings per kingdom from `SimulationConfig`
+  - [ ] Parent energy split: 50% retained by parent, 50% given to offspring
+  - [ ] Allocate offspring in `EntityPool` and initialize via SoA
+  - [ ] Offspring trait mutation via seeded Mulberry32 PRNG (Gaussian drift around parent traits)
+  - [ ] Pigment hue drift ($\pm 5^\circ$) for visual phylogeny lineage
+  - [ ] Unit tests in `packages/engine/test/systems/GeneticsSystem.test.ts` (trophic thresholds, energy conservation, mutation drift)
+- [ ] **Senescence & Mortality Handling** (`packages/engine/src/systems/MortalitySystem.ts`)
+  - [ ] Increment `ages[idx]` each tick
+  - [ ] Flag entities for death when `ages[idx] >= maxLifespans[idx]` or `healths[idx] <= 0`
+  - [ ] Dead biomass conversion: deposit nitrates into `SoilGrid` at entity coordinate
+  - [ ] Deallocate dead slots from `EntityPool` with $O(1)$ dense swap
+  - [ ] Unit tests in `packages/engine/test/systems/MortalitySystem.test.ts`
 
 ### Phase 2E: World Pipeline Orchestration & Render Serialization
 
-- [x] **Render Stride Packing** (`packages/engine/src/systems/RenderPackingSystem.ts`)
-  - [x] Pre-allocate double-buffered render strides: `Float32Array(maxEntities * 8)`
-  - [x] Direct SoA extraction to flat buffer using `packEntityFieldsToStride`
-  - [x] Write active entity count and frame metadata
-  - [x] Zero object allocations during stride serialization
-  - [x] Unit tests in `packages/engine/tests/systems/RenderPackingSystem.test.ts`
-- [x] **World Orchestrator** (`packages/engine/src/ecs/World.ts`)
-  - [x] Initialize `EntityPool`, `ComponentStorage`, `SoilGrid`, `SpatialHashGrid`, and PRNG with seed
-  - [x] Bootstrap primordial ecosystem entities according to `SimulationConfig`
-  - [x] Implement `step(dt: number): void` strictly following the 10-step execution pipeline
-  - [x] Implement render frame getter / buffer transfer API for Web Worker consumption
-  - [x] Unit tests in `packages/engine/tests/ecs/World.test.ts`
-
+- [ ] **Render Stride Packing** (`packages/engine/src/systems/RenderPackingSystem.ts`)
+  - [ ] Pre-allocate double-buffered render strides: `Float32Array(maxEntities * 8)`
+  - [ ] Direct SoA extraction to flat buffer using `packEntityFieldsToStride`
+  - [ ] Write active entity count and frame metadata
+  - [ ] Zero object allocations during stride serialization
+  - [ ] Unit tests in `packages/engine/test/systems/RenderPackingSystem.test.ts`
+- [ ] **World Orchestrator** (`packages/engine/src/ecs/World.ts`)
+  - [ ] Initialize `EntityPool`, `ComponentStorage`, `SoilGrid`, `SpatialHashGrid`, and PRNG with seed
+  - [ ] Bootstrap primordial ecosystem entities according to `SimulationConfig`
+  - [ ] Implement `step(dt: number): void` strictly following the 10-step execution pipeline
+  - [ ] Implement render frame getter / buffer transfer API for Web Worker consumption
+  - [ ] Unit tests in `packages/engine/test/ecs/World.test.ts`
 
 ### Phase 2F: Observability, Diagnostics & Headless CLI
 
-- [x] **Flight Recorder Ring Buffer** (`packages/engine/src/diagnostics/FlightRecorder.ts`)
-  - [x] Pre-allocate 300-tick ring buffer arrays for census timeseries (plants, herbivores, carnivores, fungi, avg energy, tick duration)
-  - [x] Implement tick record push without heap allocations
-  - [x] Rolling anomaly detection (extinction warning, population explosion, energy collapse)
-  - [x] JSONL / `DiagnosticSnapshot` export for AI agent inspection
-  - [x] Unit tests in `packages/engine/tests/diagnostics/FlightRecorder.test.ts`
-- [x] **Headless CLI Tools** (`packages/engine/src/cli/`)
-  - [x] Create `packages/engine/src/cli/sim.ts` (`npm run sim:run -- --seed=42 --ticks=1000 --headless`)
-  - [x] Create `packages/engine/src/cli/audit.ts` (`npm run audit:sim` verifying sub-2.5ms tick latency and physical invariants)
-  - [x] Wire CLI scripts in `packages/engine/package.json` and root `package.json`
-
+- [ ] **Flight Recorder Ring Buffer** (`packages/engine/src/diagnostics/FlightRecorder.ts`)
+  - [ ] Pre-allocate 300-tick ring buffer arrays for census timeseries (plants, herbivores, carnivores, fungi, avg energy, tick duration)
+  - [ ] Implement tick record push without heap allocations
+  - [ ] Rolling anomaly detection (extinction warning, population explosion, energy collapse)
+  - [ ] JSONL / `DiagnosticSnapshot` export for AI agent inspection
+  - [ ] Unit tests in `packages/engine/test/diagnostics/FlightRecorder.test.ts`
+- [ ] **Headless CLI Tools** (`packages/engine/src/cli/`)
+  - [ ] Create `packages/engine/src/cli/sim.ts` (`npm run sim:run -- --seed=42 --ticks=1000 --headless`)
+  - [ ] Create `packages/engine/src/cli/audit.ts` (`npm run audit:sim` verifying sub-2.5ms tick latency and physical invariants)
+  - [ ] Wire CLI scripts in `packages/engine/package.json` and root `package.json`
 
 ### Phase 2G: Automated Test Suite & Invariant Verification
 
-- [x] **Zero-Allocation Verification Test** (`packages/engine/tests/invariants/zeroAllocation.test.ts`)
-  - [x] Run 1,000 continuous ticks under full load in Node.js with `--expose-gc`
-  - [x] Assert zero GC heap growth during steady-state ticks (< 3MB tolerance)
-- [x] **Determinism Invariant Test** (`packages/engine/tests/invariants/determinism.test.ts`)
-  - [x] Run 1,000 ticks with seed `42` twice
-  - [x] Assert bit-identical entity counts, positions, energies, and render strides
-- [x] **Trophic Ordering Invariant Test** (`packages/engine/tests/invariants/trophicOrder.test.ts`)
-  - [x] Verify `plant (55) < herbivore (65) < carnivore (75)` reproduction thresholds under all mutations
-- [x] **Performance Benchmark Test** (`packages/engine/tests/benchmarks/tickPerformance.test.ts`)
-  - [x] Benchmark average tick time $\le 2.5\text{ms}$ at 2,000 entities (actual: ~2.1ms)
-- [x] **Full Test Suite & Type Check Execution**
-  - [x] `npm run test -w @chaos-garden/engine` (16 test suites, 41 tests passing)
-  - [x] `npm run type-check -w @chaos-garden/engine` (0 errors)
-  - [x] `npm run audit:sim` (0.27ms avg tick time, all invariants verified)
-
+- [ ] **Zero-Allocation Verification Test** (`packages/engine/test/invariants/zeroAllocation.test.ts`)
+  - [ ] Run 10,000 ticks under full load (2,000 entities) in Node.js
+  - [ ] Assert zero GC heap growth during steady-state ticks
+- [ ] **Determinism Invariant Test** (`packages/engine/test/invariants/determinism.test.ts`)
+  - [ ] Run 1,000 ticks with seed `42` twice
+  - [ ] Assert bit-identical entity counts, positions, energies, and render strides
+- [ ] **Trophic Ordering Invariant Test** (`packages/engine/test/invariants/trophicOrder.test.ts`)
+  - [ ] Verify `plant (55) < herbivore (65) < carnivore (75)` reproduction thresholds under all mutations
+- [ ] **Performance Benchmark Test** (`packages/engine/test/benchmarks/tickPerformance.test.ts`)
+  - [ ] Benchmark average tick time $\le 2.5\text{ms}$ at 2,000 entities
+- [ ] **Full Test Suite & Type Check Execution**
+  - [ ] `npm run test -w @chaos-garden/engine`
+  - [ ] `npm run type-check -w @chaos-garden/engine`
+  - [ ] `npm run test:all`
