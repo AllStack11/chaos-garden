@@ -90,16 +90,17 @@ function authenticateCuratorRequest(
   }
 
   const configuredSecret = env.CURATOR_SECRET || env.CURATOR_TOKEN;
-  if (configuredSecret) {
-    if (token !== configuredSecret) {
+  if (!configuredSecret) {
+    // Fail closed: secret MUST be provisioned in non-test environments
+    if (env.ENVIRONMENT !== 'test') {
       return {
         success: false,
-        status: 401,
-        error: 'Unauthorized: Invalid curator authorization credentials',
+        status: 500,
+        error: 'Server configuration error: Curator authentication is unconfigured (CURATOR_SECRET must be provisioned in non-test environments)',
       };
     }
-  } else {
-    // When no explicit secret is set (dev/test), require non-empty token
+
+    // Explicit test environment fallback: require non-empty token
     if (!token || token.length < 3) {
       return {
         success: false,
@@ -107,6 +108,12 @@ function authenticateCuratorRequest(
         error: 'Unauthorized: Invalid curator authorization credentials',
       };
     }
+  } else if (token !== configuredSecret) {
+    return {
+      success: false,
+      status: 401,
+      error: 'Unauthorized: Invalid curator authorization credentials',
+    };
   }
 
   // Derive or extract curator identity

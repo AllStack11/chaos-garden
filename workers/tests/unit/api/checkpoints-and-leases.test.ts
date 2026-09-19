@@ -578,5 +578,85 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       expect(Array.isArray(json.data.events)).toBe(true);
     });
   });
+
+  describe('Production Environment without Secret (Fail-Closed Safety)', () => {
+    it('fails closed with 500 when CURATOR_SECRET is absent in production for lease request', async () => {
+      const prodEnv: Env = {
+        DB: mockDb,
+        ENVIRONMENT: 'production',
+        CORS_ORIGIN: '*',
+      };
+
+      const req = new Request('http://localhost/api/garden/lease', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer arbitrary-curator-token',
+        },
+        body: JSON.stringify({ curatorId: 'curator-attacker', authorizedTick: 100 }),
+      });
+
+      const res = await worker.fetch(req, prodEnv);
+      expect(res.status).toBe(500);
+
+      const json = await res.json() as any;
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('CURATOR_SECRET');
+      expect(leasesTable).toHaveLength(0);
+    });
+
+    it('fails closed with 500 when CURATOR_SECRET is absent in production for checkpoint submission', async () => {
+      const prodEnv: Env = {
+        DB: mockDb,
+        ENVIRONMENT: 'production',
+        CORS_ORIGIN: '*',
+      };
+
+      const payloadInfo = await createValidBinaryPayload(100);
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer arbitrary-curator-token',
+        },
+        body: JSON.stringify({
+          tick: 100,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+          leaseToken: 'some-fake-lease',
+        }),
+      });
+
+      const res = await worker.fetch(req, prodEnv);
+      expect(res.status).toBe(500);
+
+      const json = await res.json() as any;
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('CURATOR_SECRET');
+      expect(checkpointsTable).toHaveLength(0);
+    });
+
+    it('fails closed with 500 by default when ENVIRONMENT is unconfigured and secret is absent', async () => {
+      const unconfiguredEnv: Env = {
+        DB: mockDb,
+      };
+
+      const req = new Request('http://localhost/api/garden/lease', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer arbitrary-curator-token',
+        },
+        body: JSON.stringify({ curatorId: 'curator-attacker', authorizedTick: 100 }),
+      });
+
+      const res = await worker.fetch(req, unconfiguredEnv);
+      expect(res.status).toBe(500);
+
+      const json = await res.json() as any;
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('CURATOR_SECRET');
+    });
+  });
 });
 
