@@ -19,6 +19,7 @@ import type {
   ClientWorkerOutboundMessage,
   SelectedEntityVitals,
 } from './types.js';
+import { SoilBufferPool } from './SoilBufferPool.js';
 
 let world: World | null = null;
 let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -27,45 +28,6 @@ let isRunning = false;
 let targetTps = 60;
 let speedMultiplier = 1.0;
 let selectedEntityIdHash: number | null = null;
-class SoilBufferPool {
-  private bufferSize: number = 0;
-  private moisturePool: Float32Array[] = [];
-  private nitratePool: Float32Array[] = [];
-
-  init(cols: number, rows: number): void {
-    this.bufferSize = cols * rows;
-    this.moisturePool = [
-      new Float32Array(this.bufferSize),
-      new Float32Array(this.bufferSize),
-    ];
-    this.nitratePool = [
-      new Float32Array(this.bufferSize),
-      new Float32Array(this.bufferSize),
-    ];
-  }
-
-  acquire(): { moisture: Float32Array; nitrates: Float32Array } {
-    let moisture = this.moisturePool.pop();
-    let nitrates = this.nitratePool.pop();
-    if (!moisture || moisture.byteLength === 0) {
-      moisture = new Float32Array(this.bufferSize);
-    }
-    if (!nitrates || nitrates.byteLength === 0) {
-      nitrates = new Float32Array(this.bufferSize);
-    }
-    return { moisture, nitrates };
-  }
-
-  release(moisture: Float32Array, nitrates: Float32Array): void {
-    if (moisture && moisture.byteLength > 0) {
-      this.moisturePool.push(moisture);
-    }
-    if (nitrates && nitrates.byteLength > 0) {
-      this.nitratePool.push(nitrates);
-    }
-  }
-}
-
 const soilPool = new SoilBufferPool();
 
 
@@ -276,23 +238,28 @@ function simulationLoop(): void {
   };
   self.postMessage(renderMessage, [frame.buffer.buffer]);
 
-  // 2. Throttled Soil Update (15 Hz)
+  // 2. Throttled Soil Update (15 Hz) with backpressure
   if (now - lastSoilUpdateTime >= 66) {
-    lastSoilUpdateTime = now;
-    const soil = world.soil;
-    const { moisture, nitrates } = soilPool.acquire();
-    moisture.set(soil.moisture);
-    nitrates.set(soil.nitrates);
+    const slot = soilPool.acquireSlot();
+    if (slot !== -1) {
+      lastSoilUpdateTime = now;
+      const soil = world.soil;
+      const moisture = soilPool.getMoisture(slot);
+      const nitrates = soilPool.getNitrates(slot);
+      moisture.set(soil.moisture);
+      nitrates.set(soil.nitrates);
+      soilPool.detachSlot(slot);
 
-    const soilMessage: ClientWorkerOutboundMessage = {
-      type: 'SOIL_TEXTURE_UPDATE',
-      tick: world.tick,
-      cols: soil.cols,
-      rows: soil.rows,
-      moistureBuffer: moisture,
-      nitrateBuffer: nitrates,
-    };
-    self.postMessage(soilMessage, [moisture.buffer, nitrates.buffer]);
+      const soilMessage: ClientWorkerOutboundMessage = {
+        type: 'SOIL_TEXTURE_UPDATE',
+        tick: world.tick,
+        cols: soil.cols,
+        rows: soil.rows,
+        moistureBuffer: moisture,
+        nitrateBuffer: nitrates,
+      };
+      self.postMessage(soilMessage, [moisture.buffer, nitrates.buffer]);
+    }
   }
 
   // 3. Throttled Telemetry Pulse (10 Hz)

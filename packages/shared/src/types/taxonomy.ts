@@ -151,6 +151,7 @@ export interface Entity {
   species: string;
   position: Vector2D;
   velocity: Vector2D;
+  rotation?: number;
   energy: number;   // 0 - 100
   health: number;   // 0 - 100
   age: number;      // ticks survived

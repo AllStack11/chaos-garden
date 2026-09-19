@@ -6,6 +6,8 @@
  * array compaction to maximize cache locality during system updates.
  */
 
+import type { EntityPoolSnapshot } from '@chaos-garden/shared';
+
 export class EntityPool {
   readonly capacity: number;
   readonly generations: Uint16Array;
@@ -136,6 +138,33 @@ export class EntityPool {
       return false;
     }
     return this.sparseIndices[index] !== -1;
+  }
+
+  /**
+   * Serializes the exact generational free-list and dense packing state.
+   */
+  exportState(): EntityPoolSnapshot {
+    return {
+      capacity: this.capacity,
+      denseCount: this._denseCount,
+      freeCount: this._freeCount,
+      generations: Array.from(this.generations),
+      freeList: Array.from(this.freeList),
+      denseEntities: Array.from(this.denseEntities),
+      sparseIndices: Array.from(this.sparseIndices),
+    };
+  }
+
+  /**
+   * Restores exact generational free-list, dense packing, and active count.
+   */
+  loadState(state: EntityPoolSnapshot): void {
+    this._denseCount = state.denseCount;
+    this._freeCount = state.freeCount;
+    this.generations.set(state.generations);
+    this.freeList.set(state.freeList);
+    this.denseEntities.set(state.denseEntities);
+    this.sparseIndices.set(state.sparseIndices);
   }
 }
 
