@@ -7,7 +7,6 @@
  */
 
 import { World } from '../ecs/World.js';
-import { FlightRecorder } from '../diagnostics/FlightRecorder.js';
 
 function parseArgs(): { seed: number; ticks: number; headless: boolean } {
   const args = process.argv.slice(2);
@@ -37,14 +36,11 @@ async function run(): Promise<void> {
   const world = new World({ seed });
   world.seedPrimordialEcosystem();
 
-  const recorder = new FlightRecorder(300);
-
   const startTime = performance.now();
   let totalTickDuration = 0;
 
   for (let t = 0; t < ticks; t++) {
     world.step();
-    recorder.recordTick(world);
     totalTickDuration += world.lastTickDurationMs;
 
     if (!headless && (t + 1) % 100 === 0) {
@@ -68,8 +64,8 @@ async function run(): Promise<void> {
   console.log(`   Average Tick Time: ${avgTickMs.toFixed(3)}ms`);
   console.log(`   Simulation Speed:  ${simulatedTps} TPS (${(parseFloat(simulatedTps) / 60).toFixed(1)}x real-time)\n`);
 
-  const finalDiag = recorder.getDiagnosticSnapshot(world);
-  console.log(recorder.formatMarkdown(finalDiag));
+  const finalDiag = world.flightRecorder.getDiagnosticSnapshot(world);
+  console.log(world.flightRecorder.formatMarkdown(finalDiag));
   console.log('');
 }
 

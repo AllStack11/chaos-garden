@@ -15,6 +15,8 @@ import {
   type PopulationSummary,
   type CanonicalWorldState,
   type EngineSnapshot,
+  type EncodedEngineCheckpoint,
+  type TransferableRenderFrame,
   type Entity,
   getEntityTypeCode,
   getEntityTypeFromCode,
@@ -30,6 +32,8 @@ import { MetabolismSystem } from "../systems/MetabolismSystem.js";
 import { GeneticsSystem } from "../systems/GeneticsSystem.js";
 import { MortalitySystem } from "../systems/MortalitySystem.js";
 import { RenderPackingSystem } from "../systems/RenderPackingSystem.js";
+import { FlightRecorder } from "../diagnostics/FlightRecorder.js";
+import { EngineBinaryCodec, base64ToUint8Array } from "../persistence/EngineBinaryCodec.js";
 
 export interface WorldOptions {
   seed?: number;
@@ -54,9 +58,11 @@ export class World {
   readonly geneticsSystem: GeneticsSystem;
   readonly mortalitySystem: MortalitySystem;
   readonly renderPackingSystem: RenderPackingSystem;
+  readonly flightRecorder: FlightRecorder;
 
   private _tick: number = 0;
   private _lastTickDurationMs: number = 0;
+  private _nextEntityId: number = 1;
 
   constructor(options: WorldOptions = {}) {
     this.seed = options.seed ?? 42;
@@ -87,19 +93,43 @@ export class World {
     this.geneticsSystem = new GeneticsSystem(this.config);
     this.mortalitySystem = new MortalitySystem();
     this.renderPackingSystem = new RenderPackingSystem(maxEntities);
+    this.flightRecorder = new FlightRecorder(300);
   }
 
   get tick(): number {
     return this._tick;
   }
 
+  setTick(tick: number): void {
+    this._tick = tick;
+  }
+
+  get nextEntityId(): number {
+    return this._nextEntityId;
+  }
+
+  set nextEntityId(id: number) {
+    this._nextEntityId = id;
+  }
+
   get lastTickDurationMs(): number {
     return this._lastTickDurationMs;
+  }
+
+  private rebuildSpatialGrid(): void {
+    this.spatialGrid.rebuild(
+      this.pool.denseCount,
+      this.pool.denseEntities,
+      this.storage.positionsX,
+      this.storage.positionsY,
+    );
   }
 
   /**
    * Advances the simulation by exactly one physics tick (nominal dt = 1/60s).
    * Executes subsystems in strict sequential order.
+   * Executes the 10-step pipeline in strict sequential order.
+   * Runs with 0 bytes heap allocations in steady state.
    */
   step(dt: number = 1 / this.config.targetTps): void {
     const startTime = performance.now();
@@ -107,18 +137,8 @@ export class World {
     // 1. Living Soil & Terrain Diffusion
     this.soil.diffuse();
 
-    // 2. Spatial Hash Grid Rebuild
-    this.spatialGrid.clear();
-    const activeCount = this.pool.denseCount;
-    const dense = this.pool.denseEntities;
-    for (let i = 0; i < activeCount; i++) {
-      const idx = dense[i];
-      this.spatialGrid.insert(
-        idx,
-        this.storage.positionsX[idx],
-        this.storage.positionsY[idx],
-      );
-    }
+    // 2. Spatial Hash Grid Rebuild (Pre-Steering)
+    this.rebuildSpatialGrid();
 
     // 3 & 4. Sensory Perception & Craig Reynolds Steering
     this.steeringSystem.update(
@@ -133,7 +153,10 @@ export class World {
     // 5. Physics Integration & Toroidal Boundary Wrap
     this.physicsSystem.update(dt, this.pool, this.storage);
 
-    // 6. Metabolism, Grazing, Predation & Decomposition
+    // 5b. Spatial Hash Grid Rebuild (Post-Physics, Pre-Metabolism)
+    this.rebuildSpatialGrid();
+
+    // 6. Metabolism, Grazing, Predation & Decomposition (Exact toroidal nearest target)
     this.metabolismSystem.update(
       dt,
       this.pool,
@@ -142,17 +165,54 @@ export class World {
       this.soil,
     );
 
-    // 7. Reproduction & Genetics
-    this.geneticsSystem.update(this._tick, this.pool, this.storage, this.prng);
+    // 7. Reproduction & Genetics (Monotonic immutable durable IDs)
+    this.geneticsSystem.update(
+      this._tick,
+      this.pool,
+      this.storage,
+      this.prng,
+      () => this._nextEntityId++,
+    );
 
     // 8. Senescence, Mortality & Nutrient Return
     this.mortalitySystem.update(this.pool, this.storage, this.soil);
 
-    // 9. Render Stride Serialization
-    this.renderPackingSystem.pack(this.pool, this.storage);
-
     this._tick++;
     this._lastTickDurationMs = performance.now() - startTime;
+
+    // 9. Render Stride Serialization
+    this.renderPackingSystem.pack(this.pool, this.storage, this._tick);
+
+    // 10. Flight Recorder Write (Zero-allocation scalar census write)
+    let plants = 0;
+    let herbivores = 0;
+    let carnivores = 0;
+    let fungi = 0;
+    let totalBiomass = 0;
+    const activeCount = this.pool.denseCount;
+    const dense = this.pool.denseEntities;
+    const types = this.storage.typeCodes;
+    const energies = this.storage.energies;
+
+    for (let i = 0; i < activeCount; i++) {
+      const idx = dense[i];
+      totalBiomass += energies[idx];
+      const t = types[idx];
+      if (t === EntityTypeCode.PLANT) plants++;
+      else if (t === EntityTypeCode.HERBIVORE) herbivores++;
+      else if (t === EntityTypeCode.CARNIVORE) carnivores++;
+      else fungi++;
+    }
+
+    this.flightRecorder.recordTickDirect(
+      this._tick,
+      this._lastTickDurationMs,
+      plants,
+      herbivores,
+      carnivores,
+      fungi,
+      totalBiomass,
+    );
   }
 
   /**
@@ -180,9 +240,12 @@ export class World {
         const y = prng() * h;
         const angle = prng() * Math.PI * 2;
         const idHash = (Math.floor(prng() * 1000000) + 1) & 0x00ffffff;
+        const entityId = this._nextEntityId++;
 
         this.storage.initEntity(idx, {
           idHash: idHash === 0 ? 1 : idHash,
+          entityId,
+          parentEntityId: 0,
           typeCode: type,
           x,
           y,
@@ -324,29 +387,34 @@ export class World {
   }
 
   /**
-   * Retrieves the current binary render frame buffer and swaps double buffers
-   * so the returned buffer can be safely transferred to a Web Worker or rendering thread
-   * without interfering with the next simulation tick's packing pass.
+   * Retrieves the current transferable render frame buffer and marks it inFlight.
+   * Returns null if no frame buffer was available in the fixed pool.
+   * Never allocates.
    */
-  getTransferableRenderFrame(): {
-    tick: number;
-    entityCount: number;
-    buffer: Float32Array;
-  } {
-    const frame = {
-      tick: this._tick,
-      entityCount: this.pool.denseCount,
-      buffer: this.renderPackingSystem.currentBuffer,
-    };
-    this.renderPackingSystem.swapBuffers();
-    return frame;
+  getTransferableRenderFrame(): TransferableRenderFrame | null {
+    return this.renderPackingSystem.getTransferableRenderFrame();
   }
 
   /**
-   * Reclaims a transferred render buffer back into the double-buffering pool.
+   * Reclaims a transferred render buffer back into the fixed pool.
+   * Returns true if successfully admitted, false if rejected.
    */
-  returnRenderBuffer(buffer: Float32Array): void {
-    this.renderPackingSystem.returnBuffer(buffer);
+  returnRenderBuffer(buffer: Float32Array): boolean {
+    return this.renderPackingSystem.returnRenderBuffer(buffer);
+  }
+
+  /**
+   * Exports an EncodedEngineCheckpoint with SHA-256 integrity hash.
+   */
+  async exportEngineCheckpoint(): Promise<EncodedEngineCheckpoint> {
+    return EngineBinaryCodec.exportCheckpoint(this);
+  }
+
+  /**
+   * Hydrates state directly from an EncodedEngineCheckpoint with SHA-256 verification.
+   */
+  async hydrateEngineCheckpoint(checkpoint: EncodedEngineCheckpoint): Promise<boolean> {
+    return EngineBinaryCodec.hydrateCheckpoint(this, checkpoint);
   }
 
   /**
@@ -365,6 +433,7 @@ export class World {
       const typeCode = storage.typeCodes[idx] as EntityTypeCode;
       const typeStr = getEntityTypeFromCode(typeCode);
       const idHash = storage.idHashes[idx];
+      const entityId = storage.entityIds[idx] || idHash;
 
       const baseGenome = {
         metabolismEfficiency: storage.metabolismRates[idx],
@@ -420,13 +489,16 @@ export class World {
       }
 
       const parentSlot = storage.parentIndices[idx];
+      const parentEntityId = storage.parentEntityIds[idx];
       const parentId =
-        parentSlot >= 0 && storage.idHashes[parentSlot] !== 0
-          ? storage.idHashes[parentSlot].toString()
-          : "origin";
+        parentEntityId && parentEntityId !== 0
+          ? parentEntityId.toString()
+          : parentSlot >= 0 && storage.idHashes[parentSlot] !== 0
+            ? storage.idHashes[parentSlot].toString()
+            : "origin";
 
       entities.push({
-        id: idHash.toString(),
+        id: entityId.toString(),
         type: typeStr,
         name: `${typeStr} #${idHash}`,
         species: typeStr,
@@ -488,12 +560,34 @@ export class World {
   }
 
   /**
-   * Losslessly hydrates simulation state from a CanonicalWorldState or EngineSnapshot.
+   * Losslessly hydrates simulation state from a CanonicalWorldState, EngineSnapshot, or EncodedEngineCheckpoint.
    */
-  hydrateCanonicalState(state: CanonicalWorldState | EngineSnapshot): boolean {
+  hydrateCanonicalState(state: CanonicalWorldState | EngineSnapshot | EncodedEngineCheckpoint): boolean {
     if (!state) return false;
 
     // 1. Primary path: Restore bit-exact EngineSnapshot
+    // 0. Binary encoded checkpoint path
+    if ("checkpoint" in state && state.checkpoint) {
+      try {
+        const rawBytes = base64ToUint8Array(state.checkpoint.payload);
+        const ok = EngineBinaryCodec.decode(this, rawBytes);
+        if (ok) return true;
+      } catch {
+        // fall through to other representations
+      }
+    }
+
+    if ("payload" in state && typeof state.payload === "string" && "checksum" in state) {
+      try {
+        const rawBytes = base64ToUint8Array(state.payload);
+        const ok = EngineBinaryCodec.decode(this, rawBytes);
+        if (ok) return true;
+      } catch {
+        // fall through
+      }
+    }
+
+    // 1. Primary legacy path: Restore bit-exact EngineSnapshot
     const engineSnapshot: EngineSnapshot | null =
       "engineSnapshot" in state && state.engineSnapshot
         ? state.engineSnapshot
@@ -512,6 +606,15 @@ export class World {
         this.soil.loadState(engineSnapshot.soil.moisture, engineSnapshot.soil.nitrates);
       }
       this.renderPackingSystem.pack(this.pool, this.storage);
+
+      // Recompute nextEntityId safely
+      let maxId = 0;
+      for (let i = 0; i < this.storage.capacity; i++) {
+        if (this.storage.entityIds[i] > maxId) maxId = this.storage.entityIds[i];
+      }
+      this._nextEntityId = Math.max(this._nextEntityId, maxId + 1);
+
+      this.renderPackingSystem.pack(this.pool, this.storage, this._tick);
       return true;
     }
 
@@ -538,6 +641,7 @@ export class World {
     this.soil.loadState(canonical.soil.moisture, canonical.soil.nitrates);
 
     // Map entity id string to allocated slot index to restore lineage links accurately
+    // Map entity id string to allocated slot index and entityId
     const idToSlot = new Map<string, number>();
 
     // First pass: allocate slots and record id mappings
@@ -547,9 +651,9 @@ export class World {
       idToSlot.set(ent.id, idx);
 
       const typeCode = getEntityTypeCode(ent.type);
-      const idHash =
-        (parseInt(ent.id, 10) || Math.floor(this.prng() * 1000000) + 1) &
-        0x00ffffff;
+      const parsedId = parseInt(ent.id, 10);
+      const entityId = Number.isFinite(parsedId) && parsedId > 0 ? parsedId : this._nextEntityId++;
+      const idHash = (entityId || Math.floor(this.prng() * 1000000) + 1) & 0x00ffffff;
       const g = ent.genome;
 
       const rot =
@@ -559,6 +663,8 @@ export class World {
 
       this.storage.initEntity(idx, {
         idHash: idHash === 0 ? 1 : idHash,
+        entityId,
+        parentEntityId: 0, // will be resolved in second pass
         typeCode,
         x: ent.position.x,
         y: ent.position.y,
@@ -613,9 +719,14 @@ export class World {
     }
 
     // Second pass: wire stable lineage parentIndex
+    // Second pass: wire stable lineage parentEntityId
     for (const ent of canonical.entities) {
       const childSlot = idToSlot.get(ent.id);
       if (childSlot !== undefined && ent.parentId && ent.parentId !== "origin") {
+        const parentIdNum = parseInt(ent.parentId, 10);
+        if (Number.isFinite(parentIdNum)) {
+          this.storage.parentEntityIds[childSlot] = parentIdNum;
+        }
         const parentSlot = idToSlot.get(ent.parentId);
         if (parentSlot !== undefined) {
           this.storage.parentIndices[childSlot] = parentSlot;
@@ -625,6 +736,7 @@ export class World {
 
     // Re-pack render buffer for immediate drawing
     this.renderPackingSystem.pack(this.pool, this.storage);
+    this.renderPackingSystem.pack(this.pool, this.storage, this._tick);
     return true;
   }
 }

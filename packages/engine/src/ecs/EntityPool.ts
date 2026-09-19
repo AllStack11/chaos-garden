@@ -155,6 +155,14 @@ export class EntityPool {
     };
   }
 
+  setDenseCount(count: number): void {
+    this._denseCount = count;
+  }
+
+  setFreeCount(count: number): void {
+    this._freeCount = count;
+  }
+
   /**
    * Restores exact generational free-list, dense packing, and active count.
    */

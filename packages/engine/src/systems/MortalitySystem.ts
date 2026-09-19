@@ -23,21 +23,29 @@ export class MortalitySystem {
     soil: SoilGrid
   ): number {
     let deathCount = 0;
+    const dense = pool.denseEntities;
+    const ages = storage.ages;
+    const maxLifespans = storage.maxLifespans;
+    const healths = storage.healths;
+    const energies = storage.energies;
+    const posXs = storage.positionsX;
+    const posYs = storage.positionsY;
 
     // Iterate backwards so dense swap-and-pop does not perturb unprocessed indices
     for (let i = pool.denseCount - 1; i >= 0; i--) {
-      const idx = pool.denseEntities[i];
+      const idx = dense[i];
 
       // Increment age
-      storage.ages[idx]++;
+      const newAge = ages[idx] + 1;
+      ages[idx] = newAge;
 
-      const isOld = storage.ages[idx] >= storage.maxLifespans[idx];
-      const isDead = storage.healths[idx] <= 0;
+      const isOld = newAge >= maxLifespans[idx];
+      const isDead = healths[idx] <= 0;
 
       if (isOld || isDead) {
         // Return remaining biomass into soil nitrates
-        const biomass = Math.max(0.05, (storage.energies[idx] + Math.max(0, storage.healths[idx])) * 0.002);
-        soil.depositNitrates(storage.positionsX[idx], storage.positionsY[idx], biomass);
+        const biomass = Math.max(0.05, (energies[idx] + Math.max(0, healths[idx])) * 0.002);
+        soil.depositNitrates(posXs[idx], posYs[idx], biomass);
 
         // Reset storage slot and recycle into free list
         storage.resetEntity(idx);
@@ -49,4 +57,3 @@ export class MortalitySystem {
     return deathCount;
   }
 }
-

@@ -5,6 +5,8 @@
  * performance latency, and ecological vitals.
  * Detects extinction warnings, population explosions, and generates
  * machine-readable DiagnosticSnapshot objects for LLM diagnosis.
+ * Operates with 0 byte heap allocations during per-tick recording.
+ * Bounded event buffer tracks anomalies without array shift() or object churn.
  */
 
 import {
@@ -14,6 +16,15 @@ import {
   type EcologicalVitals,
 } from '@chaos-garden/shared';
 import type { World } from '../ecs/World.js';
+
+const EVENT_LEVELS: StructuredLogEvent['level'][] = ['INFO', 'WARN', 'ERROR'];
+const EVENT_COMPONENTS: StructuredLogEvent['component'][] = ['METABOLISM', 'ENGINE', 'GENETICS'];
+const EVENT_DEFINITIONS = [
+  { event: 'FLORA_EXTINCTION', message: 'Plant population dropped to 0' },
+  { event: 'HERBIVORE_EXTINCTION', message: 'Herbivore population dropped to 0' },
+  { event: 'CARNIVORE_EXTINCTION', message: 'Carnivore population dropped to 0' },
+  { event: 'SLOW_TICK', message: 'Tick exceeded 16.6ms budget' },
+];
 
 export class FlightRecorder {
   readonly capacity: number;
@@ -30,7 +41,15 @@ export class FlightRecorder {
 
   private _head: number = 0;
   private _count: number = 0;
-  private _recentEvents: StructuredLogEvent[] = [];
+
+  // Pre-allocated bounded ring buffer for recent events (max 20)
+  readonly eventCapacity = 20;
+  readonly eventTicks: Uint32Array;
+  readonly eventLevels: Uint8Array;
+  readonly eventComponents: Uint8Array;
+  readonly eventCodes: Uint8Array;
+  private _eventHead: number = 0;
+  private _eventCount: number = 0;
 
   constructor(capacity: number = 300) {
     this.capacity = capacity;
@@ -42,6 +61,11 @@ export class FlightRecorder {
     this.biomass = new Float32Array(capacity);
     this.avgEnergy = new Float32Array(capacity);
     this.tickDurations = new Float32Array(capacity);
+
+    this.eventTicks = new Uint32Array(this.eventCapacity);
+    this.eventLevels = new Uint8Array(this.eventCapacity);
+    this.eventComponents = new Uint8Array(this.eventCapacity);
+    this.eventCodes = new Uint8Array(this.eventCapacity);
   }
 
   get count(): number {
@@ -49,66 +73,93 @@ export class FlightRecorder {
   }
 
   /**
-   * Records telemetry for the current simulation tick.
-   * Modifies pre-allocated buffers with zero heap allocations.
+   * Fast, zero-allocation scalar telemetry write path called per-tick from World.step().
+   * Modifies pre-allocated buffers with exactly 0 bytes allocated.
    */
-  recordTick(world: World): void {
-    const summary = world.getPopulationSummary();
+  recordTickDirect(
+    tick: number,
+    tickDurationMs: number,
+    plants: number,
+    herbivores: number,
+    carnivores: number,
+    fungi: number,
+    totalBiomass: number,
+  ): void {
     const idx = this._head;
+    const totalLiving = plants + herbivores + carnivores + fungi;
+    const avgE = totalLiving > 0 ? totalBiomass / totalLiving : 0;
 
-    const totalLiving = summary.totalLiving;
-    const avgE = totalLiving > 0 ? summary.totalBiomass / totalLiving : 0;
-
-    this.ticks[idx] = world.tick;
-    this.plants[idx] = summary.plants;
-    this.herbivores[idx] = summary.herbivores;
-    this.carnivores[idx] = summary.carnivores;
-    this.fungi[idx] = summary.fungi;
-    this.biomass[idx] = summary.totalBiomass;
+    this.ticks[idx] = tick;
+    this.plants[idx] = plants;
+    this.herbivores[idx] = herbivores;
+    this.carnivores[idx] = carnivores;
+    this.fungi[idx] = fungi;
+    this.biomass[idx] = totalBiomass;
     this.avgEnergy[idx] = avgE;
-    this.tickDurations[idx] = world.lastTickDurationMs;
+    this.tickDurations[idx] = tickDurationMs;
 
     this._head = (this._head + 1) % this.capacity;
     if (this._count < this.capacity) {
       this._count++;
     }
 
-    // Anomaly checks
-    if (world.tick > 10) {
-      if (summary.plants === 0) {
-        this.addEvent(world.tick, 'WARN', 'METABOLISM', 'FLORA_EXTINCTION', 'Plant population dropped to 0');
-      }
-      if (summary.herbivores === 0) {
-        this.addEvent(world.tick, 'WARN', 'METABOLISM', 'HERBIVORE_EXTINCTION', 'Herbivore population dropped to 0');
-      }
-      if (summary.carnivores === 0) {
-        this.addEvent(world.tick, 'INFO', 'METABOLISM', 'CARNIVORE_EXTINCTION', 'Carnivore population dropped to 0');
-      }
-      if (world.lastTickDurationMs > 16.6) {
-        this.addEvent(world.tick, 'WARN', 'ENGINE', 'SLOW_TICK', `Tick took ${world.lastTickDurationMs.toFixed(2)}ms (exceeded 16.6ms budget)`);
-      }
+    // Anomaly checks - bounded ring buffer without allocations
+    if (tick > 10) {
+      if (plants === 0) this.recordAnomaly(tick, 1, 0, 0);
+      if (herbivores === 0) this.recordAnomaly(tick, 1, 0, 1);
+      if (carnivores === 0) this.recordAnomaly(tick, 0, 0, 2);
+      if (tickDurationMs > 16.6) this.recordAnomaly(tick, 1, 1, 3);
     }
   }
 
-  private addEvent(
-    tick: number,
-    level: StructuredLogEvent['level'],
-    component: StructuredLogEvent['component'],
-    event: string,
-    message: string
-  ): void {
-    // Keep max 20 recent events
-    if (this._recentEvents.length >= 20) {
-      this._recentEvents.shift();
+  /**
+   * Backward-compatible recordTick method that accepts a World instance.
+   */
+  recordTick(world: World): void {
+    const summary = world.getPopulationSummary();
+    this.recordTickDirect(
+      world.tick,
+      world.lastTickDurationMs,
+      summary.plants,
+      summary.herbivores,
+      summary.carnivores,
+      summary.fungi,
+      summary.totalBiomass,
+    );
+  }
+
+  private recordAnomaly(tick: number, level: number, component: number, code: number): void {
+    const idx = this._eventHead;
+    this.eventTicks[idx] = tick;
+    this.eventLevels[idx] = level;
+    this.eventComponents[idx] = component;
+    this.eventCodes[idx] = code;
+
+    this._eventHead = (this._eventHead + 1) % this.eventCapacity;
+    if (this._eventCount < this.eventCapacity) {
+      this._eventCount++;
     }
-    this._recentEvents.push({
-      tick,
-      timestamp: new Date().toISOString(),
-      level,
-      component,
-      event,
-      message,
-    });
+  }
+
+  private materializeEvents(): StructuredLogEvent[] {
+    const events: StructuredLogEvent[] = [];
+    const start = this._eventCount < this.eventCapacity ? 0 : this._eventHead;
+    const nowIso = new Date().toISOString();
+
+    for (let i = 0; i < this._eventCount; i++) {
+      const pos = (start + i) % this.eventCapacity;
+      const code = this.eventCodes[pos];
+      const def = EVENT_DEFINITIONS[code] ?? { event: 'UNKNOWN', message: 'Unknown event' };
+      events.push({
+        tick: this.eventTicks[pos],
+        timestamp: nowIso,
+        level: EVENT_LEVELS[this.eventLevels[pos]] ?? 'INFO',
+        component: EVENT_COMPONENTS[this.eventComponents[pos]] ?? 'ENGINE',
+        event: def.event,
+        message: def.message,
+      });
+    }
+    return events;
   }
 
   /**
@@ -141,7 +192,7 @@ export class FlightRecorder {
         end: endTick,
       },
       populationHistory: history,
-      recentEvents: [...this._recentEvents],
+      recentEvents: this.materializeEvents(),
     };
   }
 
@@ -197,7 +248,7 @@ export class FlightRecorder {
       tickDurationMs: world.lastTickDurationMs,
       populations: summary,
       vitals,
-      recentAnomalies: [...this._recentEvents],
+      recentAnomalies: this.materializeEvents(),
       reproducibleSeed: world.seed,
     };
   }
@@ -218,4 +269,3 @@ export class FlightRecorder {
     ].join('\n');
   }
 }
-

@@ -13,6 +13,9 @@ import type { ComponentStorage } from '../ecs/ComponentStorage.js';
 import type { SpatialHashGrid } from '../spatial/SpatialHashGrid.js';
 import type { SoilGrid } from '../environment/SoilGrid.js';
 
+export const GRAZING_INTERACTION_RADIUS_OFFSET = 16;
+export const PREDATION_INTERACTION_RADIUS_OFFSET = 14;
+
 export class MetabolismSystem {
   readonly basePhotosynthesisRate: number;
   readonly starvationDecayRate: number;
@@ -35,15 +38,28 @@ export class MetabolismSystem {
     const activeCount = pool.denseCount;
     const dense = pool.denseEntities;
 
+    const types = storage.typeCodes;
+    const posXs = storage.positionsX;
+    const posYs = storage.positionsY;
+    const sizes = storage.sizes;
+    const energies = storage.energies;
+    const healths = storage.healths;
+    const metabolismRates = storage.metabolismRates;
+    const photosynthesisRates = storage.photosynthesisRates;
+    const decompositionRates = storage.decompositionRates;
+
+    const dtFactor = dt * 60;
+    const starvationDrain = this.starvationDecayRate * dtFactor;
+
     for (let i = 0; i < activeCount; i++) {
       const idx = dense[i];
-      const type = storage.typeCodes[idx];
-      const posX = storage.positionsX[idx];
-      const posY = storage.positionsY[idx];
-      const size = storage.sizes[idx];
+      const type = types[idx];
+      const posX = posXs[idx];
+      const posY = posYs[idx];
+      const size = sizes[idx];
 
       // 1. Basal metabolic drain
-      storage.energies[idx] -= storage.metabolismRates[idx] * dt * 60;
+      energies[idx] -= metabolismRates[idx] * dtFactor;
 
       // 2. Kingdom-specific energy intake
       switch (type) {
@@ -54,12 +70,12 @@ export class MetabolismSystem {
           const environmentalFactor = moisture * 0.6 + nitrates * 0.4;
           const photoGain =
             this.basePhotosynthesisRate *
-            storage.photosynthesisRates[idx] *
+            photosynthesisRates[idx] *
             environmentalFactor *
-            dt *
-            60;
+            dtFactor;
 
-          storage.energies[idx] = Math.min(100, storage.energies[idx] + photoGain);
+          const e = energies[idx] + photoGain;
+          energies[idx] = e > 100 ? 100 : e;
 
           // Plants drink small amounts of moisture and nitrates
           soil.consumeMoisture(posX, posY, 0.0005);
@@ -69,21 +85,22 @@ export class MetabolismSystem {
 
         case EntityTypeCode.HERBIVORE: {
           // Grazing on nearby plants if energy is not full
-          if (storage.energies[idx] < 95) {
-            const count = spatialGrid.query(posX, posY, size + 16);
-            const neighbors = spatialGrid.queryBuffer;
-            for (let n = 0; n < count; n++) {
-              const targetIdx = neighbors[n];
-              if (storage.typeCodes[targetIdx] === EntityTypeCode.PLANT) {
-                const targetEnergy = storage.energies[targetIdx];
-                if (targetEnergy > 5) {
-                  const bite = Math.min(15, targetEnergy);
-                  storage.energies[targetIdx] -= bite;
-                  storage.healths[targetIdx] -= bite * 0.4;
-                  storage.energies[idx] = Math.min(100, storage.energies[idx] + bite);
-                  break;
-                }
-              }
+          if (energies[idx] < 95) {
+            const targetIdx = spatialGrid.findNearestTarget(
+              posX,
+              posY,
+              size + GRAZING_INTERACTION_RADIUS_OFFSET,
+              EntityTypeCode.PLANT,
+              storage,
+              5
+            );
+            if (targetIdx !== -1) {
+              const targetEnergy = energies[targetIdx];
+              const bite = targetEnergy < 15 ? targetEnergy : 15;
+              energies[targetIdx] -= bite;
+              healths[targetIdx] -= bite * 0.4;
+              const newE = energies[idx] + bite;
+              energies[idx] = newE > 100 ? 100 : newE;
             }
           }
           break;
@@ -91,21 +108,19 @@ export class MetabolismSystem {
 
         case EntityTypeCode.CARNIVORE: {
           // Predation on nearby herbivores
-          if (storage.energies[idx] < 90) {
-            const count = spatialGrid.query(posX, posY, size + 14);
-            const neighbors = spatialGrid.queryBuffer;
-            for (let n = 0; n < count; n++) {
-              const targetIdx = neighbors[n];
-              if (storage.typeCodes[targetIdx] === EntityTypeCode.HERBIVORE) {
-                const targetHealth = storage.healths[targetIdx];
-                if (targetHealth > 0) {
-                  const strikeDamage = 30;
-                  storage.healths[targetIdx] -= strikeDamage;
-                  const meatEnergy = 20;
-                  storage.energies[idx] = Math.min(100, storage.energies[idx] + meatEnergy);
-                  break;
-                }
-              }
+          if (energies[idx] < 90) {
+            const targetIdx = spatialGrid.findNearestTarget(
+              posX,
+              posY,
+              size + PREDATION_INTERACTION_RADIUS_OFFSET,
+              EntityTypeCode.HERBIVORE,
+              storage,
+              0
+            );
+            if (targetIdx !== -1) {
+              healths[targetIdx] -= 30;
+              const newE = energies[idx] + 20;
+              energies[idx] = newE > 100 ? 100 : newE;
             }
           }
           break;
@@ -113,17 +128,18 @@ export class MetabolismSystem {
 
         case EntityTypeCode.FUNGUS: {
           // Decomposition: absorb nutrients from soil nitrates
-          const decompRate = storage.decompositionRates[idx];
+          const decompRate = decompositionRates[idx];
           const absorbed = soil.consumeNitrates(posX, posY, decompRate * 0.001);
-          storage.energies[idx] = Math.min(100, storage.energies[idx] + absorbed * 80);
+          const newE = energies[idx] + absorbed * 80;
+          energies[idx] = newE > 100 ? 100 : newE;
           break;
         }
       }
 
       // 3. Starvation check
-      if (storage.energies[idx] <= 0) {
-        storage.energies[idx] = 0;
-        storage.healths[idx] -= this.starvationDecayRate * dt * 60;
+      if (energies[idx] <= 0) {
+        energies[idx] = 0;
+        healths[idx] -= starvationDrain;
       }
     }
   }

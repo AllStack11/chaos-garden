@@ -10,6 +10,8 @@ import { EntityTypeCode, type ComponentStorageSnapshot } from '@chaos-garden/sha
 
 export interface EntityInitParams {
   idHash: number;
+  entityId?: number;
+  parentEntityId?: number;
   typeCode: EntityTypeCode;
   x: number;
   y: number;
@@ -84,6 +86,8 @@ export class ComponentStorage {
 
   // 6. Identity & Lineage
   readonly idHashes: Uint32Array;
+  readonly entityIds: Uint32Array;
+  readonly parentEntityIds: Uint32Array; // 0 = origin
   readonly parentIndices: Int32Array;
   readonly bornAtTicks: Uint32Array;
 
@@ -128,6 +132,8 @@ export class ComponentStorage {
     this.decompositionRates = new Float32Array(capacity);
 
     this.idHashes = new Uint32Array(capacity);
+    this.entityIds = new Uint32Array(capacity);
+    this.parentEntityIds = new Uint32Array(capacity);
     this.parentIndices = new Int32Array(capacity);
     this.bornAtTicks = new Uint32Array(capacity);
 
@@ -172,6 +178,8 @@ export class ComponentStorage {
     this.decompositionRates.fill(0);
 
     this.idHashes.fill(0);
+    this.entityIds.fill(0);
+    this.parentEntityIds.fill(0);
     this.parentIndices.fill(-1);
     this.bornAtTicks.fill(0);
   }
@@ -214,6 +222,8 @@ export class ComponentStorage {
     this.decompositionRates[index] = 0;
 
     this.idHashes[index] = 0;
+    this.entityIds[index] = 0;
+    this.parentEntityIds[index] = 0;
     this.parentIndices[index] = -1;
     this.bornAtTicks[index] = 0;
   }
@@ -256,12 +266,15 @@ export class ComponentStorage {
     this.decompositionRates[index] = params.decompositionRate ?? 0;
 
     this.idHashes[index] = params.idHash;
+    this.entityIds[index] = params.entityId ?? (params.idHash & 0xffffffff);
+    this.parentEntityIds[index] = params.parentEntityId ?? 0;
     this.parentIndices[index] = params.parentIndex ?? -1;
     this.bornAtTicks[index] = params.bornAtTick ?? 0;
   }
 
   /**
    * Serializes all 31 TypedArray component columns into standard arrays.
+   * Serializes all 33 TypedArray component columns into standard arrays.
    */
   exportState(): ComponentStorageSnapshot {
     return {
@@ -295,6 +308,8 @@ export class ComponentStorage {
       packWeights: Array.from(this.packWeights),
       decompositionRates: Array.from(this.decompositionRates),
       idHashes: Array.from(this.idHashes),
+      entityIds: Array.from(this.entityIds),
+      parentEntityIds: Array.from(this.parentEntityIds),
       parentIndices: Array.from(this.parentIndices),
       bornAtTicks: Array.from(this.bornAtTicks),
     };
@@ -302,6 +317,7 @@ export class ComponentStorage {
 
   /**
    * Restores all 31 TypedArray component columns from snapshot arrays.
+   * Restores all 33 TypedArray component columns from snapshot arrays.
    */
   loadState(snapshot: ComponentStorageSnapshot): void {
     this.positionsX.set(snapshot.positionsX);
@@ -333,6 +349,16 @@ export class ComponentStorage {
     this.packWeights.set(snapshot.packWeights);
     this.decompositionRates.set(snapshot.decompositionRates);
     this.idHashes.set(snapshot.idHashes);
+    if (snapshot.entityIds) {
+      this.entityIds.set(snapshot.entityIds);
+    } else {
+      this.entityIds.set(snapshot.idHashes);
+    }
+    if (snapshot.parentEntityIds) {
+      this.parentEntityIds.set(snapshot.parentEntityIds);
+    } else {
+      this.parentEntityIds.fill(0);
+    }
     this.parentIndices.set(snapshot.parentIndices);
     this.bornAtTicks.set(snapshot.bornAtTicks);
   }

@@ -161,6 +161,39 @@ CREATE TABLE IF NOT EXISTS dead_matter (
 CREATE INDEX IF NOT EXISTS idx_dead_matter_death_tick ON dead_matter(death_tick);
 
 -- ==========================================
+-- Engine Checkpoints Table
+-- ==========================================
+-- Dedicated table for deterministic binary snapshots with SHA-256 integrity.
+
+CREATE TABLE IF NOT EXISTS engine_checkpoints (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tick INTEGER NOT NULL UNIQUE,
+  engine_version INTEGER NOT NULL,
+  seed INTEGER NOT NULL,
+  checksum TEXT NOT NULL,
+  payload BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_engine_checkpoints_tick ON engine_checkpoints(tick DESC);
+
+-- ==========================================
+-- Curator Leases Table
+-- ==========================================
+-- Temporary authority leases granted to active viewers permitting checkpoint commits.
+
+CREATE TABLE IF NOT EXISTS curator_leases (
+  lease_id TEXT PRIMARY KEY,
+  curator_id TEXT NOT NULL,
+  granted_at_ms INTEGER NOT NULL,
+  expires_at_ms INTEGER NOT NULL,
+  authorized_tick INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_curator_leases_expires ON curator_leases(expires_at_ms DESC);
+
+-- ==========================================
 -- Metadata Table (for future migrations)
 -- ==========================================
 -- Tracks schema version and other system metadata.
@@ -174,6 +207,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
 VALUES ('schema_version', '1.8.0', datetime('now'));
+VALUES ('schema_version', '1.9.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding

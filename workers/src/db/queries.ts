@@ -24,7 +24,13 @@ import type {
   SimulationEventRow,
   Environment,
   PopulationSummary,
-  ActiveWeatherState
+  ActiveWeatherState,
+  EncodedEngineCheckpoint,
+  CuratorLease,
+} from '@chaos-garden/shared';
+import {
+  uint8ArrayToBase64,
+  base64ToUint8Array
 } from '@chaos-garden/shared';
 import { queryFirst, queryAll, executeQuery, executeBatch } from './connection';
 import type { D1Database } from '../types/worker';
@@ -759,5 +765,240 @@ function mapRowToSimulationEvent(row: SimulationEventRow): SimulationEvent {
     tags: JSON.parse(row.tags || '[]'),
     severity: row.severity as SimulationEvent['severity'],
     metadata: row.metadata || undefined
+  };
+}
+
+// ==========================================
+// Engine Checkpoints & Curator Leases
+// ==========================================
+
+export interface EngineCheckpointRow {
+  id: number;
+  tick: number;
+  engine_version: number;
+  seed: number;
+  checksum: string;
+  payload: unknown;
+  created_at: string;
+}
+
+export interface CuratorLeaseRow {
+  lease_id: string;
+  curator_id: string;
+  granted_at_ms: number;
+  expires_at_ms: number;
+  authorized_tick: number;
+  created_at: string;
+}
+
+function normalizeBlobToUint8Array(payload: unknown): Uint8Array {
+  if (payload instanceof Uint8Array) {
+    return payload;
+  }
+  if (payload instanceof ArrayBuffer) {
+    return new Uint8Array(payload);
+  }
+  if (Array.isArray(payload)) {
+    return new Uint8Array(payload);
+  }
+  if (typeof payload === 'string') {
+    return base64ToUint8Array(payload);
+  }
+  return new Uint8Array(0);
+}
+
+export async function getLatestEngineCheckpoint(
+  db: D1Database
+): Promise<EncodedEngineCheckpoint | null> {
+  const row = await queryFirst<EngineCheckpointRow>(
+    db,
+    `SELECT id, tick, engine_version, seed, checksum, payload, created_at
+     FROM engine_checkpoints
+     ORDER BY tick DESC
+     LIMIT 1`
+  );
+
+  if (!row) return null;
+
+  const bytes = normalizeBlobToUint8Array(row.payload);
+  const base64Payload = uint8ArrayToBase64(bytes);
+
+  return {
+    version: row.engine_version,
+    tick: row.tick,
+    seed: row.seed,
+    byteLength: bytes.byteLength,
+    checksum: row.checksum,
+    payload: base64Payload,
+  };
+}
+
+export async function getLatestCheckpointTick(db: D1Database): Promise<number> {
+  const row = await queryFirst<{ max_tick: number | null }>(
+    db,
+    `SELECT MAX(tick) as max_tick FROM engine_checkpoints`
+  );
+  return row?.max_tick ?? -1;
+}
+
+export async function saveEngineCheckpoint(
+  db: D1Database,
+  checkpoint: EncodedEngineCheckpoint
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const bytes = base64ToUint8Array(checkpoint.payload);
+    const arrayBuffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    );
+
+    const result = await executeQuery(
+      db,
+      `INSERT INTO engine_checkpoints (tick, engine_version, seed, checksum, payload)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        checkpoint.tick,
+        checkpoint.version,
+        checkpoint.seed,
+        checkpoint.checksum,
+        arrayBuffer,
+      ]
+    );
+
+    if (!result.success) {
+      return { success: false, error: result.error || 'Failed to insert checkpoint' };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function pruneEngineCheckpoints(
+  db: D1Database,
+  maxRetained: number = 500
+): Promise<void> {
+  await executeQuery(
+    db,
+    `DELETE FROM engine_checkpoints
+     WHERE id NOT IN (
+       SELECT id FROM engine_checkpoints
+       ORDER BY tick DESC
+       LIMIT ?
+     )`,
+    [maxRetained]
+  );
+}
+
+export async function getActiveCuratorLease(
+  db: D1Database,
+  leaseId: string
+): Promise<CuratorLease | null> {
+  const now = Date.now();
+  const row = await queryFirst<CuratorLeaseRow>(
+    db,
+    `SELECT lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at
+     FROM curator_leases
+     WHERE lease_id = ? AND expires_at_ms > ?
+     LIMIT 1`,
+    [leaseId, now]
+  );
+
+  if (!row) return null;
+
+  return {
+    leaseId: row.lease_id,
+    curatorId: row.curator_id,
+    grantedAtMs: row.granted_at_ms,
+    expiresAtMs: row.expires_at_ms,
+    authorizedTick: row.authorized_tick,
+  };
+}
+
+export async function hasActiveCuratorLease(db: D1Database): Promise<boolean> {
+  const now = Date.now();
+  const row = await queryFirst<{ count: number }>(
+    db,
+    `SELECT COUNT(*) as count FROM curator_leases WHERE expires_at_ms > ?`,
+    [now]
+  );
+  return (row?.count ?? 0) > 0;
+}
+
+export async function acquireOrRenewCuratorLease(
+  db: D1Database,
+  curatorId: string,
+  authorizedTick: number,
+  requestedLeaseId?: string,
+  ttlMs: number = 120000
+): Promise<{ lease: CuratorLease } | { error: string; conflictingCuratorId?: string }> {
+  const now = Date.now();
+  const active = await queryFirst<CuratorLeaseRow>(
+    db,
+    `SELECT lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at
+     FROM curator_leases
+     WHERE expires_at_ms > ?
+     ORDER BY expires_at_ms DESC
+     LIMIT 1`,
+    [now]
+  );
+
+  if (active) {
+    // If renewing the active lease
+    if ((requestedLeaseId && active.lease_id === requestedLeaseId) || active.curator_id === curatorId) {
+      const newExpiresAt = now + ttlMs;
+      await executeQuery(
+        db,
+        `UPDATE curator_leases
+         SET expires_at_ms = ?, authorized_tick = ?
+         WHERE lease_id = ?`,
+        [newExpiresAt, authorizedTick, active.lease_id]
+      );
+
+      return {
+        lease: {
+          leaseId: active.lease_id,
+          curatorId: active.curator_id,
+          grantedAtMs: active.granted_at_ms,
+          expiresAtMs: newExpiresAt,
+          authorizedTick,
+        },
+      };
+    }
+
+    // Active lease held by another curator
+    return {
+      error: 'Active curator lease is currently held by another curator',
+      conflictingCuratorId: active.curator_id,
+    };
+  }
+
+  // No active lease, grant new one
+  const leaseId =
+    requestedLeaseId ||
+    (typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `lease-${now}-${Math.floor(Math.random() * 100000)}`);
+  const expiresAtMs = now + ttlMs;
+
+  await executeQuery(
+    db,
+    `INSERT INTO curator_leases (lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick)
+     VALUES (?, ?, ?, ?, ?)`,
+    [leaseId, curatorId, now, expiresAtMs, authorizedTick]
+  );
+
+  return {
+    lease: {
+      leaseId,
+      curatorId,
+      grantedAtMs: now,
+      expiresAtMs,
+      authorizedTick,
+    },
   };
 }
