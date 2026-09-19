@@ -29,11 +29,11 @@ import { SpatialHashGrid } from "../spatial/SpatialHashGrid.js";
 import { SteeringSystem } from "../systems/SteeringSystem.js";
 import { PhysicsSystem } from "../systems/PhysicsSystem.js";
 import { MetabolismSystem } from "../systems/MetabolismSystem.js";
-import { GeneticsSystem } from "../systems/GeneticsSystem.js";
+import { GeneticsSystem, type EntityIdAllocator } from "../systems/GeneticsSystem.js";
 import { MortalitySystem } from "../systems/MortalitySystem.js";
 import { RenderPackingSystem } from "../systems/RenderPackingSystem.js";
 import { FlightRecorder } from "../diagnostics/FlightRecorder.js";
-import { EngineBinaryCodec, base64ToUint8Array } from "../persistence/EngineBinaryCodec.js";
+import { EngineBinaryCodec } from "../persistence/EngineBinaryCodec.js";
 
 export interface WorldOptions {
   seed?: number;
@@ -41,7 +41,7 @@ export interface WorldOptions {
   prngState?: number;
 }
 
-export class World {
+export class World implements EntityIdAllocator {
   readonly config: SimulationConfig;
   readonly seed: number;
   readonly prng: PRNG;
@@ -112,6 +112,10 @@ export class World {
     this._nextEntityId = id;
   }
 
+  allocateEntityId(): number {
+    return this._nextEntityId++;
+  }
+
   get lastTickDurationMs(): number {
     return this._lastTickDurationMs;
   }
@@ -165,13 +169,13 @@ export class World {
       this.soil,
     );
 
-    // 7. Reproduction & Genetics (Monotonic immutable durable IDs)
+    // 7. Reproduction & Genetics (Monotonic immutable durable IDs, zero closure allocation)
     this.geneticsSystem.update(
       this._tick,
       this.pool,
       this.storage,
       this.prng,
-      () => this._nextEntityId++,
+      this,
     );
 
     // 8. Senescence, Mortality & Nutrient Return
@@ -560,32 +564,17 @@ export class World {
   }
 
   /**
-   * Losslessly hydrates simulation state from a CanonicalWorldState, EngineSnapshot, or EncodedEngineCheckpoint.
+   * Alias for hydrateEngineCheckpoint.
    */
-  hydrateCanonicalState(state: CanonicalWorldState | EngineSnapshot | EncodedEngineCheckpoint): boolean {
+  async hydrateFromCheckpoint(checkpoint: EncodedEngineCheckpoint): Promise<boolean> {
+    return this.hydrateEngineCheckpoint(checkpoint);
+  }
+
+  /**
+   * Losslessly hydrates simulation state from a CanonicalWorldState or EngineSnapshot.
+   */
+  hydrateCanonicalState(state: CanonicalWorldState | EngineSnapshot): boolean {
     if (!state) return false;
-
-    // 1. Primary path: Restore bit-exact EngineSnapshot
-    // 0. Binary encoded checkpoint path
-    if ("checkpoint" in state && state.checkpoint) {
-      try {
-        const rawBytes = base64ToUint8Array(state.checkpoint.payload);
-        const ok = EngineBinaryCodec.decode(this, rawBytes);
-        if (ok) return true;
-      } catch {
-        // fall through to other representations
-      }
-    }
-
-    if ("payload" in state && typeof state.payload === "string" && "checksum" in state) {
-      try {
-        const rawBytes = base64ToUint8Array(state.payload);
-        const ok = EngineBinaryCodec.decode(this, rawBytes);
-        if (ok) return true;
-      } catch {
-        // fall through
-      }
-    }
 
     // 1. Primary legacy path: Restore bit-exact EngineSnapshot
     const engineSnapshot: EngineSnapshot | null =

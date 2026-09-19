@@ -12,6 +12,7 @@ import {
   uint8ArrayToBase64,
   base64ToUint8Array,
   computeSha256Hex,
+  EntityTypeCode,
 } from '@chaos-garden/shared';
 import type { World } from '../ecs/World.js';
 
@@ -146,8 +147,11 @@ export class EngineBinaryCodec {
 
   /**
    * Decodes binary payload into world state after validating integrity and capacities.
+   * Decodes binary payload into world state after validating integrity, capacities,
+   * pool topology, and entity invariants.
    * Returns true if successfully hydrated, false if rejected.
    * Never mutates world state on validation failure.
+   * Strictly never mutates world state on validation failure.
    */
   static decode(world: World, payload: Uint8Array): boolean {
     if (!payload || payload.byteLength < HEADER_BYTE_LENGTH) {
@@ -194,15 +198,122 @@ export class EngineBinaryCodec {
     }
 
     // All validation passed; restore world state
+    const buffer = payload.buffer;
+    const baseOffset = payload.byteOffset;
+    const cap = capacity;
+    let offset = baseOffset + HEADER_BYTE_LENGTH;
+
+    // 3. Pre-extract staging views to validate all invariants BEFORE world mutation
+    // Pool views
+    const freeListView = new Uint32Array(buffer, offset, cap);
+    const denseEntitiesView = new Uint32Array(buffer, offset + cap * 4, cap);
+    const sparseIndicesView = new Int32Array(buffer, offset + cap * 8, cap);
+
+    // Component storage Float32 views (offset 12 * cap)
+    const float32Base = offset + cap * 12;
+    const positionsXView = new Float32Array(buffer, float32Base, cap);
+    const positionsYView = new Float32Array(buffer, float32Base + cap * 4, cap);
+    const velocitiesXView = new Float32Array(buffer, float32Base + cap * 8, cap);
+    const velocitiesYView = new Float32Array(buffer, float32Base + cap * 12, cap);
+    const accelerationsXView = new Float32Array(buffer, float32Base + cap * 16, cap);
+    const accelerationsYView = new Float32Array(buffer, float32Base + cap * 20, cap);
+    const rotationsView = new Float32Array(buffer, float32Base + cap * 24, cap);
+    const energiesView = new Float32Array(buffer, float32Base + cap * 28, cap);
+    const healthsView = new Float32Array(buffer, float32Base + cap * 32, cap);
+    const sizesView = new Float32Array(buffer, float32Base + cap * 36, cap);
+
+    // Component storage Uint32 views (24 Float32 columns = 24 * cap * 4)
+    const uint32Base = float32Base + 24 * cap * 4;
+    const entityIdsView = new Uint32Array(buffer, uint32Base + cap * 16, cap); // 5th column: entityIds
+
+    // Soil grid views (6 Uint32 cols + 1 Int32 col = 7 cols * cap * 4)
+    const soilBase = uint32Base + 7 * cap * 4;
+    const soilCellCount = soilCols * soilRows;
+    const soilMoistureView = new Float32Array(buffer, soilBase, soilCellCount);
+    const soilNitratesView = new Float32Array(buffer, soilBase + soilCellCount * 4, soilCellCount);
+
+    // 2-byte columns (2 cols * cap * 2) and 1-byte column (typeCodes)
+    const twoByteBase = soilBase + soilCellCount * 8;
+    const oneByteBase = twoByteBase + cap * 4;
+    const typeCodesView = new Uint8Array(buffer, oneByteBase, cap);
+
+    // 4. Invariant Validation: Pool topology, bounds, and uniqueness
+    const seenSlots = new Uint8Array(capacity);
+    for (let i = 0; i < denseCount; i++) {
+      const slot = denseEntitiesView[i];
+      if (slot >= capacity) return false;
+      if (sparseIndicesView[slot] !== i) return false;
+      if (seenSlots[slot] !== 0) return false; // Duplicate slot in dense array
+      seenSlots[slot] = 1;
+    }
+
+    for (let j = 0; j < freeCount; j++) {
+      const freeSlot = freeListView[j];
+      if (freeSlot >= capacity) return false;
+      if (seenSlots[freeSlot] !== 0) return false; // Slot cannot be both free and active
+      seenSlots[freeSlot] = 2;
+    }
+
+    // 5. Invariant Validation: Entity components across all active slots
+    const worldW = world.config.gardenWidth;
+    const worldH = world.config.gardenHeight;
+
+    for (let i = 0; i < denseCount; i++) {
+      const slot = denseEntitiesView[i];
+
+      const type = typeCodesView[slot];
+      if (
+        type !== EntityTypeCode.PLANT &&
+        type !== EntityTypeCode.HERBIVORE &&
+        type !== EntityTypeCode.CARNIVORE &&
+        type !== EntityTypeCode.FUNGUS
+      ) {
+        return false;
+      }
+
+      const entityId = entityIdsView[slot];
+      if (entityId === 0) return false;
+
+      const px = positionsXView[slot];
+      const py = positionsYView[slot];
+      if (!Number.isFinite(px) || !Number.isFinite(py)) return false;
+      if (px < 0 || px >= worldW || py < 0 || py >= worldH) return false;
+
+      const vx = velocitiesXView[slot];
+      const vy = velocitiesYView[slot];
+      if (!Number.isFinite(vx) || !Number.isFinite(vy)) return false;
+
+      const ax = accelerationsXView[slot];
+      const ay = accelerationsYView[slot];
+      if (!Number.isFinite(ax) || !Number.isFinite(ay)) return false;
+
+      const rot = rotationsView[slot];
+      if (!Number.isFinite(rot)) return false;
+
+      const en = energiesView[slot];
+      const hl = healthsView[slot];
+      if (!Number.isFinite(en) || en < 0 || !Number.isFinite(hl) || hl < 0) return false;
+
+      const sz = sizesView[slot];
+      if (!Number.isFinite(sz) || sz <= 0) return false;
+    }
+
+    // 6. Invariant Validation: Soil grid values
+    for (let k = 0; k < soilCellCount; k++) {
+      const m = soilMoistureView[k];
+      const n = soilNitratesView[k];
+      if (!Number.isFinite(m) || m < 0 || m > 1.0) return false;
+      if (!Number.isFinite(n) || n < 0 || n > 1.0) return false;
+    }
+
+    // All validation passed strictly without touching world state!
+    // Now apply state mutation to target world:
     (world as { seed: number }).seed = seed;
     world.setTick(tick);
     world.prng.setState(prngState);
     world.nextEntityId = nextEntityId;
 
-    const buffer = payload.buffer;
-    const baseOffset = payload.byteOffset;
-    let offset = baseOffset + HEADER_BYTE_LENGTH;
-    const cap = capacity;
+    offset = baseOffset + HEADER_BYTE_LENGTH;
 
     // Restore 4-byte columns
     // EntityPool
@@ -269,7 +380,6 @@ export class EngineBinaryCodec {
     offset += cap * 4;
 
     // Restore SoilGrid
-    const soilCellCount = soilCols * soilRows;
     world.soil.moisture.set(new Float32Array(buffer, offset, soilCellCount));
     offset += soilCellCount * 4;
     world.soil.nitrates.set(new Float32Array(buffer, offset, soilCellCount));

@@ -344,9 +344,8 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
             parsed && typeof parsed === 'object' && 'data' in parsed
               ? parsed.data
               : parsed;
-          hydrated = world.hydrateCanonicalState(stateData);
 
-          // 1. Prefer bit-exact binary checkpoint if present
+          // 1. Prefer bit-exact binary checkpoint if present (integrity-checked SHA-256 validation)
           if (
             stateData &&
             typeof stateData === 'object' &&

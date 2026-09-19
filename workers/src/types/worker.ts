@@ -27,6 +27,8 @@ export interface Env {
   
   // Environment variables
   CORS_ORIGIN: string;
+  CURATOR_SECRET?: string;
+  CURATOR_TOKEN?: string;
 }
 
 // ==========================================

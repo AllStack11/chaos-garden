@@ -28,6 +28,12 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
     created_at: string;
   }>;
 
+  const validCuratorHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer test-curator-secret',
+    'X-Curator-Id': 'curator-alice',
+  };
+
   beforeEach(() => {
     checkpointsTable = [];
     leasesTable = [];
@@ -160,6 +166,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       DB: mockDb,
       ENVIRONMENT: 'test',
       CORS_ORIGIN: '*',
+      CURATOR_SECRET: 'test-curator-secret',
     };
   });
 
@@ -182,10 +189,39 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
   }
 
   describe('Curator Leases (POST /api/garden/lease)', () => {
-    it('grants a new curator lease with 2-minute TTL', async () => {
+    it('rejects anonymous lease acquisition with 401', async () => {
       const req = new Request('http://localhost/api/garden/lease', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curatorId: 'curator-alice', authorizedTick: 100 }),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(401);
+
+      const json = await res.json() as any;
+      expect(json.success).toBe(false);
+      expect(json.error).toContain('Unauthorized');
+    });
+
+    it('rejects lease acquisition with invalid curator secret with 401', async () => {
+      const req = new Request('http://localhost/api/garden/lease', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer wrong-secret',
+        },
+        body: JSON.stringify({ curatorId: 'curator-alice', authorizedTick: 100 }),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(401);
+    });
+
+    it('grants a new curator lease with valid credentials', async () => {
+      const req = new Request('http://localhost/api/garden/lease', {
+        method: 'POST',
+        headers: validCuratorHeaders,
         body: JSON.stringify({ curatorId: 'curator-alice', authorizedTick: 100 }),
       });
 
@@ -212,7 +248,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/lease', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify({ curatorId: 'curator-alice', authorizedTick: 120, leaseId: 'existing-lease-1' }),
       });
 
@@ -238,7 +274,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/lease', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify({ curatorId: 'curator-alice' }),
       });
 
@@ -252,6 +288,68 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
   });
 
   describe('Engine Checkpoints (POST /api/garden/checkpoint)', () => {
+    it('rejects anonymous checkpoint submission with 401', async () => {
+      const payloadInfo = await createValidBinaryPayload(150);
+      const submission: CheckpointSubmission = {
+        leaseId: 'some-lease',
+        tick: 150,
+        checkpoint: {
+          version: 2,
+          tick: 150,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects checkpoint submission from different curator than the lease holder with 403', async () => {
+      leasesTable.push({
+        lease_id: 'valid-lease',
+        curator_id: 'curator-bob', // held by Bob
+        granted_at_ms: Date.now(),
+        expires_at_ms: Date.now() + 100000,
+        authorized_tick: 100,
+        created_at: new Date().toISOString(),
+      });
+
+      const payloadInfo = await createValidBinaryPayload(150);
+      const submission: CheckpointSubmission = {
+        leaseId: 'valid-lease',
+        tick: 150,
+        checkpoint: {
+          version: 2,
+          tick: 150,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: validCuratorHeaders, // Alice is authenticating
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(403);
+
+      const json = await res.json() as any;
+      expect(json.error).toContain('does not match active lease holder');
+    });
+
     it('rejects checkpoint submission without valid curator lease', async () => {
       const payloadInfo = await createValidBinaryPayload(150);
       const submission: CheckpointSubmission = {
@@ -269,7 +367,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/checkpoint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify(submission),
       });
 
@@ -316,7 +414,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/checkpoint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify(submission),
       });
 
@@ -353,7 +451,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/checkpoint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify(submission),
       });
 
@@ -398,7 +496,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/checkpoint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify(submission),
       });
 
@@ -435,7 +533,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
       const req = new Request('http://localhost/api/garden/checkpoint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: validCuratorHeaders,
         body: JSON.stringify(submission),
       });
 
@@ -481,3 +579,4 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
     });
   });
 });
+

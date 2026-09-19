@@ -17,6 +17,10 @@ import {
 import type { EntityPool } from '../ecs/EntityPool.js';
 import type { ComponentStorage } from '../ecs/ComponentStorage.js';
 
+export interface EntityIdAllocator {
+  allocateEntityId(): number;
+}
+
 export class GeneticsSystem {
   readonly config: SimulationConfig;
 
@@ -29,7 +33,7 @@ export class GeneticsSystem {
     pool: EntityPool,
     storage: ComponentStorage,
     prng: PRNG,
-    nextIdGenerator?: () => number,
+    idAllocator?: EntityIdAllocator | (() => number),
   ): void {
     const activeCount = pool.denseCount;
     const dense = pool.denseEntities;
@@ -149,7 +153,9 @@ export class GeneticsSystem {
         );
       }
 
-      const childEntityId = nextIdGenerator ? nextIdGenerator() : (childIdHash === 0 ? 1 : childIdHash);
+      const childEntityId = idAllocator
+        ? (typeof idAllocator === 'function' ? idAllocator() : idAllocator.allocateEntityId())
+        : (childIdHash === 0 ? 1 : childIdHash);
       const parentEntityId = storage.entityIds[parentIdx];
 
       // Initialize child entity in SoA storage

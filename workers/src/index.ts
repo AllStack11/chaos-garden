@@ -58,6 +58,62 @@ export interface Env {
   DB: D1Database;
   ENVIRONMENT?: string;
   CORS_ORIGIN?: string;
+  CURATOR_SECRET?: string;
+  CURATOR_TOKEN?: string;
+}
+
+interface AuthenticatedCurator {
+  curatorId: string;
+}
+
+type CuratorAuthResult =
+  | { success: true; curator: AuthenticatedCurator }
+  | { success: false; status: number; error: string };
+
+function authenticateCuratorRequest(
+  request: Request,
+  env: Env,
+  expectedCuratorId?: string
+): CuratorAuthResult {
+  const authHeader = request.headers.get('Authorization') || request.headers.get('X-Curator-Key');
+  if (!authHeader) {
+    return {
+      success: false,
+      status: 401,
+      error: 'Unauthorized: Missing curator authorization header',
+    };
+  }
+
+  let token = authHeader.trim();
+  if (token.startsWith('Bearer ')) {
+    token = token.slice(7).trim();
+  }
+
+  const configuredSecret = env.CURATOR_SECRET || env.CURATOR_TOKEN;
+  if (configuredSecret) {
+    if (token !== configuredSecret) {
+      return {
+        success: false,
+        status: 401,
+        error: 'Unauthorized: Invalid curator authorization credentials',
+      };
+    }
+  } else {
+    // When no explicit secret is set (dev/test), require non-empty token
+    if (!token || token.length < 3) {
+      return {
+        success: false,
+        status: 401,
+        error: 'Unauthorized: Invalid curator authorization credentials',
+      };
+    }
+  }
+
+  // Derive or extract curator identity
+  const headerCuratorId = request.headers.get('X-Curator-Id');
+  const curatorId = headerCuratorId || expectedCuratorId || (token.startsWith('curator-') ? token : `curator-${token.slice(0, 16)}`);
+
+  return { success: true, curator: { curatorId } };
 }
 
 let databaseReadyPromise: Promise<void> | null = null;
@@ -450,11 +506,13 @@ async function handlePostLease(request: Request, env: Env, corsOrigin: string): 
       ttlMs?: number;
     };
 
-    const curatorId =
-      body.curatorId ||
-      (typeof crypto !== 'undefined' && crypto.randomUUID
-        ? `curator-${crypto.randomUUID()}`
-        : `curator-${Date.now()}`);
+    // Authenticate and authorize curator identity
+    const auth = authenticateCuratorRequest(request, env, body.curatorId);
+    if (!auth.success) {
+      return createErrorResponse(auth.error, corsOrigin, auth.status, undefined, isDevelopment);
+    }
+
+    const curatorId = auth.curator.curatorId;
 
     let authorizedTick = body.authorizedTick;
     if (typeof authorizedTick !== 'number') {
@@ -511,6 +569,12 @@ async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: stri
   const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
 
   try {
+    // 0. Verify curator authorization
+    const auth = authenticateCuratorRequest(request, env);
+    if (!auth.success) {
+      return createErrorResponse(auth.error, corsOrigin, auth.status, undefined, isDevelopment);
+    }
+
     const submission = (await request.json().catch(() => null)) as CheckpointSubmission | null;
     if (!submission || !submission.leaseId || !submission.checkpoint) {
       return createErrorResponse(
@@ -527,6 +591,17 @@ async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: stri
     if (!activeLease) {
       return createErrorResponse(
         'Invalid or expired curator lease',
+        corsOrigin,
+        403,
+        undefined,
+        isDevelopment
+      );
+    }
+
+    // Verify lease owner matches authenticated curator
+    if (activeLease.curatorId !== auth.curator.curatorId) {
+      return createErrorResponse(
+        'Forbidden: Curator identity does not match active lease holder',
         corsOrigin,
         403,
         undefined,
