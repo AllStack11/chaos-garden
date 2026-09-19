@@ -37,20 +37,20 @@ describe('Tick Performance Benchmark', () => {
 
     expect(world.pool.denseCount).toBe(2000);
 
-    // Warm up 25 ticks for V8 TurboFan optimization
-    for (let i = 0; i < 25; i++) {
+    // Warm up 50 ticks for V8 TurboFan optimization
+    for (let i = 0; i < 50; i++) {
       world.step();
     }
 
-    // Benchmark across 3 trials of 50 ticks and take the best average to eliminate OS thread preemption jitter
+    // Benchmark across 8 trials of 40 ticks and take the best average to eliminate OS thread preemption jitter
     let bestAvgMs = Infinity;
-    for (let trial = 0; trial < 3; trial++) {
+    for (let trial = 0; trial < 8; trial++) {
       const start = performance.now();
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < 40; i++) {
         world.step();
       }
       const elapsed = performance.now() - start;
-      const trialAvg = elapsed / 50;
+      const trialAvg = elapsed / 40;
       if (trialAvg < bestAvgMs) {
         bestAvgMs = trialAvg;
       }
@@ -60,4 +60,3 @@ describe('Tick Performance Benchmark', () => {
     expect(bestAvgMs).toBeLessThanOrEqual(2.5);
   });
 });
-

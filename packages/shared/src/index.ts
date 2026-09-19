@@ -34,6 +34,9 @@ export * from './math/vector.js';
 export * from './math/random.js';
 export * from './math/stride.js';
 
+// Codec & Cryptographic Utilities
+export * from './utils/codec.js';
+
 // ==========================================
 // Backward Compatibility Aliases
 // ==========================================

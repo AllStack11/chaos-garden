@@ -23,6 +23,15 @@ export interface EntityPoolSnapshot {
 }
 
 /**
+ * Transferable zero-copy render frame passed to Web Worker or render thread.
+ */
+export interface TransferableRenderFrame {
+  tick: number;
+  entityCount: number;
+  buffer: Float32Array;
+}
+
+/**
  * Exact, zero-loss snapshot of all ComponentStorage typed array columns.
  */
 export interface ComponentStorageSnapshot {
@@ -58,6 +67,8 @@ export interface ComponentStorageSnapshot {
   idHashes: number[];
   parentIndices: number[];
   bornAtTicks: number[];
+  entityIds?: number[];
+  parentEntityIds?: number[];
 }
 
 /**
@@ -71,6 +82,18 @@ export interface EngineSnapshot {
   pool: EntityPoolSnapshot;
   storage: ComponentStorageSnapshot;
   soil: SoilGridState;
+}
+
+/**
+ * Compact, deterministic binary-encoded checkpoint with SHA-256 integrity hash.
+ */
+export interface EncodedEngineCheckpoint {
+  version: number;
+  tick: number;
+  seed: number;
+  byteLength: number;
+  checksum: string; // Hex-encoded SHA-256 hash of payload bytes
+  payload: string;   // Base64-encoded binary payload
 }
 
 /**
@@ -92,6 +115,7 @@ export interface CanonicalWorldState {
   version?: number;
   prngState?: number;
   engineSnapshot?: EngineSnapshot;
+  checkpoint?: EncodedEngineCheckpoint;
 }
 
 /**
@@ -102,6 +126,15 @@ export interface GardenSnapshotResponse {
   data: CanonicalWorldState;
   serverTime: string;
   error?: string;
+}
+
+/**
+ * Canonical garden bootstrap response consumed by client.
+ */
+export interface GardenBootstrapResponse {
+  canonicalState: CanonicalWorldState;
+  checkpoint?: EncodedEngineCheckpoint;
+  events: ChronicleEvent[];
 }
 
 /**
@@ -121,9 +154,12 @@ export interface CuratorLease {
  */
 export interface CheckpointSubmission {
   leaseId: string;
+  curatorId?: string;
   tick: number;
-  snapshot: CanonicalWorldState;
-  chronicleEvents: ChronicleEvent[];
+  checkpoint: EncodedEngineCheckpoint;
+  canonicalState?: CanonicalWorldState;
+  snapshot?: CanonicalWorldState;
+  chronicleEvents?: ChronicleEvent[];
 }
 
 /**

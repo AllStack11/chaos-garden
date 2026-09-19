@@ -28,7 +28,8 @@ export class GeneticsSystem {
     currentTick: number,
     pool: EntityPool,
     storage: ComponentStorage,
-    prng: PRNG
+    prng: PRNG,
+    nextIdGenerator?: () => number,
   ): void {
     const activeCount = pool.denseCount;
     const dense = pool.denseEntities;
@@ -148,9 +149,14 @@ export class GeneticsSystem {
         );
       }
 
+      const childEntityId = nextIdGenerator ? nextIdGenerator() : (childIdHash === 0 ? 1 : childIdHash);
+      const parentEntityId = storage.entityIds[parentIdx];
+
       // Initialize child entity in SoA storage
       storage.initEntity(childIdx, {
         idHash: childIdHash === 0 ? 1 : childIdHash,
+        entityId: childEntityId,
+        parentEntityId: parentEntityId,
         typeCode: type,
         x: childX,
         y: childY,

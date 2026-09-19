@@ -75,7 +75,7 @@ describe("World (ECS Orchestrator & Execution Pipeline)", () => {
     }
   });
 
-  it("exposes getTransferableRenderFrame with double-buffered swapping", () => {
+  it("exposes getTransferableRenderFrame with 3-buffer pool swapping and recycling", () => {
     const world = new World({ seed: 42 });
     world.seedPrimordialEcosystem();
     world.step();
@@ -88,16 +88,23 @@ describe("World (ECS Orchestrator & Execution Pipeline)", () => {
     world.step();
     const frameB = world.getTransferableRenderFrame();
     expect(frameB.tick).toBe(2);
-    // Double buffering: frameB buffer is the alternate buffer instance
     expect(frameB.buffer).not.toBe(frameA.buffer);
 
     world.step();
-    // Reclaiming/recycling buffer
-    world.returnRenderBuffer(frameA.buffer);
+    // In 3-buffer pool, tick 3 uses buffer 2 while frameA (0) and frameB (1) are in-flight
     const frameC = world.getTransferableRenderFrame();
     expect(frameC.tick).toBe(3);
-    // Should reuse frameA's buffer
-    expect(frameC.buffer).toBe(frameA.buffer);
+    expect(frameC.buffer).not.toBe(frameA.buffer);
+    expect(frameC.buffer).not.toBe(frameB.buffer);
+
+    // Return frameA to pool
+    world.returnRenderBuffer(frameA.buffer);
+
+    // Tick 4 should now recycle frameA's buffer (buffer 0)
+    world.step();
+    const frameD = world.getTransferableRenderFrame();
+    expect(frameD.tick).toBe(4);
+    expect(frameD.buffer).toBe(frameA.buffer);
   });
 
   it("losslessly exports and hydrates simulation state from CanonicalWorldState", () => {

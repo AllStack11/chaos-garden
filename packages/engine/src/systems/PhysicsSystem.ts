@@ -24,23 +24,32 @@ export class PhysicsSystem {
     const width = this.worldWidth;
     const height = this.worldHeight;
 
+    const maxSpeeds = storage.maxSpeeds;
+    const accX = storage.accelerationsX;
+    const accY = storage.accelerationsY;
+    const velX = storage.velocitiesX;
+    const velY = storage.velocitiesY;
+    const posX = storage.positionsX;
+    const posY = storage.positionsY;
+    const rotations = storage.rotations;
+
     for (let i = 0; i < activeCount; i++) {
       const idx = dense[i];
 
-      const maxSpeed = storage.maxSpeeds[idx];
+      const maxSpeed = maxSpeeds[idx];
       if (maxSpeed === 0) {
-        storage.accelerationsX[idx] = 0;
-        storage.accelerationsY[idx] = 0;
+        accX[idx] = 0;
+        accY[idx] = 0;
         continue;
       }
 
       // Integrate acceleration into velocity
-      let vx = storage.velocitiesX[idx] + storage.accelerationsX[idx] * dt;
-      let vy = storage.velocitiesY[idx] + storage.accelerationsY[idx] * dt;
+      let vx = velX[idx] + accX[idx] * dt;
+      let vy = velY[idx] + accY[idx] * dt;
 
       // Reset acceleration for next tick
-      storage.accelerationsX[idx] = 0;
-      storage.accelerationsY[idx] = 0;
+      accX[idx] = 0;
+      accY[idx] = 0;
 
       const speedSq = vx * vx + vy * vy;
       if (speedSq > maxSpeed * maxSpeed) {
@@ -49,12 +58,12 @@ export class PhysicsSystem {
         vy = (vy / speed) * maxSpeed;
       }
 
-      storage.velocitiesX[idx] = vx;
-      storage.velocitiesY[idx] = vy;
+      velX[idx] = vx;
+      velY[idx] = vy;
 
       // Integrate velocity into position
-      let px = storage.positionsX[idx] + vx * dt;
-      let py = storage.positionsY[idx] + vy * dt;
+      let px = posX[idx] + vx * dt;
+      let py = posY[idx] + vy * dt;
 
       // Toroidal boundary wrapping (fast addition/subtraction)
       if (px < 0) px += width;
@@ -63,12 +72,12 @@ export class PhysicsSystem {
       if (py < 0) py += height;
       else if (py >= height) py -= height;
 
-      storage.positionsX[idx] = px;
-      storage.positionsY[idx] = py;
+      posX[idx] = px;
+      posY[idx] = py;
 
       // Update rotation heading angle if moving
       if (vx !== 0 || vy !== 0) {
-        storage.rotations[idx] = Math.atan2(vy, vx);
+        rotations[idx] = Math.atan2(vy, vx);
       }
     }
   }

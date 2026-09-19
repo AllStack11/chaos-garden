@@ -228,15 +228,17 @@ function simulationLoop(): void {
     }
   }
 
-  // 1. Send transferable render frame (60 FPS)
+  // 1. Send transferable render frame (60 FPS) with backpressure skip
   const frame = world.getTransferableRenderFrame();
-  const renderMessage: ClientWorkerOutboundMessage = {
-    type: 'RENDER_FRAME',
-    tick: frame.tick,
-    entityCount: frame.entityCount,
-    buffer: frame.buffer,
-  };
-  self.postMessage(renderMessage, [frame.buffer.buffer]);
+  if (frame !== null) {
+    const renderMessage: ClientWorkerOutboundMessage = {
+      type: 'RENDER_FRAME',
+      tick: frame.tick,
+      entityCount: frame.entityCount,
+      buffer: frame.buffer,
+    };
+    self.postMessage(renderMessage, [frame.buffer.buffer]);
+  }
 
   // 2. Throttled Soil Update (15 Hz) with backpressure
   if (now - lastSoilUpdateTime >= 66) {
@@ -318,7 +320,7 @@ function stopLoop(): void {
   }
 }
 
-self.onmessage = (event: MessageEvent<ClientWorkerInboundMessage>) => {
+self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
   const msg = event.data;
 
   switch (msg.type) {
@@ -343,6 +345,25 @@ self.onmessage = (event: MessageEvent<ClientWorkerInboundMessage>) => {
               ? parsed.data
               : parsed;
           hydrated = world.hydrateCanonicalState(stateData);
+
+          // 1. Prefer bit-exact binary checkpoint if present
+          if (
+            stateData &&
+            typeof stateData === 'object' &&
+            'checkpoint' in stateData &&
+            stateData.checkpoint
+          ) {
+            hydrated = await world.hydrateEngineCheckpoint(stateData.checkpoint);
+          }
+
+          // 2. Fall back to high-level canonical state snapshot
+          if (!hydrated) {
+            const canonicalState =
+              stateData && typeof stateData === 'object' && 'canonicalState' in stateData
+                ? stateData.canonicalState
+                : stateData;
+            hydrated = world.hydrateCanonicalState(canonicalState);
+          }
         } catch (e) {
           console.warn(
             '[SimulationWorker] Failed to hydrate initialStateJson, falling back to primordial seed:',
@@ -405,21 +426,20 @@ self.onmessage = (event: MessageEvent<ClientWorkerInboundMessage>) => {
     case 'REQUEST_SNAPSHOT': {
       if (!world) break;
       const canonicalState = world.exportCanonicalState();
+      const checkpoint = await world.exportEngineCheckpoint();
       self.postMessage({
         type: 'SNAPSHOT_PAYLOAD',
-        stateJson: JSON.stringify(canonicalState),
+        stateJson: JSON.stringify({
+          canonicalState,
+          checkpoint,
+        }),
       });
       break;
     }
 
     case 'REQUEST_DIAGNOSTICS': {
       if (!world) break;
-      const census = world.getPopulationSummary();
-      const diagnostics = {
-        tick: world.tick,
-        tps: measuredTps,
-        census,
-      };
+      const diagnostics = world.flightRecorder.getDiagnosticSnapshot(world);
       self.postMessage({
         type: 'DIAGNOSTICS_PAYLOAD',
         diagnosticsJson: JSON.stringify(diagnostics),

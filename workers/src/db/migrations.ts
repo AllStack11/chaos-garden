@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from './connection';
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.8.0';
+export const CURRENT_SCHEMA_VERSION = '1.9.0';
 
 /**
  * Check if the database schema is up to date.
@@ -86,6 +86,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.0.0') {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
@@ -95,6 +96,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.1.0') {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
@@ -103,6 +105,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.3.0') {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
@@ -110,26 +113,34 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.4.0') {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.5.0') {
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.5.1') {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.6.0') {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
     } else if (currentVersion === '1.7.0') {
       await migrateToV1_8_0(db);
+      await migrateToV1_9_0(db);
+    } else if (currentVersion === '1.8.0') {
+      await migrateToV1_9_0(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
@@ -494,6 +505,72 @@ async function migrateToV1_8_0(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 1.9.0.
+ * Introduces engine_checkpoints and curator_leases tables.
+ */
+async function migrateToV1_9_0(db: D1Database): Promise<void> {
+  console.log('Running migration to v1.9.0...');
+
+  const createCheckpointsResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS engine_checkpoints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tick INTEGER NOT NULL UNIQUE,
+      engine_version INTEGER NOT NULL,
+      seed INTEGER NOT NULL,
+      checksum TEXT NOT NULL,
+      payload BLOB NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  );
+  if (!createCheckpointsResult.success) {
+    throw new Error(`Failed to create engine_checkpoints table: ${createCheckpointsResult.error}`);
+  }
+
+  const createCheckpointsIdxResult = await executeRaw(
+    db,
+    `CREATE INDEX IF NOT EXISTS idx_engine_checkpoints_tick ON engine_checkpoints(tick DESC)`
+  );
+  if (!createCheckpointsIdxResult.success) {
+    throw new Error(`Failed to create idx_engine_checkpoints_tick: ${createCheckpointsIdxResult.error}`);
+  }
+
+  const createLeasesResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS curator_leases (
+      lease_id TEXT PRIMARY KEY,
+      curator_id TEXT NOT NULL,
+      granted_at_ms INTEGER NOT NULL,
+      expires_at_ms INTEGER NOT NULL,
+      authorized_tick INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`
+  );
+  if (!createLeasesResult.success) {
+    throw new Error(`Failed to create curator_leases table: ${createLeasesResult.error}`);
+  }
+
+  const createLeasesIdxResult = await executeRaw(
+    db,
+    `CREATE INDEX IF NOT EXISTS idx_curator_leases_expires ON curator_leases(expires_at_ms DESC)`
+  );
+  if (!createLeasesIdxResult.success) {
+    throw new Error(`Failed to create idx_curator_leases_expires: ${createLeasesIdxResult.error}`);
+  }
+
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '1.9.0', datetime('now'))`
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log('Migration to v1.9.0 complete');
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  * 
@@ -526,6 +603,7 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_6_0(db);
     await migrateToV1_7_0(db);
     await migrateToV1_8_0(db);
+    await migrateToV1_9_0(db);
 
     console.log('Database initialization complete');
     return true;
