@@ -12,7 +12,7 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 | **Foundation** | **Agent Roles & Dispatcher** | `AGENTS.md`, `docs/agents/architect.md`, `docs/agents/coder.md`, machine-agnostic rules | ✅ **COMPLETED** |
 | **Phase 1** | **Shared Contracts (`@chaos-garden/shared`)** | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
 | **Phase 2** | **Simulation Engine (`@chaos-garden/engine`)** | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI | ✅ **COMPLETED** |
-| **Phase 3** | **Client App (`@chaos-garden/client`)** | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge | ⏳ **UP NEXT** |
+| **Phase 3** | **Client App (`@chaos-garden/client`)** | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge | ✅ **COMPLETED** |
 | **Phase 4** | **Cloudflare Backend (`@chaos-garden/server`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics | 📋 Queued |
 
 ---
@@ -157,7 +157,9 @@ Create a framework-agnostic, zero-dependency ECS simulation engine capable of ru
 
 ---
 
-### Phase 3: Client Application (`packages/client`) — UP NEXT
+### Phase 3: Client Application (`packages/client`) — DESIGN COMPLETE, READY FOR IMPLEMENTATION
+
+👉 **Detailed Specification**: [`docs/phase_3_client_design.md`](phase_3_client_design.md)
 
 Replace legacy Astro frontend with a Vite + Svelte 5 + PixiJS v8 single-page application.
 

@@ -99,4 +99,100 @@ describe("World (ECS Orchestrator & Execution Pipeline)", () => {
     // Should reuse frameA's buffer
     expect(frameC.buffer).toBe(frameA.buffer);
   });
+
+  it("losslessly exports and hydrates simulation state from CanonicalWorldState", () => {
+    const originalWorld = new World({ seed: 777 });
+    originalWorld.seedPrimordialEcosystem();
+    for (let i = 0; i < 25; i++) {
+      originalWorld.step();
+    }
+
+    const exportedState = originalWorld.exportCanonicalState();
+    expect(exportedState.tick).toBe(25);
+    expect(exportedState.entities.length).toBe(originalWorld.pool.denseCount);
+    expect(exportedState.soil.moisture.length).toBe(
+      originalWorld.soil.totalCells,
+    );
+
+    // Create a new world and hydrate it
+    const restoredWorld = new World({ seed: 777 });
+    const success = restoredWorld.hydrateCanonicalState(exportedState);
+    expect(success).toBe(true);
+
+    expect(restoredWorld.tick).toBe(25);
+    expect(restoredWorld.pool.denseCount).toBe(originalWorld.pool.denseCount);
+    expect(restoredWorld.getPopulationSummary()).toEqual(
+      originalWorld.getPopulationSummary(),
+    );
+
+    // Compare soil
+    expect(restoredWorld.soil.getMoisture(100, 100)).toBeCloseTo(
+      originalWorld.soil.getMoisture(100, 100),
+    );
+    expect(restoredWorld.soil.getNitrates(100, 100)).toBeCloseTo(
+      originalWorld.soil.getNitrates(100, 100),
+    );
+  });
+
+  it("preserves exact deterministic continuation after snapshot export and hydration", () => {
+    const worldA = new World({ seed: 42 });
+    worldA.seedPrimordialEcosystem();
+
+    // Step 200 ticks to develop mature ecosystem with births, deaths, and movements
+    for (let i = 0; i < 200; i++) {
+      worldA.step();
+    }
+
+    const snapshot = worldA.exportCanonicalState();
+
+    // Hydrate into worldB initialized with a different initial seed
+    const worldB = new World({ seed: 9999 });
+    const success = worldB.hydrateCanonicalState(snapshot);
+    expect(success).toBe(true);
+
+    // Assert immediate post-hydration equivalence
+    expect(worldB.tick).toBe(worldA.tick);
+    expect(worldB.pool.denseCount).toBe(worldA.pool.denseCount);
+    expect(worldB.getRenderFrame().buffer).toEqual(worldA.getRenderFrame().buffer);
+
+    // Step both worlds forward for 100 ticks
+    for (let i = 0; i < 100; i++) {
+      worldA.step();
+      worldB.step();
+    }
+
+    // Verify tick and count
+    expect(worldB.tick).toBe(worldA.tick);
+    expect(worldB.pool.denseCount).toBe(worldA.pool.denseCount);
+
+    // Assert every living entity in dense order has bit-identical component storage columns
+    const count = worldA.pool.denseCount;
+    expect(count).toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i++) {
+      const idxA = worldA.pool.denseEntities[i];
+      const idxB = worldB.pool.denseEntities[i];
+      expect(idxB).toBe(idxA);
+
+      expect(worldB.storage.positionsX[idxB]).toBe(worldA.storage.positionsX[idxA]);
+      expect(worldB.storage.positionsY[idxB]).toBe(worldA.storage.positionsY[idxA]);
+      expect(worldB.storage.velocitiesX[idxB]).toBe(worldA.storage.velocitiesX[idxA]);
+      expect(worldB.storage.velocitiesY[idxB]).toBe(worldA.storage.velocitiesY[idxA]);
+      expect(worldB.storage.rotations[idxB]).toBe(worldA.storage.rotations[idxA]);
+      expect(worldB.storage.energies[idxB]).toBe(worldA.storage.energies[idxA]);
+      expect(worldB.storage.healths[idxB]).toBe(worldA.storage.healths[idxA]);
+      expect(worldB.storage.ages[idxB]).toBe(worldA.storage.ages[idxA]);
+      expect(worldB.storage.typeCodes[idxB]).toBe(worldA.storage.typeCodes[idxA]);
+      expect(worldB.storage.sizes[idxB]).toBe(worldA.storage.sizes[idxA]);
+      expect(worldB.storage.pigments[idxB]).toBe(worldA.storage.pigments[idxA]);
+      expect(worldB.storage.idHashes[idxB]).toBe(worldA.storage.idHashes[idxA]);
+    }
+
+    // Assert identical binary render stride buffers
+    const frameA = worldA.getRenderFrame();
+    const frameB = worldB.getRenderFrame();
+    expect(frameB.tick).toBe(frameA.tick);
+    expect(frameB.entityCount).toBe(frameA.entityCount);
+    expect(frameB.buffer).toEqual(frameA.buffer);
+  });
 });

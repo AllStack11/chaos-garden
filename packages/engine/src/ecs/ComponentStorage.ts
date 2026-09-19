@@ -6,7 +6,7 @@
  * sequential cache line prefetching across simulation ticks.
  */
 
-import { EntityTypeCode } from '@chaos-garden/shared';
+import { EntityTypeCode, type ComponentStorageSnapshot } from '@chaos-garden/shared';
 
 export interface EntityInitParams {
   idHash: number;
@@ -258,6 +258,83 @@ export class ComponentStorage {
     this.idHashes[index] = params.idHash;
     this.parentIndices[index] = params.parentIndex ?? -1;
     this.bornAtTicks[index] = params.bornAtTick ?? 0;
+  }
+
+  /**
+   * Serializes all 31 TypedArray component columns into standard arrays.
+   */
+  exportState(): ComponentStorageSnapshot {
+    return {
+      capacity: this.capacity,
+      positionsX: Array.from(this.positionsX),
+      positionsY: Array.from(this.positionsY),
+      velocitiesX: Array.from(this.velocitiesX),
+      velocitiesY: Array.from(this.velocitiesY),
+      accelerationsX: Array.from(this.accelerationsX),
+      accelerationsY: Array.from(this.accelerationsY),
+      rotations: Array.from(this.rotations),
+      energies: Array.from(this.energies),
+      healths: Array.from(this.healths),
+      ages: Array.from(this.ages),
+      maxLifespans: Array.from(this.maxLifespans),
+      typeCodes: Array.from(this.typeCodes),
+      sizes: Array.from(this.sizes),
+      pigments: Array.from(this.pigments),
+      generations: Array.from(this.generations),
+      metabolismRates: Array.from(this.metabolismRates),
+      reproductionThresholds: Array.from(this.reproductionThresholds),
+      mutationRates: Array.from(this.mutationRates),
+      photosynthesisRates: Array.from(this.photosynthesisRates),
+      seedDispersionRadii: Array.from(this.seedDispersionRadii),
+      moistureAffinities: Array.from(this.moistureAffinities),
+      maxSpeeds: Array.from(this.maxSpeeds),
+      maxForces: Array.from(this.maxForces),
+      perceptionRadii: Array.from(this.perceptionRadii),
+      fleeRadii: Array.from(this.fleeRadii),
+      flockingWeights: Array.from(this.flockingWeights),
+      packWeights: Array.from(this.packWeights),
+      decompositionRates: Array.from(this.decompositionRates),
+      idHashes: Array.from(this.idHashes),
+      parentIndices: Array.from(this.parentIndices),
+      bornAtTicks: Array.from(this.bornAtTicks),
+    };
+  }
+
+  /**
+   * Restores all 31 TypedArray component columns from snapshot arrays.
+   */
+  loadState(snapshot: ComponentStorageSnapshot): void {
+    this.positionsX.set(snapshot.positionsX);
+    this.positionsY.set(snapshot.positionsY);
+    this.velocitiesX.set(snapshot.velocitiesX);
+    this.velocitiesY.set(snapshot.velocitiesY);
+    this.accelerationsX.set(snapshot.accelerationsX);
+    this.accelerationsY.set(snapshot.accelerationsY);
+    this.rotations.set(snapshot.rotations);
+    this.energies.set(snapshot.energies);
+    this.healths.set(snapshot.healths);
+    this.ages.set(snapshot.ages);
+    this.maxLifespans.set(snapshot.maxLifespans);
+    this.typeCodes.set(snapshot.typeCodes);
+    this.sizes.set(snapshot.sizes);
+    this.pigments.set(snapshot.pigments);
+    this.generations.set(snapshot.generations);
+    this.metabolismRates.set(snapshot.metabolismRates);
+    this.reproductionThresholds.set(snapshot.reproductionThresholds);
+    this.mutationRates.set(snapshot.mutationRates);
+    this.photosynthesisRates.set(snapshot.photosynthesisRates);
+    this.seedDispersionRadii.set(snapshot.seedDispersionRadii);
+    this.moistureAffinities.set(snapshot.moistureAffinities);
+    this.maxSpeeds.set(snapshot.maxSpeeds);
+    this.maxForces.set(snapshot.maxForces);
+    this.perceptionRadii.set(snapshot.perceptionRadii);
+    this.fleeRadii.set(snapshot.fleeRadii);
+    this.flockingWeights.set(snapshot.flockingWeights);
+    this.packWeights.set(snapshot.packWeights);
+    this.decompositionRates.set(snapshot.decompositionRates);
+    this.idHashes.set(snapshot.idHashes);
+    this.parentIndices.set(snapshot.parentIndices);
+    this.bornAtTicks.set(snapshot.bornAtTicks);
   }
 }
 
