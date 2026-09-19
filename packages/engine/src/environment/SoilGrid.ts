@@ -82,6 +82,21 @@ export class SoilGrid {
   }
 
   /**
+   * Loads serialized moisture and nitrate values into the current and next buffers.
+   */
+  loadState(moisture: ArrayLike<number>, nitrates: ArrayLike<number>): void {
+    const count = Math.min(this.totalCells, moisture.length, nitrates.length);
+    for (let i = 0; i < count; i++) {
+      const m = moisture[i];
+      const n = nitrates[i];
+      this._moistureCurrent[i] = m;
+      this._moistureNext[i] = m;
+      this._nitratesCurrent[i] = n;
+      this._nitratesNext[i] = n;
+    }
+  }
+
+  /**
    * Translates continuous world coordinates into flat grid cell index with toroidal wrapping.
    */
   getIndex(worldX: number, worldY: number): number {

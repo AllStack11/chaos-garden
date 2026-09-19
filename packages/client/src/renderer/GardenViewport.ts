@@ -83,12 +83,12 @@ export class GardenViewport {
     this.isInitialized = true;
   }
 
-  renderFrame(buffer: ArrayBuffer, entityCount: number): void {
+  renderFrame(buffer: Float32Array, entityCount: number): void {
     if (!this.isInitialized) return;
     this.organismLayer.updateFromBuffer(buffer, entityCount);
   }
 
-  updateSoil(moistureBuffer: ArrayBuffer, nitrateBuffer: ArrayBuffer): void {
+  updateSoil(moistureBuffer: Float32Array, nitrateBuffer: Float32Array): void {
     if (!this.isInitialized) return;
     this.soilLayer.updateBuffers(moistureBuffer, nitrateBuffer);
   }

@@ -63,9 +63,9 @@ export class SoilLayer extends Container {
   /**
    * Updates dynamic GPU texture from transferred worker Float32Array buffers.
    */
-  updateBuffers(moistureBuffer: ArrayBuffer, nitrateBuffer: ArrayBuffer): void {
-    const moisture = new Float32Array(moistureBuffer);
-    const nitrates = new Float32Array(nitrateBuffer);
+  updateBuffers(moistureBuffer: Float32Array, nitrateBuffer: Float32Array): void {
+    const moisture = moistureBuffer;
+    const nitrates = nitrateBuffer;
     const count = Math.min(moisture.length, this.cols * this.rows);
     const pixels = this.rgbaPixels;
 

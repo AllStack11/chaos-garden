@@ -178,7 +178,7 @@ sequenceDiagram
 - The worker emits `TELEMETRY_PULSE` at **4–10 Hz** (configurable, default 10 Hz):
   ```typescript
   export interface TelemetryPulse {
-    type: 'TELEMETRY_PULSE';
+    type: "TELEMETRY_PULSE";
     tick: number;
     tps: number;
     populations: {
@@ -241,6 +241,7 @@ To render 2,000 organisms within $< 5$ draw calls:
     4. **Fungus**: Radiant hyphal mycelium cap with breathing spore aura.
 - **Render Stride Unpacking**:
   - The render loop reads directly from the incoming `Float32Array` without instantiating any objects:
+
     ```typescript
     for (let i = 0; i < entityCount; i++) {
       const offset = i * 8;
@@ -261,6 +262,7 @@ To render 2,000 organisms within $< 5$ draw calls:
       sprite.visible = true;
     }
     ```
+
 - **Visual Vital Cues**:
   - Low energy ($< 20\%$): Organism visual pulsation weakens and turns faint.
   - Full energy ($> 80\%$): Bioluminescent aura blooms and membrane gently oscillates.
@@ -387,7 +389,9 @@ The user interface is built with **Svelte 5** utilizing modern Runes (`$state`, 
 State is partitioned into two clear modules:
 
 #### `gardenState.svelte.ts`
+
 Holds live ecosystem telemetry and simulation controls:
+
 ```typescript
 class GardenState {
   tick = $state(0);
@@ -406,10 +410,26 @@ class GardenState {
   });
 
   // Derived population percentages for HUD breakdown bars
-  plantRatio = $derived(this.populations.totalLiving > 0 ? this.populations.plants / this.populations.totalLiving : 0);
-  herbivoreRatio = $derived(this.populations.totalLiving > 0 ? this.populations.herbivores / this.populations.totalLiving : 0);
-  carnivoreRatio = $derived(this.populations.totalLiving > 0 ? this.populations.carnivores / this.populations.totalLiving : 0);
-  fungusRatio = $derived(this.populations.totalLiving > 0 ? this.populations.fungi / this.populations.totalLiving : 0);
+  plantRatio = $derived(
+    this.populations.totalLiving > 0
+      ? this.populations.plants / this.populations.totalLiving
+      : 0,
+  );
+  herbivoreRatio = $derived(
+    this.populations.totalLiving > 0
+      ? this.populations.herbivores / this.populations.totalLiving
+      : 0,
+  );
+  carnivoreRatio = $derived(
+    this.populations.totalLiving > 0
+      ? this.populations.carnivores / this.populations.totalLiving
+      : 0,
+  );
+  fungusRatio = $derived(
+    this.populations.totalLiving > 0
+      ? this.populations.fungi / this.populations.totalLiving
+      : 0,
+  );
 
   selectedEntity = $state<SelectedEntityVitals | null>(null);
 
@@ -427,12 +447,21 @@ export const gardenState = new GardenState();
 ```
 
 #### `curatorState.svelte.ts`
+
 Manages curator tool selection and interaction:
+
 ```typescript
-export type CuratorTool = 'INSPECT' | 'WATER' | 'NUTRIENTS' | 'SPAWN_PLANT' | 'SPAWN_HERBIVORE' | 'SPAWN_CARNIVORE' | 'SPAWN_FUNGUS';
+export type CuratorTool =
+  | "INSPECT"
+  | "WATER"
+  | "NUTRIENTS"
+  | "SPAWN_PLANT"
+  | "SPAWN_HERBIVORE"
+  | "SPAWN_CARNIVORE"
+  | "SPAWN_FUNGUS";
 
 class CuratorState {
-  activeTool = $state<CuratorTool>('INSPECT');
+  activeTool = $state<CuratorTool>("INSPECT");
   brushRadius = $state<number>(32); // World coordinate radius
   brushIntensity = $state<number>(0.5);
   isFollowCamActive = $state<boolean>(false);
@@ -456,6 +485,7 @@ App.svelte
 ```
 
 #### 1. `CuratorToolbar.svelte`
+
 - **Playback Controls**: Play/Pause button, speed buttons (`0.5x`, `1x`, `2x`, `5x`, `10x`).
 - **Interactive Tool Dock**:
   - `Inspect` (Default): Click organisms to select and view real-time chromosomes.
@@ -465,6 +495,7 @@ App.svelte
   - `Follow-Cam Toggle`: Locks camera to selected creature.
 
 #### 2. `StatsHUD.svelte`
+
 - Displays:
   - Terrarium age (tick count and simulated days/hours).
   - Simulation TPS (ticks per second) and rendering FPS.
@@ -473,6 +504,7 @@ App.svelte
     - Emerald Green (Plants) $\cdot$ Cyan (Herbivores) $\cdot$ Crimson (Carnivores) $\cdot$ Purple (Fungi).
 
 #### 3. `EntityInspector.svelte`
+
 - Displays deep live vitals when an entity is selected:
   - Entity ID hash and taxonomic kingdom.
   - Age / Max Lifespan with visual radial progress meter.
@@ -482,17 +514,20 @@ App.svelte
   - Curator actions: "Follow Camera", "Feed (+25 Energy)", "Cull".
 
 #### 4. `ChronicleDrawer.svelte`
+
 - Expandable timeline logging historical Terrarium events:
   - "Tick 1,240: First Herbivore Speciation detected (Speed +15%)."
   - "Tick 3,500: Apex Carnivore emerged."
   - "Tick 8,200: Survived Great Drought."
 
 #### 5. `LlmDiagnosticsModal.svelte` (1-Click Agent Diagnostics)
+
 - Built for instant pairing with AI coding assistants (Claude, ChatGPT, Gemini).
 - Displays a preview of recent Flight Recorder anomalies and ecosystem vitals.
 - **"Copy LLM Diagnostic Prompt" Button**: Formats and copies a clean, markdown-structured diagnostic prompt to the user's clipboard:
   ```markdown
   ### Chaos Garden Simulation Health Report
+
   - **Seed**: 42 | **Tick**: 12,450 | **TPS**: 60.1 | **FPS**: 59.8
   - **Populations**: Plants: 342, Herbivores: 84, Carnivores: 12, Fungi: 45 (Total: 483)
   - **Ecological Vitals**: Biomass: 24,120 | Avg Energy: 68.2 | Soil Moisture: 0.48 | Nitrates: 0.32
@@ -536,15 +571,15 @@ Mobile devices and laptops must not drain battery or overheat when Chaos Garden 
 
 The Phase 3 client design satisfies all **7 System Architect Review Rubrics**:
 
-| Rubric | Architectural Verification Strategy |
-| :--- | :--- |
-| **1. Zero-Allocation Rule** | Transferable `Float32Array` ping-pong buffers for render strides. Zero object allocations in the 60 FPS loop on either thread. |
-| **2. Main-Thread Decoupling** | Engine simulation runs 100% inside `SimulationWorker.ts`. Main thread executes only PixiJS draw calls and Svelte 4–10 Hz telemetry. |
-| **3. Consensus Safety** | Client runs in isolated local sandbox. Only authorized curator lease holders can commit checkpoints (`POST /api/garden/checkpoint`). |
-| **4. Trophic Invariance** | Verified at engine level; client UI reinforces visual trophic hierarchy (`plants < herbivores < carnivores`). |
-| **5. PRNG Determinism** | Web Worker initializes `World` using Mulberry32 PRNG with reproducible seed loaded from snapshot or URL parameter. |
-| **6. Battery & Thermal** | `VisibilityManager` drops worker to 5 TPS, stops PixiJS ticker, and suspends Web Audio when tab is hidden. |
-| **7. Offline Resilience** | `LocalPersistence` boots from IndexedDB snapshot cache when disconnected from Cloudflare D1. |
+| Rubric                        | Architectural Verification Strategy                                                                                                  |
+| :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------------- |
+| **1. Zero-Allocation Rule**   | Transferable `Float32Array` ping-pong buffers for render strides. Zero object allocations in the 60 FPS loop on either thread.       |
+| **2. Main-Thread Decoupling** | Engine simulation runs 100% inside `SimulationWorker.ts`. Main thread executes only PixiJS draw calls and Svelte 4–10 Hz telemetry.  |
+| **3. Consensus Safety**       | Client runs in isolated local sandbox. Only authorized curator lease holders can commit checkpoints (`POST /api/garden/checkpoint`). |
+| **4. Trophic Invariance**     | Verified at engine level; client UI reinforces visual trophic hierarchy (`plants < herbivores < carnivores`).                        |
+| **5. PRNG Determinism**       | Web Worker initializes `World` using Mulberry32 PRNG with reproducible seed loaded from snapshot or URL parameter.                   |
+| **6. Battery & Thermal**      | `VisibilityManager` drops worker to 5 TPS, stops PixiJS ticker, and suspends Web Audio when tab is hidden.                           |
+| **7. Offline Resilience**     | `LocalPersistence` boots from IndexedDB snapshot cache when disconnected from Cloudflare D1.                                         |
 
 ### Performance Envelopes
 
@@ -692,4 +727,3 @@ The Phase 3 client design satisfies all **7 System Architect Review Rubrics**:
   - [x] `npm run test -w @chaos-garden/engine` passes.
   - [x] `npm run test -w @chaos-garden/client` passes.
   - [x] `npm run audit:sim` passes.
-

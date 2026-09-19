@@ -168,8 +168,8 @@ export class OrganismLayer extends Container {
    * Unpacks incoming 32-byte binary render strides directly into pooled sprite transforms.
    * Zero heap allocations.
    */
-  updateFromBuffer(buffer: ArrayBuffer, entityCount: number): void {
-    const floatView = new Float32Array(buffer);
+  updateFromBuffer(buffer: Float32Array, entityCount: number): void {
+    const floatView = buffer;
     const count = Math.min(entityCount, this.maxCapacity);
 
     for (let i = 0; i < count; i++) {

@@ -15,15 +15,15 @@ import type {
 export type RenderFrameCallback = (
   tick: number,
   entityCount: number,
-  buffer: ArrayBuffer,
+  buffer: Float32Array,
 ) => void;
 
 export type SoilUpdateCallback = (
   tick: number,
   cols: number,
   rows: number,
-  moistureBuffer: ArrayBuffer,
-  nitrateBuffer: ArrayBuffer,
+  moistureBuffer: Float32Array,
+  nitrateBuffer: Float32Array,
 ) => void;
 
 export type TelemetryCallback = (pulse: TelemetryPulse) => void;
@@ -177,14 +177,33 @@ export class WorkerBridge {
     });
   }
 
-  returnRenderBuffer(buffer: ArrayBuffer): void {
+  returnRenderBuffer(buffer: Float32Array): void {
     if (this.isTerminated || buffer.byteLength === 0) return;
     this.worker.postMessage(
       {
         type: 'RETURN_RENDER_BUFFER',
         buffer,
       },
-      [buffer],
+      [buffer.buffer],
+    );
+  }
+
+  returnSoilBuffer(
+    moistureBuffer: Float32Array,
+    nitrateBuffer: Float32Array,
+  ): void {
+    if (this.isTerminated) return;
+    const transferables: Transferable[] = [];
+    if (moistureBuffer.byteLength > 0)
+      transferables.push(moistureBuffer.buffer);
+    if (nitrateBuffer.byteLength > 0) transferables.push(nitrateBuffer.buffer);
+    this.worker.postMessage(
+      {
+        type: 'RETURN_SOIL_BUFFER',
+        moistureBuffer,
+        nitrateBuffer,
+      },
+      transferables,
     );
   }
 

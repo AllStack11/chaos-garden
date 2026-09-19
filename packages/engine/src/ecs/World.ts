@@ -13,6 +13,11 @@ import {
   createSeededRandom,
   EntityTypeCode,
   type PopulationSummary,
+  type CanonicalWorldState,
+  type Entity,
+  getEntityTypeCode,
+  getEntityTypeFromCode,
+  DEFAULT_ATMOSPHERIC_STATE,
 } from "@chaos-garden/shared";
 import { EntityPool } from "./EntityPool.js";
 import { ComponentStorage } from "./ComponentStorage.js";
@@ -340,5 +345,195 @@ export class World {
    */
   returnRenderBuffer(buffer: Float32Array): void {
     this.renderPackingSystem.returnBuffer(buffer);
+  }
+
+  /**
+   * Serializes current simulation state into a CanonicalWorldState snapshot.
+   */
+  exportCanonicalState(): CanonicalWorldState {
+    const activeCount = this.pool.denseCount;
+    const dense = this.pool.denseEntities;
+    const storage = this.storage;
+    const entities: Entity[] = [];
+
+    for (let i = 0; i < activeCount; i++) {
+      const idx = dense[i];
+      const typeCode = storage.typeCodes[idx] as EntityTypeCode;
+      const typeStr = getEntityTypeFromCode(typeCode);
+      const idHash = storage.idHashes[idx];
+
+      const baseGenome = {
+        metabolismEfficiency: storage.metabolismRates[idx],
+        reproductionThreshold: storage.reproductionThresholds[idx],
+        mutationRate: storage.mutationRates[idx],
+        size: storage.sizes[idx],
+        lifespan: storage.maxLifespans[idx],
+        pigment: storage.pigments[idx],
+      };
+
+      let genome: any;
+      switch (typeCode) {
+        case EntityTypeCode.PLANT:
+          genome = {
+            type: "plant",
+            ...baseGenome,
+            photosynthesisRate: storage.photosynthesisRates[idx],
+            seedDispersionRadius: storage.seedDispersionRadii[idx],
+            moistureAffinity: storage.moistureAffinities[idx],
+          };
+          break;
+        case EntityTypeCode.HERBIVORE:
+          genome = {
+            type: "herbivore",
+            ...baseGenome,
+            maxSpeed: storage.maxSpeeds[idx],
+            maxForce: storage.maxForces[idx],
+            perceptionRadius: storage.perceptionRadii[idx],
+            fleeRadius: storage.fleeRadii[idx],
+            flockingWeight: storage.flockingWeights[idx],
+          };
+          break;
+        case EntityTypeCode.CARNIVORE:
+          genome = {
+            type: "carnivore",
+            ...baseGenome,
+            maxSpeed: storage.maxSpeeds[idx],
+            maxForce: storage.maxForces[idx],
+            perceptionRadius: storage.perceptionRadii[idx],
+            packWeight: storage.packWeights[idx],
+          };
+          break;
+        case EntityTypeCode.FUNGUS:
+          genome = {
+            type: "fungus",
+            ...baseGenome,
+            decompositionRate: storage.decompositionRates[idx],
+            sporeDispersionRadius: 40,
+            myceliumSpreadRate: 1.0,
+          };
+          break;
+      }
+
+      entities.push({
+        id: idHash.toString(),
+        type: typeStr,
+        name: `${typeStr} #${idHash}`,
+        species: typeStr,
+        position: { x: storage.positionsX[idx], y: storage.positionsY[idx] },
+        velocity: { x: storage.velocitiesX[idx], y: storage.velocitiesY[idx] },
+        energy: storage.energies[idx],
+        health: storage.healths[idx],
+        age: storage.ages[idx],
+        generation: storage.generations[idx],
+        parentId:
+          storage.parentIndices[idx] === -1
+            ? "origin"
+            : storage.parentIndices[idx].toString(),
+        bornAtTick: storage.bornAtTicks[idx],
+        isAlive: true,
+        genome,
+      });
+    }
+
+    const sunlight = 0.5 + 0.5 * Math.sin((this._tick / 1200) * Math.PI * 2);
+
+    return {
+      id: 1,
+      tick: this._tick,
+      epoch: Math.floor(this._tick / 10000) + 1,
+      timestamp: new Date().toISOString(),
+      seed: this.seed,
+      atmospheric: {
+        ...DEFAULT_ATMOSPHERIC_STATE,
+        sunlight,
+      },
+      populationSummary: this.getPopulationSummary(),
+      entities,
+      deadMatter: [],
+      soil: {
+        cols: this.soil.cols,
+        rows: this.soil.rows,
+        cellSize: this.soil.cellSize,
+        moisture: Array.from(this.soil.moisture),
+        nitrates: Array.from(this.soil.nitrates),
+      },
+      checksum: `snap-${this._tick}-${activeCount}`,
+    };
+  }
+
+  /**
+   * Losslessly hydrates simulation state from a CanonicalWorldState snapshot.
+   */
+  hydrateCanonicalState(state: CanonicalWorldState): boolean {
+    if (
+      !state ||
+      typeof state.tick !== "number" ||
+      !Array.isArray(state.entities) ||
+      !state.soil ||
+      !state.soil.moisture ||
+      !state.soil.nitrates
+    ) {
+      return false;
+    }
+
+    this._tick = state.tick;
+    this.pool.reset();
+
+    // Restore living soil fields
+    this.soil.loadState(state.soil.moisture, state.soil.nitrates);
+
+    // Restore entities
+    for (const ent of state.entities) {
+      const idx = this.pool.allocate();
+      if (idx === -1) break;
+
+      const typeCode = getEntityTypeCode(ent.type);
+      const idHash =
+        (parseInt(ent.id, 10) || Math.floor(this.prng() * 1000000) + 1) &
+        0x00ffffff;
+      const g = ent.genome;
+
+      this.storage.initEntity(idx, {
+        idHash: idHash === 0 ? 1 : idHash,
+        typeCode,
+        x: ent.position.x,
+        y: ent.position.y,
+        vx: ent.velocity.x,
+        vy: ent.velocity.y,
+        rotation: Math.atan2(ent.velocity.y, ent.velocity.x),
+        size: g.size ?? 8,
+        pigment: g.pigment ?? 120,
+        energy: ent.energy,
+        health: ent.health,
+        generation: ent.generation ?? 1,
+        parentIndex:
+          ent.parentId === "origin" ? -1 : parseInt(ent.parentId, 10) || -1,
+        bornAtTick: ent.bornAtTick ?? 0,
+        lifespan: g.lifespan ?? 1500,
+        metabolismRate:
+          g.metabolismEfficiency ?? this.config.baseEnergyCostPerTick,
+        reproductionThreshold: g.reproductionThreshold ?? 60,
+        mutationRate: g.mutationRate ?? this.config.mutationMagnitude,
+        photosynthesisRate:
+          "photosynthesisRate" in g ? (g as any).photosynthesisRate : 0,
+        seedDispersionRadius:
+          "seedDispersionRadius" in g ? (g as any).seedDispersionRadius : 0,
+        moistureAffinity:
+          "moistureAffinity" in g ? (g as any).moistureAffinity : 0.5,
+        maxSpeed: "maxSpeed" in g ? (g as any).maxSpeed : 0,
+        maxForce: "maxForce" in g ? (g as any).maxForce : 0,
+        perceptionRadius:
+          "perceptionRadius" in g ? (g as any).perceptionRadius : 0,
+        fleeRadius: typeCode === EntityTypeCode.HERBIVORE ? 80 : 0,
+        flockingWeight: typeCode === EntityTypeCode.HERBIVORE ? 0.8 : 0.4,
+        packWeight: typeCode === EntityTypeCode.CARNIVORE ? 1.2 : 0,
+        decompositionRate:
+          "decompositionRate" in g ? (g as any).decompositionRate : 0,
+      });
+    }
+
+    // Re-pack render buffer for immediate drawing
+    this.renderPackingSystem.pack(this.pool, this.storage);
+    return true;
   }
 }

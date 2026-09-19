@@ -99,4 +99,38 @@ describe("World (ECS Orchestrator & Execution Pipeline)", () => {
     // Should reuse frameA's buffer
     expect(frameC.buffer).toBe(frameA.buffer);
   });
+
+  it("losslessly exports and hydrates simulation state from CanonicalWorldState", () => {
+    const originalWorld = new World({ seed: 777 });
+    originalWorld.seedPrimordialEcosystem();
+    for (let i = 0; i < 25; i++) {
+      originalWorld.step();
+    }
+
+    const exportedState = originalWorld.exportCanonicalState();
+    expect(exportedState.tick).toBe(25);
+    expect(exportedState.entities.length).toBe(originalWorld.pool.denseCount);
+    expect(exportedState.soil.moisture.length).toBe(
+      originalWorld.soil.totalCells,
+    );
+
+    // Create a new world and hydrate it
+    const restoredWorld = new World({ seed: 777 });
+    const success = restoredWorld.hydrateCanonicalState(exportedState);
+    expect(success).toBe(true);
+
+    expect(restoredWorld.tick).toBe(25);
+    expect(restoredWorld.pool.denseCount).toBe(originalWorld.pool.denseCount);
+    expect(restoredWorld.getPopulationSummary()).toEqual(
+      originalWorld.getPopulationSummary(),
+    );
+
+    // Compare soil
+    expect(restoredWorld.soil.getMoisture(100, 100)).toBeCloseTo(
+      originalWorld.soil.getMoisture(100, 100),
+    );
+    expect(restoredWorld.soil.getNitrates(100, 100)).toBeCloseTo(
+      originalWorld.soil.getNitrates(100, 100),
+    );
+  });
 });

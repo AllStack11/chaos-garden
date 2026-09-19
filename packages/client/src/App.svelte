@@ -103,6 +103,7 @@
       },
       onSoilUpdate: (_tick, _cols, _rows, moistureBuffer, nitrateBuffer) => {
         viewport?.updateSoil(moistureBuffer, nitrateBuffer);
+        bridge?.returnSoilBuffer(moistureBuffer, nitrateBuffer);
       },
       onTelemetry: (pulse) => {
         gardenState.updateFromTelemetry(pulse);

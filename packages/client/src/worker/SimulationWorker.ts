@@ -27,6 +27,47 @@ let isRunning = false;
 let targetTps = 60;
 let speedMultiplier = 1.0;
 let selectedEntityIdHash: number | null = null;
+class SoilBufferPool {
+  private bufferSize: number = 0;
+  private moisturePool: Float32Array[] = [];
+  private nitratePool: Float32Array[] = [];
+
+  init(cols: number, rows: number): void {
+    this.bufferSize = cols * rows;
+    this.moisturePool = [
+      new Float32Array(this.bufferSize),
+      new Float32Array(this.bufferSize),
+    ];
+    this.nitratePool = [
+      new Float32Array(this.bufferSize),
+      new Float32Array(this.bufferSize),
+    ];
+  }
+
+  acquire(): { moisture: Float32Array; nitrates: Float32Array } {
+    let moisture = this.moisturePool.pop();
+    let nitrates = this.nitratePool.pop();
+    if (!moisture || moisture.byteLength === 0) {
+      moisture = new Float32Array(this.bufferSize);
+    }
+    if (!nitrates || nitrates.byteLength === 0) {
+      nitrates = new Float32Array(this.bufferSize);
+    }
+    return { moisture, nitrates };
+  }
+
+  release(moisture: Float32Array, nitrates: Float32Array): void {
+    if (moisture && moisture.byteLength > 0) {
+      this.moisturePool.push(moisture);
+    }
+    if (nitrates && nitrates.byteLength > 0) {
+      this.nitratePool.push(nitrates);
+    }
+  }
+}
+
+const soilPool = new SoilBufferPool();
+
 
 // Telemetry & soil rate counters
 let lastTelemetryTime = 0;
@@ -227,33 +268,31 @@ function simulationLoop(): void {
 
   // 1. Send transferable render frame (60 FPS)
   const frame = world.getTransferableRenderFrame();
-  const frameBuffer = frame.buffer.buffer as ArrayBuffer;
   const renderMessage: ClientWorkerOutboundMessage = {
     type: 'RENDER_FRAME',
     tick: frame.tick,
     entityCount: frame.entityCount,
-    buffer: frameBuffer,
+    buffer: frame.buffer,
   };
-  self.postMessage(renderMessage, [frameBuffer]);
+  self.postMessage(renderMessage, [frame.buffer.buffer]);
 
   // 2. Throttled Soil Update (15 Hz)
   if (now - lastSoilUpdateTime >= 66) {
     lastSoilUpdateTime = now;
     const soil = world.soil;
-    const moistureCopy = new Float32Array(soil.moisture);
-    const nitrateCopy = new Float32Array(soil.nitrates);
-    const moistureBuf = moistureCopy.buffer as ArrayBuffer;
-    const nitrateBuf = nitrateCopy.buffer as ArrayBuffer;
+    const { moisture, nitrates } = soilPool.acquire();
+    moisture.set(soil.moisture);
+    nitrates.set(soil.nitrates);
 
     const soilMessage: ClientWorkerOutboundMessage = {
       type: 'SOIL_TEXTURE_UPDATE',
       tick: world.tick,
       cols: soil.cols,
       rows: soil.rows,
-      moistureBuffer: moistureBuf,
-      nitrateBuffer: nitrateBuf,
+      moistureBuffer: moisture,
+      nitrateBuffer: nitrates,
     };
-    self.postMessage(soilMessage, [moistureBuf, nitrateBuf]);
+    self.postMessage(soilMessage, [moisture.buffer, nitrates.buffer]);
   }
 
   // 3. Throttled Telemetry Pulse (10 Hz)
@@ -326,15 +365,41 @@ self.onmessage = (event: MessageEvent<ClientWorkerInboundMessage>) => {
           gardenHeight: msg.height,
         },
       });
-      world.seedPrimordialEcosystem();
+      soilPool.init(world.soil.cols, world.soil.rows);
+
+      let hydrated = false;
+      if (msg.initialStateJson) {
+        try {
+          const parsed = JSON.parse(msg.initialStateJson);
+          const stateData =
+            parsed && typeof parsed === 'object' && 'data' in parsed
+              ? parsed.data
+              : parsed;
+          hydrated = world.hydrateCanonicalState(stateData);
+        } catch (e) {
+          console.warn(
+            '[SimulationWorker] Failed to hydrate initialStateJson, falling back to primordial seed:',
+            e,
+          );
+        }
+      }
+
+      if (!hydrated) {
+        world.seedPrimordialEcosystem();
+      }
       startLoop();
       break;
     }
 
     case 'RETURN_RENDER_BUFFER': {
       if (world) {
-        world.returnRenderBuffer(new Float32Array(msg.buffer));
+        world.returnRenderBuffer(msg.buffer);
       }
+      break;
+    }
+
+    case 'RETURN_SOIL_BUFFER': {
+      soilPool.release(msg.moistureBuffer, msg.nitrateBuffer);
       break;
     }
 
@@ -372,16 +437,10 @@ self.onmessage = (event: MessageEvent<ClientWorkerInboundMessage>) => {
 
     case 'REQUEST_SNAPSHOT': {
       if (!world) break;
-      const summary = world.getPopulationSummary();
-      const snapshot = {
-        tick: world.tick,
-        seed: world.seed,
-        populations: summary,
-        config: world.config,
-      };
+      const canonicalState = world.exportCanonicalState();
       self.postMessage({
         type: 'SNAPSHOT_PAYLOAD',
-        stateJson: JSON.stringify(snapshot),
+        stateJson: JSON.stringify(canonicalState),
       });
       break;
     }

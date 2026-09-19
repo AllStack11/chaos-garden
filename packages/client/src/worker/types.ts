@@ -9,6 +9,7 @@ import type {
   WorkerInboundMessage as SharedWorkerInboundMessage,
   WorkerOutboundMessage as SharedWorkerOutboundMessage,
 } from '@chaos-garden/shared';
+} from "@chaos-garden/shared";
 
 export interface SelectedEntityVitals {
   idHash: number;
@@ -33,6 +34,7 @@ export interface SelectedEntityVitals {
 
 export interface TelemetryPulse {
   type: 'TELEMETRY_PULSE';
+  type: "TELEMETRY_PULSE";
   tick: number;
   tps: number;
   populations: {
@@ -48,27 +50,34 @@ export interface TelemetryPulse {
 
 export interface RenderFrameMessage {
   type: 'RENDER_FRAME';
+  type: "RENDER_FRAME";
   tick: number;
   entityCount: number;
   buffer: ArrayBuffer;
+  buffer: Float32Array;
 }
 
 export interface SoilTextureUpdateMessage {
   type: 'SOIL_TEXTURE_UPDATE';
+  type: "SOIL_TEXTURE_UPDATE";
   tick: number;
   cols: number;
   rows: number;
   moistureBuffer: ArrayBuffer;
   nitrateBuffer: ArrayBuffer;
+  moistureBuffer: Float32Array;
+  nitrateBuffer: Float32Array;
 }
 
 export interface SnapshotPayloadMessage {
   type: 'SNAPSHOT_PAYLOAD';
+  type: "SNAPSHOT_PAYLOAD";
   stateJson: string;
 }
 
 export interface DiagnosticsPayloadMessage {
   type: 'DIAGNOSTICS_PAYLOAD';
+  type: "DIAGNOSTICS_PAYLOAD";
   diagnosticsJson: string;
 }
 
@@ -82,9 +91,19 @@ export type ClientWorkerOutboundMessage =
 export type ReturnRenderBufferMessage = {
   type: 'RETURN_RENDER_BUFFER';
   buffer: ArrayBuffer;
+  type: "RETURN_RENDER_BUFFER";
+  buffer: Float32Array;
+};
+
+export type ReturnSoilBufferMessage = {
+  type: "RETURN_SOIL_BUFFER";
+  moistureBuffer: Float32Array;
+  nitrateBuffer: Float32Array;
 };
 
 export type ClientWorkerInboundMessage =
   | SharedWorkerInboundMessage
   | ReturnRenderBufferMessage;
 
+  | ReturnRenderBufferMessage
+  | ReturnSoilBufferMessage;

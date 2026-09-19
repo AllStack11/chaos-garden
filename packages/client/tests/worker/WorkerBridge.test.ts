@@ -35,6 +35,22 @@ describe('WorkerBridge Unit Tests', () => {
     });
   });
 
+  it('initializes with optional initialStateJson snapshot', () => {
+    const mockWorker = new MockWorker() as unknown as Worker;
+    const bridge = new WorkerBridge({ worker: mockWorker });
+
+    const snapshot = '{"tick":420,"entities":[]}';
+    bridge.init(42, 1600, 1200, snapshot);
+
+    expect(mockWorker.postMessage).toHaveBeenCalledWith({
+      type: 'INIT',
+      seed: 42,
+      width: 1600,
+      height: 1200,
+      initialStateJson: snapshot,
+    });
+  });
+
   it('routes SET_SPEED, SET_THROTTLE and CURATOR_ACTION messages', () => {
     const mockWorker = new MockWorker() as unknown as Worker;
     const bridge = new WorkerBridge({ worker: mockWorker });
@@ -64,7 +80,7 @@ describe('WorkerBridge Unit Tests', () => {
     const mockWorker = new MockWorker() as unknown as Worker;
     const bridge = new WorkerBridge({ worker: mockWorker });
 
-    const buffer = new Float32Array(16).buffer;
+    const buffer = new Float32Array(16);
     bridge.returnRenderBuffer(buffer);
 
     expect(mockWorker.postMessage).toHaveBeenCalledWith(
@@ -72,7 +88,25 @@ describe('WorkerBridge Unit Tests', () => {
         type: 'RETURN_RENDER_BUFFER',
         buffer,
       },
-      [buffer],
+      [buffer.buffer],
+    );
+  });
+
+  it('dispatches returnSoilBuffer with transfer list', () => {
+    const mockWorker = new MockWorker() as unknown as Worker;
+    const bridge = new WorkerBridge({ worker: mockWorker });
+
+    const moisture = new Float32Array(100);
+    const nitrates = new Float32Array(100);
+    bridge.returnSoilBuffer(moisture, nitrates);
+
+    expect(mockWorker.postMessage).toHaveBeenCalledWith(
+      {
+        type: 'RETURN_SOIL_BUFFER',
+        moistureBuffer: moisture,
+        nitrateBuffer: nitrates,
+      },
+      [moisture.buffer, nitrates.buffer],
     );
   });
 
@@ -89,7 +123,7 @@ describe('WorkerBridge Unit Tests', () => {
       },
     });
 
-    const dummyBuffer = new ArrayBuffer(64);
+    const dummyBuffer = new Float32Array(16);
     mockWorker.simulateMessage({
       type: 'RENDER_FRAME',
       tick: 120,
@@ -99,6 +133,40 @@ describe('WorkerBridge Unit Tests', () => {
 
     expect(frameTick).toBe(120);
     expect(count).toBe(15);
+  });
+
+  it('receives SOIL_TEXTURE_UPDATE and invokes callback with Float32Array buffers', () => {
+    const mockWorker = new MockWorker();
+    let soilCols = 0;
+    let soilRows = 0;
+    let moistureLen = 0;
+    let nitrateLen = 0;
+
+    const bridge = new WorkerBridge({
+      worker: mockWorker as unknown as Worker,
+      onSoilUpdate: (_tick, cols, rows, mBuf, nBuf) => {
+        soilCols = cols;
+        soilRows = rows;
+        moistureLen = mBuf.length;
+        nitrateLen = nBuf.length;
+      },
+    });
+
+    const moisture = new Float32Array(50);
+    const nitrates = new Float32Array(50);
+    mockWorker.simulateMessage({
+      type: 'SOIL_TEXTURE_UPDATE',
+      tick: 240,
+      cols: 10,
+      rows: 5,
+      moistureBuffer: moisture,
+      nitrateBuffer: nitrates,
+    });
+
+    expect(soilCols).toBe(10);
+    expect(soilRows).toBe(5);
+    expect(moistureLen).toBe(50);
+    expect(nitrateLen).toBe(50);
   });
 
   it('receives TELEMETRY_PULSE and invokes callback', () => {
