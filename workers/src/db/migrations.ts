@@ -539,15 +539,28 @@ async function migrateToV1_9_0(db: D1Database): Promise<void> {
     db,
     `CREATE TABLE IF NOT EXISTS curator_leases (
       lease_id TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      lease_id TEXT NOT NULL,
       curator_id TEXT NOT NULL,
       granted_at_ms INTEGER NOT NULL,
       expires_at_ms INTEGER NOT NULL,
       authorized_tick INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`
   );
   if (!createLeasesResult.success) {
     throw new Error(`Failed to create curator_leases table: ${createLeasesResult.error}`);
+  }
+
+  const seedLeaseResult = await executeRaw(
+    db,
+    `INSERT OR IGNORE INTO curator_leases (id, lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at, updated_at)
+     VALUES (1, 'initial', 'none', 0, 0, 0, datetime('now'), datetime('now'))`
+  );
+  if (!seedLeaseResult.success) {
+    throw new Error(`Failed to seed initial curator lease row: ${seedLeaseResult.error}`);
   }
 
   const createLeasesIdxResult = await executeRaw(

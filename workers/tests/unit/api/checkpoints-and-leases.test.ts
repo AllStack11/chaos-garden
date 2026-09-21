@@ -54,14 +54,14 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
               const max = Math.max(...checkpointsTable.map((c) => c.tick));
               return { max_tick: max };
             }
-            if (query.includes('FROM curator_leases WHERE lease_id = ? AND expires_at_ms > ?')) {
+            if (query.includes('FROM curator_leases') && query.includes('lease_id = ?')) {
               const [leaseId, now] = params;
               const found = leasesTable.find(
                 (l) => l.lease_id === leaseId && l.expires_at_ms > now
               );
               return found ?? null;
             }
-            if (query.includes('FROM curator_leases WHERE expires_at_ms > ? ORDER BY expires_at_ms DESC')) {
+            if (query.includes('FROM curator_leases') && query.includes('expires_at_ms > ?')) {
               const [now] = params;
               const active = leasesTable
                 .filter((l) => l.expires_at_ms > now)
@@ -115,26 +115,58 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
             return { results: [] };
           }),
           run: vi.fn(async () => {
-            if (query.includes('INSERT INTO curator_leases')) {
-              const [lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick] = params;
-              leasesTable.push({
-                lease_id,
-                curator_id,
-                granted_at_ms,
-                expires_at_ms,
-                authorized_tick,
-                created_at: new Date().toISOString(),
-              });
-              return { success: true };
+            if (query.includes('INSERT OR IGNORE INTO curator_leases') || query.includes('INSERT INTO curator_leases')) {
+              if (leasesTable.length === 0) {
+                leasesTable.push({
+                  id: 1,
+                  lease_id: 'initial',
+                  curator_id: 'none',
+                  granted_at_ms: 0,
+                  expires_at_ms: 0,
+                  authorized_tick: 0,
+                  created_at: new Date().toISOString(),
+                });
+              }
+              return { success: true, meta: { changes: 1 } };
             }
-            if (query.includes('UPDATE curator_leases')) {
-              const [newExpires, authTick, leaseId] = params;
+            if (query.includes('UPDATE curator_leases SET authorized_tick = ?')) {
+              const [authTick, leaseId] = params;
               const target = leasesTable.find((l) => l.lease_id === leaseId);
               if (target) {
-                target.expires_at_ms = newExpires;
                 target.authorized_tick = authTick;
               }
-              return { success: true };
+              return { success: true, meta: { changes: 1 } };
+            }
+            if (query.includes('UPDATE curator_leases')) {
+              const [leaseId, curatorId, grantedAt, expiresAt, authorizedTick, now, checkCuratorId, requestedLeaseId] = params;
+              if (leasesTable.length === 0) {
+                leasesTable.push({
+                  id: 1,
+                  lease_id: leaseId,
+                  curator_id: curatorId,
+                  granted_at_ms: grantedAt,
+                  expires_at_ms: expiresAt,
+                  authorized_tick: authorizedTick,
+                  created_at: new Date().toISOString(),
+                });
+                return { success: true, meta: { changes: 1 } };
+              }
+              const current = leasesTable[0];
+              const canClaim =
+                current.expires_at_ms <= now ||
+                current.curator_id === checkCuratorId ||
+                (requestedLeaseId && current.lease_id === requestedLeaseId);
+
+              if (canClaim) {
+                current.lease_id = leaseId;
+                current.curator_id = curatorId;
+                current.granted_at_ms = grantedAt;
+                current.expires_at_ms = expiresAt;
+                current.authorized_tick = authorizedTick;
+                return { success: true, meta: { changes: 1 } };
+              } else {
+                return { success: true, meta: { changes: 0 } };
+              }
             }
             if (query.includes('INSERT INTO engine_checkpoints')) {
               const [tick, engine_version, seed, checksum, payload] = params;
@@ -284,6 +316,40 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       const json = await res.json() as any;
       expect(json.success).toBe(false);
       expect(json.error).toContain('held by another curator');
+    });
+
+    it('concurrent lease requests result in exactly one grant and one conflict (CAS invariant)', async () => {
+      const reqAlice = new Request('http://localhost/api/garden/lease', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-curator-secret',
+          'X-Curator-Id': 'curator-alice',
+        },
+        body: JSON.stringify({ curatorId: 'curator-alice', authorizedTick: 100 }),
+      });
+
+      const reqBob = new Request('http://localhost/api/garden/lease', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-curator-secret',
+          'X-Curator-Id': 'curator-bob',
+        },
+        body: JSON.stringify({ curatorId: 'curator-bob', authorizedTick: 100 }),
+      });
+
+      // Fire both concurrently
+      const [resAlice, resBob] = await Promise.all([
+        worker.fetch(reqAlice, env),
+        worker.fetch(reqBob, env),
+      ]);
+
+      const statuses = [resAlice.status, resBob.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      // Exactly 1 active lease row in singleton storage
+      expect(leasesTable).toHaveLength(1);
     });
   });
 

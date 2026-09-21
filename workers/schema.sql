@@ -181,17 +181,23 @@ CREATE INDEX IF NOT EXISTS idx_engine_checkpoints_tick ON engine_checkpoints(tic
 -- Curator Leases Table
 -- ==========================================
 -- Temporary authority leases granted to active viewers permitting checkpoint commits.
+-- Enforces a singleton lock row (id = 1) to guarantee atomic Compare-And-Swap (CAS) lease acquisition.
 
 CREATE TABLE IF NOT EXISTS curator_leases (
-  lease_id TEXT PRIMARY KEY,
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  lease_id TEXT NOT NULL,
   curator_id TEXT NOT NULL,
   granted_at_ms INTEGER NOT NULL,
   expires_at_ms INTEGER NOT NULL,
   authorized_tick INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_curator_leases_expires ON curator_leases(expires_at_ms DESC);
+
+INSERT OR REPLACE INTO curator_leases (id, lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at, updated_at)
+VALUES (1, 'initial', 'none', 0, 0, 0, datetime('now'), datetime('now'));
 
 -- ==========================================
 -- Metadata Table (for future migrations)
@@ -206,7 +212,6 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-VALUES ('schema_version', '1.8.0', datetime('now'));
 VALUES ('schema_version', '1.9.0', datetime('now'));
 
 -- ==========================================

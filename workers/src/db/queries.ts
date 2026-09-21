@@ -896,17 +896,20 @@ export async function pruneEngineCheckpoints(
 
 export async function getActiveCuratorLease(
   db: D1Database,
-  leaseId: string
+  leaseId?: string
 ): Promise<CuratorLease | null> {
   const now = Date.now();
-  const row = await queryFirst<CuratorLeaseRow>(
-    db,
-    `SELECT lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at
-     FROM curator_leases
-     WHERE lease_id = ? AND expires_at_ms > ?
-     LIMIT 1`,
-    [leaseId, now]
-  );
+  const query = leaseId
+    ? `SELECT lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at
+       FROM curator_leases
+       WHERE id = 1 AND lease_id = ? AND expires_at_ms > ?
+       LIMIT 1`
+    : `SELECT lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at
+       FROM curator_leases
+       WHERE id = 1 AND expires_at_ms > ?
+       LIMIT 1`;
+  const params = leaseId ? [leaseId, now] : [now];
+  const row = await queryFirst<CuratorLeaseRow>(db, query, params);
 
   if (!row) return null;
 
@@ -923,7 +926,7 @@ export async function hasActiveCuratorLease(db: D1Database): Promise<boolean> {
   const now = Date.now();
   const row = await queryFirst<{ count: number }>(
     db,
-    `SELECT COUNT(*) as count FROM curator_leases WHERE expires_at_ms > ?`,
+    `SELECT COUNT(*) as count FROM curator_leases WHERE id = 1 AND expires_at_ms > ?`,
     [now]
   );
   return (row?.count ?? 0) > 0;
@@ -937,47 +940,6 @@ export async function acquireOrRenewCuratorLease(
   ttlMs: number = 120000
 ): Promise<{ lease: CuratorLease } | { error: string; conflictingCuratorId?: string }> {
   const now = Date.now();
-  const active = await queryFirst<CuratorLeaseRow>(
-    db,
-    `SELECT lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at
-     FROM curator_leases
-     WHERE expires_at_ms > ?
-     ORDER BY expires_at_ms DESC
-     LIMIT 1`,
-    [now]
-  );
-
-  if (active) {
-    // If renewing the active lease
-    if ((requestedLeaseId && active.lease_id === requestedLeaseId) || active.curator_id === curatorId) {
-      const newExpiresAt = now + ttlMs;
-      await executeQuery(
-        db,
-        `UPDATE curator_leases
-         SET expires_at_ms = ?, authorized_tick = ?
-         WHERE lease_id = ?`,
-        [newExpiresAt, authorizedTick, active.lease_id]
-      );
-
-      return {
-        lease: {
-          leaseId: active.lease_id,
-          curatorId: active.curator_id,
-          grantedAtMs: active.granted_at_ms,
-          expiresAtMs: newExpiresAt,
-          authorizedTick,
-        },
-      };
-    }
-
-    // Active lease held by another curator
-    return {
-      error: 'Active curator lease is currently held by another curator',
-      conflictingCuratorId: active.curator_id,
-    };
-  }
-
-  // No active lease, grant new one
   const leaseId =
     requestedLeaseId ||
     (typeof crypto !== 'undefined' && crypto.randomUUID
@@ -985,20 +947,63 @@ export async function acquireOrRenewCuratorLease(
       : `lease-${now}-${Math.floor(Math.random() * 100000)}`);
   const expiresAtMs = now + ttlMs;
 
+  // Ensure singleton row exists in case of fresh or unseeded DB
   await executeQuery(
     db,
-    `INSERT INTO curator_leases (lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick)
-     VALUES (?, ?, ?, ?, ?)`,
-    [leaseId, curatorId, now, expiresAtMs, authorizedTick]
+    `INSERT OR IGNORE INTO curator_leases (id, lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at, updated_at)
+     VALUES (1, 'initial', 'none', 0, 0, 0, datetime('now'), datetime('now'))`
   );
 
-  return {
-    lease: {
+  // Atomic Compare-And-Swap (CAS) update on singleton lock row:
+  // Succeeds with changes === 1 IF AND ONLY IF:
+  // 1. Current lease has expired (expires_at_ms <= now), OR
+  // 2. The same curator is renewing (curator_id = ?), OR
+  // 3. The specific leaseId is being renewed (lease_id = ? AND requestedLeaseId IS NOT NULL)
+  const result = await executeQuery(
+    db,
+    `UPDATE curator_leases
+     SET lease_id = ?,
+         curator_id = ?,
+         granted_at_ms = ?,
+         expires_at_ms = ?,
+         authorized_tick = ?,
+         updated_at = datetime('now')
+     WHERE id = 1
+       AND (
+         expires_at_ms <= ?
+         OR curator_id = ?
+         OR (lease_id = ? AND ? IS NOT NULL)
+       )`,
+    [
       leaseId,
       curatorId,
-      grantedAtMs: now,
+      now,
       expiresAtMs,
       authorizedTick,
-    },
+      now,
+      curatorId,
+      requestedLeaseId ?? '',
+      requestedLeaseId ?? null,
+    ]
+  );
+
+  const changes = result.meta?.changes ?? 0;
+  if (changes === 1) {
+    return {
+      lease: {
+        leaseId,
+        curatorId,
+        grantedAtMs: now,
+        expiresAtMs,
+        authorizedTick,
+      },
+    };
+  }
+
+  // Acquisition failed due to active conflicting lease held by another curator
+  const active = await getActiveCuratorLease(db);
+  return {
+    error: 'Active curator lease is currently held by another curator',
+    conflictingCuratorId: active?.curatorId,
   };
 }

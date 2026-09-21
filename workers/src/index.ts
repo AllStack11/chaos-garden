@@ -747,7 +747,7 @@ async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: stri
     // 9. Update lease authorized tick
     await executeQuery(
       env.DB,
-      'UPDATE curator_leases SET authorized_tick = ? WHERE lease_id = ?',
+      'UPDATE curator_leases SET authorized_tick = ? WHERE id = 1 AND lease_id = ?',
       [checkpoint.tick, activeLease.leaseId]
     );
 
