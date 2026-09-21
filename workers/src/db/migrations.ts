@@ -1,26 +1,26 @@
 /**
  * Database Migrations
- * 
+ *
  * Schema versioning and migration utilities for future evolution.
  * Like the gradual adaptation of organisms over generations,
  * our database schema may need to evolve as the system grows.
- * 
+ *
  * Current version: 1.5.1
  */
 
-import type { D1Database } from '../types/worker';
-import { queryFirst, executeRaw } from './connection';
+import type { D1Database } from "../types/worker";
+import { queryFirst, executeRaw } from "./connection";
 
 /**
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = '1.9.0';
+export const CURRENT_SCHEMA_VERSION = "1.9.0";
 
 /**
  * Check if the database schema is up to date.
  * Like checking the health of the ecosystem's foundation.
- * 
+ *
  * @param db - The D1 database instance
  * @returns True if schema is current, false if migration needed
  */
@@ -28,9 +28,9 @@ export async function isSchemaUpToDate(db: D1Database): Promise<boolean> {
   try {
     const metadata = await queryFirst<{ value: string }>(
       db,
-      "SELECT value FROM system_metadata WHERE key = 'schema_version'"
+      "SELECT value FROM system_metadata WHERE key = 'schema_version'",
     );
-    
+
     return metadata?.value === CURRENT_SCHEMA_VERSION;
   } catch {
     // If we can't check, assume we need to initialize
@@ -40,17 +40,19 @@ export async function isSchemaUpToDate(db: D1Database): Promise<boolean> {
 
 /**
  * Get the current schema version from the database.
- * 
+ *
  * @param db - The D1 database instance
  * @returns The current version string or null if not set
  */
-export async function getCurrentSchemaVersion(db: D1Database): Promise<string | null> {
+export async function getCurrentSchemaVersion(
+  db: D1Database,
+): Promise<string | null> {
   try {
     const metadata = await queryFirst<{ value: string }>(
       db,
-      "SELECT value FROM system_metadata WHERE key = 'schema_version'"
+      "SELECT value FROM system_metadata WHERE key = 'schema_version'",
     );
-    
+
     return metadata?.value || null;
   } catch {
     return null;
@@ -60,21 +62,23 @@ export async function getCurrentSchemaVersion(db: D1Database): Promise<string | 
 /**
  * Run pending migrations to bring schema up to current version.
  * This function will grow as we add schema versions.
- * 
+ *
  * @param db - The D1 database instance
  * @returns True if migrations succeeded
  */
 export async function runMigrations(db: D1Database): Promise<boolean> {
   const currentVersion = await getCurrentSchemaVersion(db);
-  
+
   if (currentVersion === CURRENT_SCHEMA_VERSION) {
     // Already up to date
     return true;
   }
-  
+
   // Start a migration log
-  console.log(`Starting migration from ${currentVersion || 'none'} to ${CURRENT_SCHEMA_VERSION}`);
-  
+  console.log(
+    `Starting migration from ${currentVersion || "none"} to ${CURRENT_SCHEMA_VERSION}`,
+  );
+
   try {
     if (!currentVersion) {
       await migrateToV1_0_0(db);
@@ -87,7 +91,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.0.0') {
+    } else if (currentVersion === "1.0.0") {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
@@ -97,7 +101,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.1.0') {
+    } else if (currentVersion === "1.1.0") {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
@@ -106,7 +110,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.3.0') {
+    } else if (currentVersion === "1.3.0") {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
@@ -114,41 +118,41 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.4.0') {
+    } else if (currentVersion === "1.4.0") {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.5.0') {
+    } else if (currentVersion === "1.5.0") {
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.5.1') {
+    } else if (currentVersion === "1.5.1") {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.6.0') {
+    } else if (currentVersion === "1.6.0") {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.7.0') {
+    } else if (currentVersion === "1.7.0") {
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
-    } else if (currentVersion === '1.8.0') {
+    } else if (currentVersion === "1.8.0") {
       await migrateToV1_9_0(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
-    
-    console.log('Migrations completed successfully');
+
+    console.log("Migrations completed successfully");
     return true;
   } catch (error) {
-    console.error('Migration failed:', error);
+    console.error("Migration failed:", error);
     return false;
   }
 }
@@ -156,63 +160,65 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
 /**
  * Migration to version 1.0.0 - Initial schema.
  * Creates all base tables and indexes.
- * 
+ *
  * @param db - The D1 database instance
  */
 async function migrateToV1_0_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.0.0...');
-  
+  console.log("Running migration to v1.0.0...");
+
   // The schema.sql file should already have been executed,
   // but we ensure the version is set correctly here
   const result = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-     VALUES ('schema_version', '1.0.0', datetime('now'))`
+     VALUES ('schema_version', '1.0.0', datetime('now'))`,
   );
-  
+
   if (!result.success) {
     throw new Error(`Failed to set schema version: ${result.error}`);
   }
-  
-  console.log('Migration to v1.0.0 complete');
+
+  console.log("Migration to v1.0.0 complete");
 }
 
 /**
  * Migration to version 1.1.0.
  * Removes application log persistence schema artifacts.
- * 
+ *
  * @param db - The D1 database instance
  */
 async function migrateToV1_1_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.1.0...');
+  console.log("Running migration to v1.1.0...");
 
   const dropStatements = [
-    'DROP INDEX IF EXISTS idx_application_logs_timestamp',
-    'DROP INDEX IF EXISTS idx_application_logs_level',
-    'DROP INDEX IF EXISTS idx_application_logs_component',
-    'DROP INDEX IF EXISTS idx_application_logs_tick',
-    'DROP INDEX IF EXISTS idx_application_logs_entity',
-    'DROP TABLE IF EXISTS application_logs'
+    "DROP INDEX IF EXISTS idx_application_logs_timestamp",
+    "DROP INDEX IF EXISTS idx_application_logs_level",
+    "DROP INDEX IF EXISTS idx_application_logs_component",
+    "DROP INDEX IF EXISTS idx_application_logs_tick",
+    "DROP INDEX IF EXISTS idx_application_logs_entity",
+    "DROP TABLE IF EXISTS application_logs",
   ];
 
   for (const statement of dropStatements) {
     const result = await executeRaw(db, statement);
     if (!result.success) {
-      throw new Error(`Failed to execute migration step "${statement}": ${result.error}`);
+      throw new Error(
+        `Failed to execute migration step "${statement}": ${result.error}`,
+      );
     }
   }
 
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-     VALUES ('schema_version', '1.1.0', datetime('now'))`
+     VALUES ('schema_version', '1.1.0', datetime('now'))`,
   );
 
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.1.0 complete');
+  console.log("Migration to v1.1.0 complete");
 }
 
 /**
@@ -220,7 +226,7 @@ async function migrateToV1_1_0(db: D1Database): Promise<void> {
  * Adds simulation execution control table used for lock-based tick orchestration.
  */
 async function migrateToV1_3_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.3.0...');
+  console.log("Running migration to v1.3.0...");
 
   const createTableResult = await executeRaw(
     db,
@@ -231,16 +237,18 @@ async function migrateToV1_3_0(db: D1Database): Promise<void> {
       lock_expires_at INTEGER,
       last_completed_tick INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`
+    )`,
   );
   if (!createTableResult.success) {
-    throw new Error(`Failed to create simulation_control: ${createTableResult.error}`);
+    throw new Error(
+      `Failed to create simulation_control: ${createTableResult.error}`,
+    );
   }
 
   const seedResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO simulation_control (id, last_completed_tick, updated_at)
-     VALUES (1, 0, datetime('now'))`
+     VALUES (1, 0, datetime('now'))`,
   );
   if (!seedResult.success) {
     throw new Error(`Failed to seed simulation_control: ${seedResult.error}`);
@@ -249,13 +257,13 @@ async function migrateToV1_3_0(db: D1Database): Promise<void> {
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at) 
-     VALUES ('schema_version', '1.3.0', datetime('now'))`
+     VALUES ('schema_version', '1.3.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.3.0 complete');
+  console.log("Migration to v1.3.0 complete");
 }
 
 /**
@@ -263,21 +271,23 @@ async function migrateToV1_3_0(db: D1Database): Promise<void> {
  * Adds persisted population summary columns for living/dead breakdowns.
  */
 async function migrateToV1_4_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.4.0...');
+  console.log("Running migration to v1.4.0...");
 
   const addColumnStatements = [
-    'ALTER TABLE garden_state ADD COLUMN dead_plants INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN dead_herbivores INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN dead_carnivores INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN dead_fungi INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN total_living INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN total_dead INTEGER NOT NULL DEFAULT 0'
+    "ALTER TABLE garden_state ADD COLUMN dead_plants INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN dead_herbivores INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN dead_carnivores INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN dead_fungi INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN total_living INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN total_dead INTEGER NOT NULL DEFAULT 0",
   ];
 
   for (const statement of addColumnStatements) {
     const result = await executeRaw(db, statement);
-    if (!result.success && !result.error?.includes('duplicate column name')) {
-      throw new Error(`Failed to execute migration step "${statement}": ${result.error}`);
+    if (!result.success && !result.error?.includes("duplicate column name")) {
+      throw new Error(
+        `Failed to execute migration step "${statement}": ${result.error}`,
+      );
     }
   }
 
@@ -299,22 +309,24 @@ async function migrateToV1_4_0(db: D1Database): Promise<void> {
          total = CASE
            WHEN total < (plants + herbivores + carnivores + fungi) THEN plants + herbivores + carnivores + fungi
            ELSE total
-         END`
+         END`,
   );
   if (!backfillResult.success) {
-    throw new Error(`Failed to backfill population columns: ${backfillResult.error}`);
+    throw new Error(
+      `Failed to backfill population columns: ${backfillResult.error}`,
+    );
   }
 
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.4.0', datetime('now'))`
+     VALUES ('schema_version', '1.4.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.4.0 complete');
+  console.log("Migration to v1.4.0 complete");
 }
 
 /**
@@ -322,20 +334,22 @@ async function migrateToV1_4_0(db: D1Database): Promise<void> {
  * Adds cumulative all-time death counters to garden state snapshots.
  */
 async function migrateToV1_5_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.5.0...');
+  console.log("Running migration to v1.5.0...");
 
   const addColumnStatements = [
-    'ALTER TABLE garden_state ADD COLUMN all_time_dead_plants INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN all_time_dead_herbivores INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN all_time_dead_carnivores INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN all_time_dead_fungi INTEGER NOT NULL DEFAULT 0',
-    'ALTER TABLE garden_state ADD COLUMN all_time_dead INTEGER NOT NULL DEFAULT 0'
+    "ALTER TABLE garden_state ADD COLUMN all_time_dead_plants INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN all_time_dead_herbivores INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN all_time_dead_carnivores INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN all_time_dead_fungi INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE garden_state ADD COLUMN all_time_dead INTEGER NOT NULL DEFAULT 0",
   ];
 
   for (const statement of addColumnStatements) {
     const result = await executeRaw(db, statement);
-    if (!result.success && !result.error?.includes('duplicate column name')) {
-      throw new Error(`Failed to execute migration step "${statement}": ${result.error}`);
+    if (!result.success && !result.error?.includes("duplicate column name")) {
+      throw new Error(
+        `Failed to execute migration step "${statement}": ${result.error}`,
+      );
     }
   }
 
@@ -346,22 +360,24 @@ async function migrateToV1_5_0(db: D1Database): Promise<void> {
          all_time_dead_herbivores = COALESCE(NULLIF(all_time_dead_herbivores, 0), COALESCE(dead_herbivores, 0)),
          all_time_dead_carnivores = COALESCE(NULLIF(all_time_dead_carnivores, 0), COALESCE(dead_carnivores, 0)),
          all_time_dead_fungi = COALESCE(NULLIF(all_time_dead_fungi, 0), COALESCE(dead_fungi, 0)),
-         all_time_dead = COALESCE(NULLIF(all_time_dead, 0), COALESCE(total_dead, 0))`
+         all_time_dead = COALESCE(NULLIF(all_time_dead, 0), COALESCE(total_dead, 0))`,
   );
   if (!backfillResult.success) {
-    throw new Error(`Failed to backfill all-time dead columns: ${backfillResult.error}`);
+    throw new Error(
+      `Failed to backfill all-time dead columns: ${backfillResult.error}`,
+    );
   }
 
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.5.0', datetime('now'))`
+     VALUES ('schema_version', '1.5.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.5.0 complete');
+  console.log("Migration to v1.5.0 complete");
 }
 
 /**
@@ -369,13 +385,13 @@ async function migrateToV1_5_0(db: D1Database): Promise<void> {
  * Aligns bootstrap tick-0 sunlight with the deterministic sunlight calculator.
  */
 async function migrateToV1_5_1(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.5.1...');
+  console.log("Running migration to v1.5.1...");
 
   const backfillResult = await executeRaw(
     db,
     `UPDATE garden_state
      SET sunlight = 0
-     WHERE tick = 0`
+     WHERE tick = 0`,
   );
   if (!backfillResult.success) {
     throw new Error(`Failed to align tick-0 sunlight: ${backfillResult.error}`);
@@ -384,13 +400,13 @@ async function migrateToV1_5_1(db: D1Database): Promise<void> {
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.5.1', datetime('now'))`
+     VALUES ('schema_version', '1.5.1', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.5.1 complete');
+  console.log("Migration to v1.5.1 complete");
 }
 
 /**
@@ -398,26 +414,31 @@ async function migrateToV1_5_1(db: D1Database): Promise<void> {
  * Adds weather_state JSON column to garden_state for persistent weather patterns.
  */
 async function migrateToV1_6_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.6.0...');
+  console.log("Running migration to v1.6.0...");
 
   const addColumnResult = await executeRaw(
     db,
-    'ALTER TABLE garden_state ADD COLUMN weather_state TEXT DEFAULT NULL'
+    "ALTER TABLE garden_state ADD COLUMN weather_state TEXT DEFAULT NULL",
   );
-  if (!addColumnResult.success && !addColumnResult.error?.includes('duplicate column name')) {
-    throw new Error(`Failed to add weather_state column: ${addColumnResult.error}`);
+  if (
+    !addColumnResult.success &&
+    !addColumnResult.error?.includes("duplicate column name")
+  ) {
+    throw new Error(
+      `Failed to add weather_state column: ${addColumnResult.error}`,
+    );
   }
 
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.6.0', datetime('now'))`
+     VALUES ('schema_version', '1.6.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.6.0 complete');
+  console.log("Migration to v1.6.0 complete");
 }
 
 /**
@@ -428,7 +449,7 @@ async function migrateToV1_6_0(db: D1Database): Promise<void> {
  * Any existing is_alive=0 rows are purged from entities as part of this migration.
  */
 async function migrateToV1_7_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.7.0...');
+  console.log("Running migration to v1.7.0...");
 
   const createTableResult = await executeRaw(
     db,
@@ -439,18 +460,22 @@ async function migrateToV1_7_0(db: D1Database): Promise<void> {
       energy REAL NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('plant', 'herbivore', 'carnivore', 'fungus')),
       death_tick INTEGER NOT NULL
-    )`
+    )`,
   );
   if (!createTableResult.success) {
-    throw new Error(`Failed to create dead_matter table: ${createTableResult.error}`);
+    throw new Error(
+      `Failed to create dead_matter table: ${createTableResult.error}`,
+    );
   }
 
   const createIndexResult = await executeRaw(
     db,
-    `CREATE INDEX IF NOT EXISTS idx_dead_matter_death_tick ON dead_matter(death_tick)`
+    `CREATE INDEX IF NOT EXISTS idx_dead_matter_death_tick ON dead_matter(death_tick)`,
   );
   if (!createIndexResult.success) {
-    throw new Error(`Failed to create dead_matter index: ${createIndexResult.error}`);
+    throw new Error(
+      `Failed to create dead_matter index: ${createIndexResult.error}`,
+    );
   }
 
   // Purge dead entity rows that were stored under the old scheme.
@@ -458,7 +483,7 @@ async function migrateToV1_7_0(db: D1Database): Promise<void> {
   // any existing deployment that has accumulated is_alive=0 rows.
   const purgeResult = await executeRaw(
     db,
-    `DELETE FROM entities WHERE is_alive = 0`
+    `DELETE FROM entities WHERE is_alive = 0`,
   );
   if (!purgeResult.success) {
     throw new Error(`Failed to purge dead entities: ${purgeResult.error}`);
@@ -467,13 +492,13 @@ async function migrateToV1_7_0(db: D1Database): Promise<void> {
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.7.0', datetime('now'))`
+     VALUES ('schema_version', '1.7.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.7.0 complete');
+  console.log("Migration to v1.7.0 complete");
 }
 
 /**
@@ -482,26 +507,28 @@ async function migrateToV1_7_0(db: D1Database): Promise<void> {
  * per-tick query: WHERE is_alive = 1 ORDER BY born_at_tick ASC/DESC.
  */
 async function migrateToV1_8_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.8.0...');
+  console.log("Running migration to v1.8.0...");
 
   const createIndexResult = await executeRaw(
     db,
-    `CREATE INDEX IF NOT EXISTS idx_entities_alive_age ON entities(is_alive, born_at_tick)`
+    `CREATE INDEX IF NOT EXISTS idx_entities_alive_age ON entities(is_alive, born_at_tick)`,
   );
   if (!createIndexResult.success) {
-    throw new Error(`Failed to create idx_entities_alive_age: ${createIndexResult.error}`);
+    throw new Error(
+      `Failed to create idx_entities_alive_age: ${createIndexResult.error}`,
+    );
   }
 
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.8.0', datetime('now'))`
+     VALUES ('schema_version', '1.8.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.8.0 complete');
+  console.log("Migration to v1.8.0 complete");
 }
 
 /**
@@ -509,7 +536,7 @@ async function migrateToV1_8_0(db: D1Database): Promise<void> {
  * Introduces engine_checkpoints and curator_leases tables.
  */
 async function migrateToV1_9_0(db: D1Database): Promise<void> {
-  console.log('Running migration to v1.9.0...');
+  console.log("Running migration to v1.9.0...");
 
   const createCheckpointsResult = await executeRaw(
     db,
@@ -521,72 +548,80 @@ async function migrateToV1_9_0(db: D1Database): Promise<void> {
       checksum TEXT NOT NULL,
       payload BLOB NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`
+    )`,
   );
   if (!createCheckpointsResult.success) {
-    throw new Error(`Failed to create engine_checkpoints table: ${createCheckpointsResult.error}`);
+    throw new Error(
+      `Failed to create engine_checkpoints table: ${createCheckpointsResult.error}`,
+    );
   }
 
   const createCheckpointsIdxResult = await executeRaw(
     db,
-    `CREATE INDEX IF NOT EXISTS idx_engine_checkpoints_tick ON engine_checkpoints(tick DESC)`
+    `CREATE INDEX IF NOT EXISTS idx_engine_checkpoints_tick ON engine_checkpoints(tick DESC)`,
   );
   if (!createCheckpointsIdxResult.success) {
-    throw new Error(`Failed to create idx_engine_checkpoints_tick: ${createCheckpointsIdxResult.error}`);
+    throw new Error(
+      `Failed to create idx_engine_checkpoints_tick: ${createCheckpointsIdxResult.error}`,
+    );
   }
 
   const createLeasesResult = await executeRaw(
     db,
     `CREATE TABLE IF NOT EXISTS curator_leases (
-      lease_id TEXT PRIMARY KEY,
       id INTEGER PRIMARY KEY CHECK (id = 1),
       lease_id TEXT NOT NULL,
       curator_id TEXT NOT NULL,
       granted_at_ms INTEGER NOT NULL,
       expires_at_ms INTEGER NOT NULL,
       authorized_tick INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )`
+    )`,
   );
   if (!createLeasesResult.success) {
-    throw new Error(`Failed to create curator_leases table: ${createLeasesResult.error}`);
+    throw new Error(
+      `Failed to create curator_leases table: ${createLeasesResult.error}`,
+    );
   }
 
   const seedLeaseResult = await executeRaw(
     db,
     `INSERT OR IGNORE INTO curator_leases (id, lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick, created_at, updated_at)
-     VALUES (1, 'initial', 'none', 0, 0, 0, datetime('now'), datetime('now'))`
+     VALUES (1, 'initial', 'none', 0, 0, 0, datetime('now'), datetime('now'))`,
   );
   if (!seedLeaseResult.success) {
-    throw new Error(`Failed to seed initial curator lease row: ${seedLeaseResult.error}`);
+    throw new Error(
+      `Failed to seed initial curator lease row: ${seedLeaseResult.error}`,
+    );
   }
 
   const createLeasesIdxResult = await executeRaw(
     db,
-    `CREATE INDEX IF NOT EXISTS idx_curator_leases_expires ON curator_leases(expires_at_ms DESC)`
+    `CREATE INDEX IF NOT EXISTS idx_curator_leases_expires ON curator_leases(expires_at_ms DESC)`,
   );
   if (!createLeasesIdxResult.success) {
-    throw new Error(`Failed to create idx_curator_leases_expires: ${createLeasesIdxResult.error}`);
+    throw new Error(
+      `Failed to create idx_curator_leases_expires: ${createLeasesIdxResult.error}`,
+    );
   }
 
   const versionResult = await executeRaw(
     db,
     `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-     VALUES ('schema_version', '1.9.0', datetime('now'))`
+     VALUES ('schema_version', '1.9.0', datetime('now'))`,
   );
   if (!versionResult.success) {
     throw new Error(`Failed to set schema version: ${versionResult.error}`);
   }
 
-  console.log('Migration to v1.9.0 complete');
+  console.log("Migration to v1.9.0 complete");
 }
 
 /**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
- * 
+ *
  * @param db - The D1 database instance
  * @returns True if initialization succeeded
  */
@@ -595,19 +630,19 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     // Check if already initialized
     const isInitialized = await queryFirst<{ count: number }>(
       db,
-      'SELECT COUNT(*) as count FROM system_metadata'
+      "SELECT COUNT(*) as count FROM system_metadata",
     );
-    
+
     if (isInitialized && isInitialized.count > 0) {
-      console.log('Database already initialized');
+      console.log("Database already initialized");
       return true;
     }
-    
-    console.log('Initializing database...');
-    
+
+    console.log("Initializing database...");
+
     // Schema should be applied via wrangler d1 execute
     // This function handles post-schema setup
-    
+
     await migrateToV1_1_0(db);
     await migrateToV1_3_0(db);
     await migrateToV1_4_0(db);
@@ -618,10 +653,10 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_8_0(db);
     await migrateToV1_9_0(db);
 
-    console.log('Database initialization complete');
+    console.log("Database initialization complete");
     return true;
   } catch (error) {
-    console.error('Database initialization failed:', error);
+    console.error("Database initialization failed:", error);
     return false;
   }
 }
