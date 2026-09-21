@@ -34,9 +34,12 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
     'X-Curator-Id': 'curator-alice',
   };
 
+  let expireLeaseAfterRead = false;
+
   beforeEach(() => {
     checkpointsTable = [];
     leasesTable = [];
+    expireLeaseAfterRead = false;
 
     mockDb = {
       prepare: vi.fn((rawQuery: string) => {
@@ -59,6 +62,9 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
               const found = leasesTable.find(
                 (l) => l.lease_id === leaseId && l.expires_at_ms > now
               );
+              if (found && expireLeaseAfterRead) {
+                found.expires_at_ms = 0;
+              }
               return found ?? null;
             }
             if (query.includes('FROM curator_leases') && query.includes('expires_at_ms > ?')) {
@@ -169,6 +175,31 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
               }
             }
             if (query.includes('INSERT INTO engine_checkpoints')) {
+              if (query.includes('WHERE EXISTS')) {
+                const [tick, engine_version, seed, checksum, payload, leaseId, curatorId, nowMs, reqTick] = params;
+                const currentLease = leasesTable.find((l) => l.lease_id === leaseId);
+                const isValid =
+                  currentLease &&
+                  currentLease.curator_id === curatorId &&
+                  currentLease.expires_at_ms > nowMs &&
+                  currentLease.authorized_tick < reqTick;
+
+                if (!isValid) {
+                  return { success: true, meta: { changes: 0 } };
+                }
+
+                checkpointsTable.push({
+                  id: checkpointsTable.length + 1,
+                  tick,
+                  engine_version,
+                  seed,
+                  checksum,
+                  payload,
+                  created_at: new Date().toISOString(),
+                });
+                return { success: true, meta: { changes: 1 } };
+              }
+
               const [tick, engine_version, seed, checksum, payload] = params;
               checkpointsTable.push({
                 id: checkpointsTable.length + 1,
@@ -180,6 +211,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
                 created_at: new Date().toISOString(),
               });
               return { success: true };
+              return { success: true, meta: { changes: 1 } };
             }
             if (query.includes('DELETE FROM engine_checkpoints')) {
               return { success: true };
@@ -611,6 +643,91 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       expect(json.data.tick).toBe(300);
       expect(json.data.checksum).toBe(payloadInfo.checksum);
       expect(checkpointsTable).toHaveLength(1);
+    });
+
+    it('rejects checkpoint persistence if lease expires or hands off to new curator prior to commit (handoff race)', async () => {
+      // Bob took over the singleton row
+      leasesTable.push({
+        id: 1,
+        lease_id: 'bob-lease',
+        curator_id: 'curator-bob',
+        granted_at_ms: Date.now(),
+        expires_at_ms: Date.now() + 100000,
+        authorized_tick: 100,
+        created_at: new Date().toISOString(),
+      });
+
+      const payloadInfo = await createValidBinaryPayload(300);
+      const submission: CheckpointSubmission = {
+        leaseId: 'alice-stale-lease',
+        tick: 300,
+        checkpoint: {
+          version: 2,
+          tick: 300,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: validCuratorHeaders, // Alice attempts to commit
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect([403, 409]).toContain(res.status);
+
+      // Invariant: zero checkpoints written by Alice
+      expect(checkpointsTable).toHaveLength(0);
+      // Invariant: Bob's lease on the singleton row remains uncorrupted
+      expect(leasesTable[0].curator_id).toBe('curator-bob');
+      expect(leasesTable[0].authorized_tick).toBe(100);
+    });
+
+    it('atomically rejects checkpoint insert when lease expires between pre-validation and persistence', async () => {
+      expireLeaseAfterRead = true;
+      const now = Date.now();
+      leasesTable.push({
+        id: 1,
+        lease_id: 'valid-lease',
+        curator_id: 'curator-alice',
+        granted_at_ms: now - 50000,
+        expires_at_ms: now + 50000,
+        authorized_tick: 100,
+        created_at: new Date().toISOString(),
+      });
+
+      const payloadInfo = await createValidBinaryPayload(300);
+      const submission: CheckpointSubmission = {
+        leaseId: 'valid-lease',
+        tick: 300,
+        checkpoint: {
+          version: 2,
+          tick: 300,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: validCuratorHeaders,
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(409);
+
+      const json = await res.json() as any;
+      expect(json.error).toContain('Curator lease has expired or was superseded prior to checkpoint persistence');
+
+      // Zero rows added to engine_checkpoints
+      expect(checkpointsTable).toHaveLength(0);
     });
   });
 

@@ -729,13 +729,18 @@ async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: stri
       );
     }
 
-    // 7. Atomic persistence to engine_checkpoints
-    const saveResult = await saveEngineCheckpoint(env.DB, checkpoint);
+    // 7. Atomic persistence to engine_checkpoints conditioned on active curator lease
+    const saveResult = await saveEngineCheckpoint(env.DB, checkpoint, {
+      leaseId: activeLease.leaseId,
+      curatorId: auth.curator.curatorId,
+      nowMs: Date.now(),
+    });
     if (!saveResult.success) {
+      const statusCode = saveResult.conflict ? 409 : 500;
       return createErrorResponse(
         saveResult.error || 'Failed to save engine checkpoint',
         corsOrigin,
-        500,
+        statusCode,
         undefined,
         isDevelopment
       );
@@ -743,13 +748,6 @@ async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: stri
 
     // 8. Prune older checkpoints to maintain maximum 500 retained rows
     await pruneEngineCheckpoints(env.DB, 500);
-
-    // 9. Update lease authorized tick
-    await executeQuery(
-      env.DB,
-      'UPDATE curator_leases SET authorized_tick = ? WHERE id = 1 AND lease_id = ?',
-      [checkpoint.tick, activeLease.leaseId]
-    );
 
     await logger.info('api_checkpoint_saved', 'Engine checkpoint committed successfully', {
       tick: checkpoint.tick,

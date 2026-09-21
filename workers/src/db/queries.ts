@@ -846,16 +846,75 @@ export async function getLatestCheckpointTick(db: D1Database): Promise<number> {
   return row?.max_tick ?? -1;
 }
 
+export interface CheckpointAuthorizationContext {
+  leaseId: string;
+  curatorId: string;
+  nowMs?: number;
+}
+
 export async function saveEngineCheckpoint(
   db: D1Database,
   checkpoint: EncodedEngineCheckpoint,
-): Promise<{ success: boolean; error?: string }> {
+  authContext?: CheckpointAuthorizationContext,
+): Promise<{ success: boolean; error?: string; conflict?: boolean }> {
   try {
     const bytes = base64ToUint8Array(checkpoint.payload);
     const arrayBuffer = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength,
     );
+
+    if (authContext) {
+      const now = authContext.nowMs ?? Date.now();
+      const result = await executeQuery(
+        db,
+        `INSERT INTO engine_checkpoints (tick, engine_version, seed, checksum, payload)
+         SELECT ?, ?, ?, ?, ?
+         WHERE EXISTS (
+           SELECT 1 FROM curator_leases
+           WHERE id = 1
+             AND lease_id = ?
+             AND curator_id = ?
+             AND expires_at_ms > ?
+             AND authorized_tick < ?
+         )`,
+        [
+          checkpoint.tick,
+          checkpoint.version,
+          checkpoint.seed,
+          checkpoint.checksum,
+          arrayBuffer,
+          authContext.leaseId,
+          authContext.curatorId,
+          now,
+          checkpoint.tick,
+        ],
+      );
+
+      const changes = result.meta?.changes ?? 0;
+      if (changes !== 1) {
+        return {
+          success: false,
+          conflict: true,
+          error:
+            "Curator lease has expired or was superseded prior to checkpoint persistence",
+        };
+      }
+
+      // Atomically advance authorized_tick on singleton row
+      await executeQuery(
+        db,
+        `UPDATE curator_leases
+         SET authorized_tick = ?, updated_at = datetime('now')
+         WHERE id = 1
+           AND lease_id = ?
+           AND curator_id = ?
+           AND expires_at_ms > ?`,
+        [checkpoint.tick, authContext.leaseId, authContext.curatorId, now],
+      );
+
+      return { success: true };
+    }
 
     const result = await executeQuery(
       db,
