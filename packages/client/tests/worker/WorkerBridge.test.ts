@@ -4,17 +4,27 @@ import type {
   ClientWorkerInboundMessage,
   ClientWorkerOutboundMessage,
   TelemetryPulse,
+  BootstrapCandidate,
 } from '../../src/worker/types.js';
+import type { EncodedEngineCheckpoint, DiagnosticSnapshot } from '@chaos-garden/shared';
 
 class MockWorker {
   public postMessage = vi.fn();
   public terminate = vi.fn();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public onmessage: ((ev: MessageEvent) => any) | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public onerror: ((ev: ErrorEvent) => any) | null = null;
 
   simulateMessage(data: ClientWorkerOutboundMessage): void {
     if (this.onmessage) {
       this.onmessage({ data } as MessageEvent);
+    }
+  }
+
+  simulateError(message: string): void {
+    if (this.onerror) {
+      this.onerror({ message } as ErrorEvent);
     }
   }
 }
@@ -23,24 +33,62 @@ describe('WorkerBridge Unit Tests', () => {
   it('initializes and posts INIT message to the worker', () => {
     const mockWorker = new MockWorker() as unknown as Worker;
     const bridge = new WorkerBridge({ worker: mockWorker });
+describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
+  it('initializes with candidate and resolves on BOOTSTRAP_STATUS echoing requestId', async () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
     bridge.init(42, 1600, 1200);
+    const candidate: BootstrapCandidate = {
+      kind: 'canonical',
+      checkpoint: {
+        version: 1,
+        tick: 200,
+        seed: 42,
+        byteLength: 100,
+        checksum: 'sha-abc',
+        payload: 'base64...',
+      },
+    };
+
+    const initPromise = bridge.init(42, 1600, 1200, candidate);
 
     expect(mockWorker.postMessage).toHaveBeenCalledWith({
       type: 'INIT',
+      requestId: 1,
       seed: 42,
       width: 1600,
       height: 1200,
       initialStateJson: undefined,
+      candidate,
     });
+
+    mockWorker.simulateMessage({
+      type: 'BOOTSTRAP_STATUS',
+      requestId: 1,
+      mode: 'exact',
+      success: true,
+      tick: 200,
+    });
+
+    const result = await initPromise;
+    expect(result.mode).toBe('exact');
+    expect(result.success).toBe(true);
+    expect(result.tick).toBe(200);
   });
 
   it('initializes with optional initialStateJson snapshot', () => {
     const mockWorker = new MockWorker() as unknown as Worker;
     const bridge = new WorkerBridge({ worker: mockWorker });
+  it('cancels in-flight requests when a new init is called', async () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
     const snapshot = '{"tick":420,"entities":[]}';
     bridge.init(42, 1600, 1200, snapshot);
+    const firstInit = bridge.init(42, 1600, 1200);
+    // Call second init before first responds
+    const secondInit = bridge.init(99, 1600, 1200);
 
     expect(mockWorker.postMessage).toHaveBeenCalledWith({
       type: 'INIT',
@@ -48,12 +96,26 @@ describe('WorkerBridge Unit Tests', () => {
       width: 1600,
       height: 1200,
       initialStateJson: snapshot,
+    await expect(firstInit).rejects.toThrow('Worker reinitialized');
+
+    mockWorker.simulateMessage({
+      type: 'BOOTSTRAP_STATUS',
+      requestId: 2,
+      mode: 'primordial',
+      success: true,
+      tick: 0,
     });
+
+    const result = await secondInit;
+    expect(result.mode).toBe('primordial');
   });
 
   it('routes SET_SPEED, SET_THROTTLE and CURATOR_ACTION messages', () => {
     const mockWorker = new MockWorker() as unknown as Worker;
     const bridge = new WorkerBridge({ worker: mockWorker });
+  it('routes SET_SPEED, SET_THROTTLE, SELECT_ENTITY and CURATOR_ACTION messages', () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
     bridge.setSpeed(2.0);
     expect(mockWorker.postMessage).toHaveBeenCalledWith({
@@ -68,17 +130,64 @@ describe('WorkerBridge Unit Tests', () => {
     });
 
     bridge.dispatchCuratorAction('WATER_SOIL', { x: 100, y: 200 }, 0.5);
+    bridge.selectEntity(1234);
+    expect(mockWorker.postMessage).toHaveBeenCalledWith({
+      type: 'SELECT_ENTITY',
+      entityId: 1234,
+    });
+
+    bridge.dispatchCuratorAction('WATER_SOIL', {
+      position: { x: 100, y: 200 },
+      amount: 0.5,
+    });
     expect(mockWorker.postMessage).toHaveBeenCalledWith({
       type: 'CURATOR_ACTION',
       action: 'WATER_SOIL',
       position: { x: 100, y: 200 },
       amount: 0.5,
+      entityId: undefined,
+    });
+
+    bridge.dispatchCuratorAction('CULL_ENTITY', { entityId: 99 });
+    expect(mockWorker.postMessage).toHaveBeenCalledWith({
+      type: 'CURATOR_ACTION',
+      action: 'CULL_ENTITY',
+      position: undefined,
+      amount: undefined,
+      entityId: 99,
     });
   });
 
   it('dispatches returnRenderBuffer with transfer list', () => {
     const mockWorker = new MockWorker() as unknown as Worker;
     const bridge = new WorkerBridge({ worker: mockWorker });
+  it('picks entity at world position correlating requestId', async () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
+
+    const pickPromise = bridge.pickEntityAt({ x: 50, y: 75 }, 24);
+
+    expect(mockWorker.postMessage).toHaveBeenCalledWith({
+      type: 'PICK_ENTITY_AT_WORLD_POSITION',
+      requestId: 1,
+      x: 50,
+      y: 75,
+      maxRadius: 24,
+    });
+
+    mockWorker.simulateMessage({
+      type: 'PICK_RESULT',
+      requestId: 1,
+      entityId: 42,
+    });
+
+    const result = await pickPromise;
+    expect(result).toBe(42);
+  });
+
+  it('dispatches returnRenderBuffer and returnSoilBuffer with transfer list', () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
     const buffer = new Float32Array(16);
     bridge.returnRenderBuffer(buffer);
@@ -111,15 +220,25 @@ describe('WorkerBridge Unit Tests', () => {
   });
 
   it('receives RENDER_FRAME and invokes callback', () => {
+  it('receives RENDER_FRAME, SOIL_TEXTURE_UPDATE, and TELEMETRY_PULSE callbacks', () => {
     const mockWorker = new MockWorker();
     let frameTick = -1;
     let count = -1;
+    let soilCols = 0;
+    let receivedPulse: TelemetryPulse | null = null;
 
     const bridge = new WorkerBridge({
       worker: mockWorker as unknown as Worker,
       onRenderFrame: (tick, entityCount) => {
+      onRenderFrame: (tick) => {
         frameTick = tick;
         count = entityCount;
+      },
+      onSoilUpdate: (_t, cols) => {
+        soilCols = cols;
+      },
+      onTelemetry: (p) => {
+        receivedPulse = p;
       },
     });
 
@@ -161,6 +280,8 @@ describe('WorkerBridge Unit Tests', () => {
       rows: 5,
       moistureBuffer: moisture,
       nitrateBuffer: nitrates,
+      moistureBuffer: new Float32Array(50),
+      nitrateBuffer: new Float32Array(50),
     });
 
     expect(soilCols).toBe(10);
@@ -200,30 +321,99 @@ describe('WorkerBridge Unit Tests', () => {
   });
 
   it('resolves requestSnapshot when SNAPSHOT_PAYLOAD arrives', async () => {
+  it('coalesces concurrent snapshot requests into a single in-flight promise', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
     const snapshotPromise = bridge.requestSnapshot();
+    const p1 = bridge.requestSnapshot();
+    const p2 = bridge.requestSnapshot();
+
+    expect(p1).toBe(p2); // same promise reference
+    expect(mockWorker.postMessage).toHaveBeenCalledTimes(1);
+
+    const dummyCheckpoint: EncodedEngineCheckpoint = {
+      version: 1,
+      tick: 500,
+      seed: 42,
+      byteLength: 50,
+      checksum: 'hash1',
+      payload: 'data1',
+    };
 
     mockWorker.simulateMessage({
       type: 'SNAPSHOT_PAYLOAD',
       stateJson: '{"tick":500}',
+      requestId: 1,
+      checkpoint: dummyCheckpoint,
     });
 
     const result = await snapshotPromise;
     expect(result).toBe('{"tick":500}');
+    const res1 = await p1;
+    const res2 = await p2;
+    expect(res1.checkpoint).toEqual(dummyCheckpoint);
+    expect(res2.checkpoint).toEqual(dummyCheckpoint);
   });
 
   it('terminates the worker cleanly', () => {
+  it('requests diagnostics and resolves with DiagnosticSnapshot', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
+    const diagPromise = bridge.requestDiagnostics();
+
+    expect(mockWorker.postMessage).toHaveBeenCalledWith({
+      type: 'REQUEST_DIAGNOSTICS',
+      requestId: 1,
+    });
+
+    const dummyDiag = {
+      tick: 350,
+      tps: 60,
+      populations: { plants: 50, herbivores: 20, carnivores: 5, fungi: 10, totalLiving: 85, totalBiomass: 5000, deadMatterCount: 0, allTimeBirths: 0, allTimeDeaths: 0 },
+      vitals: { totalLiving: 85, totalBiomass: 5000, avgEnergy: 60, avgHealth: 100, predatorPreyRatio: 0.1, soilAverageMoisture: 0.5, soilAverageNitrates: 0.5, aridLandPercentage: 0, biodiversityIndex: 1 },
+      recentAnomalies: [],
+      timestamp: '2026-09-22T00:00:00Z',
+      seed: 42,
+      tickDurationMs: 0.3,
+      reproducibleSeed: 42,
+    } as DiagnosticSnapshot;
+
+    mockWorker.simulateMessage({
+      type: 'DIAGNOSTICS_PAYLOAD',
+      requestId: 1,
+      diagnostics: dummyDiag,
+    });
+
+    const res = await diagPromise;
+    expect(res.tick).toBe(350);
+  });
+
+  it('rejects pending requests on timeout', async () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
+
+    const timeoutPromise = bridge.pickEntityAt({ x: 0, y: 0 }, 10, 50); // 50ms timeout
+
+    await expect(timeoutPromise).rejects.toThrow('timed out after 50ms');
+  });
+
+  it('terminates the worker cleanly and rejects pending requests', async () => {
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
+
+    const pending = bridge.pickEntityAt({ x: 10, y: 20 });
     bridge.terminate();
+
     expect(mockWorker.terminate).toHaveBeenCalled();
+    await expect(pending).rejects.toThrow('Worker terminated');
 
     // After termination, postMessage should not be called
     bridge.setSpeed(1.0);
     expect(mockWorker.postMessage).not.toHaveBeenCalled();
+    // PostMessage not called after termination
+    expect(mockWorker.postMessage).toHaveBeenCalledTimes(1); // only the pickEntityAt call
   });
 });
 

@@ -3,12 +3,24 @@
  *
  * Manages the lifecycle of SimulationWorker, provides typed RPC dispatch,
  * and maintains the zero-allocation transferable render buffer ping-pong exchange.
+ * Manages the lifecycle of SimulationWorker, provides typed correlated RPC dispatch
+ * with monotonic request IDs, timeout handling, cancellation on reinitialization,
+ * single-flight snapshot coalescing, and zero-allocation transferable buffer exchange.
  */
 
 import type { Vector2D } from '@chaos-garden/shared';
 import type {
+  Vector2D,
+  EncodedEngineCheckpoint,
+  CanonicalWorldState,
+  DiagnosticSnapshot,
+} from '@chaos-garden/shared';
+import type {
   ClientWorkerInboundMessage,
   ClientWorkerOutboundMessage,
+  BootstrapCandidate,
+  BootstrapStatusMessage,
+  CuratorActionType,
   TelemetryPulse,
 } from './types.js';
 
@@ -35,9 +47,26 @@ export interface WorkerBridgeOptions {
   onTelemetry?: TelemetryCallback;
 }
 
+interface PendingRequest<T> {
+  resolve: (value: T) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class WorkerBridge {
   private worker: Worker;
   private isTerminated = false;
+  private nextRequestId = 1;
+
+  // Correlated RPC pending requests map
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private pendingRequests = new Map<number, PendingRequest<any>>();
+
+  // Single-flight coalescing for snapshot requests
+  private inFlightSnapshotPromise: Promise<{
+    checkpoint: EncodedEngineCheckpoint;
+    canonicalState?: CanonicalWorldState;
+  }> | null = null;
 
   private onRenderFrame?: RenderFrameCallback;
   private onSoilUpdate?: SoilUpdateCallback;
@@ -89,11 +118,23 @@ export class WorkerBridge {
           this.onTelemetry?.(msg);
           break;
 
+        case 'BOOTSTRAP_STATUS':
+          this.resolvePending(msg.requestId, msg);
+          break;
+
+        case 'PICK_RESULT':
+          this.resolvePending(msg.requestId, msg.entityId);
+          break;
+
         case 'SNAPSHOT_PAYLOAD':
           if (this.pendingSnapshotResolve) {
             this.pendingSnapshotResolve(msg.stateJson);
             this.pendingSnapshotResolve = null;
           }
+          this.resolvePending(msg.requestId, {
+            checkpoint: msg.checkpoint,
+            canonicalState: msg.canonicalState,
+          });
           break;
 
         case 'DIAGNOSTICS_PAYLOAD':
@@ -101,13 +142,51 @@ export class WorkerBridge {
             this.pendingDiagnosticsResolve(msg.diagnosticsJson);
             this.pendingDiagnosticsResolve = null;
           }
+          this.resolvePending(msg.requestId, msg.diagnostics);
           break;
       }
     };
 
     this.worker.onerror = (error: ErrorEvent) => {
       console.error('[WorkerBridge] Simulation Worker uncaught error:', error);
+      console.error('[WorkerBridge] Simulation Worker error event:', error);
+      this.rejectAllPending(new Error('Simulation worker error: ' + (error.message || 'unknown error')));
     };
+  }
+
+  private createCorrelatedRequest<T>(timeoutMs: number): {
+    requestId: number;
+    promise: Promise<T>;
+  } {
+    const requestId = this.nextRequestId++;
+    const promise = new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(requestId);
+        reject(new Error(`Worker RPC request ${requestId} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      this.pendingRequests.set(requestId, { resolve, reject, timer });
+    });
+
+    return { requestId, promise };
+  }
+
+  private resolvePending(requestId: number, value: unknown): void {
+    const pending = this.pendingRequests.get(requestId);
+    if (pending) {
+      clearTimeout(pending.timer);
+      this.pendingRequests.delete(requestId);
+      pending.resolve(value);
+    }
+  }
+
+  private rejectAllPending(reason: Error): void {
+    for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(reason);
+    }
+    this.pendingRequests.clear();
+    this.inFlightSnapshotPromise = null;
   }
 
   setRenderFrameCallback(cb: RenderFrameCallback): void {
@@ -122,19 +201,32 @@ export class WorkerBridge {
     this.onTelemetry = cb;
   }
 
+  /**
+   * Initializes the worker simulation. Cancels any in-flight requests from earlier sessions.
+   */
   init(
     seed: number,
     width: number,
     height: number,
     initialStateJson?: string,
   ): void {
+    candidate?: BootstrapCandidate,
+    timeoutMs = 8000,
+  ): Promise<BootstrapStatusMessage> {
+    // Cancel earlier pending requests safely
+    this.rejectAllPending(new Error('Worker reinitialized: pending request cancelled'));
+
+    const { requestId, promise } = this.createCorrelatedRequest<BootstrapStatusMessage>(timeoutMs);
     this.postMessage({
       type: 'INIT',
+      requestId,
       seed,
       width,
       height,
       initialStateJson,
+      candidate,
     });
+    return promise;
   }
 
   setSpeed(speedMultiplier: number): void {
@@ -152,9 +244,33 @@ export class WorkerBridge {
   }
 
   selectEntity(idHash: number | null): void {
+  /**
+   * Deterministically queries the nearest entity at world coordinates.
+   */
+  pickEntityAt(
+    position: Vector2D,
+    maxRadius = 32,
+    timeoutMs = 3000,
+  ): Promise<number | null> {
+    const { requestId, promise } = this.createCorrelatedRequest<number | null>(timeoutMs);
+    this.postMessage({
+      type: 'PICK_ENTITY_AT_WORLD_POSITION',
+      requestId,
+      x: position.x,
+      y: position.y,
+      maxRadius,
+    });
+    return promise;
+  }
+
+  /**
+   * Selects an entity by its durable entityId (or null to deselect).
+   */
+  selectEntity(entityId: number | null): void {
     this.postMessage({
       type: 'SELECT_ENTITY',
       idHash,
+      entityId,
     });
   }
 
@@ -168,12 +284,17 @@ export class WorkerBridge {
       | 'SPAWN_FUNGUS',
     position: Vector2D,
     amount?: number,
+    action: CuratorActionType,
+    options: { position?: Vector2D; amount?: number; entityId?: number } = {},
   ): void {
     this.postMessage({
       type: 'CURATOR_ACTION',
       action,
       position,
       amount,
+      position: options.position,
+      amount: options.amount,
+      entityId: options.entityId,
     });
   }
 
@@ -211,14 +332,48 @@ export class WorkerBridge {
     return new Promise((resolve) => {
       this.pendingSnapshotResolve = resolve;
       this.postMessage({ type: 'REQUEST_SNAPSHOT' });
+  /**
+   * Requests a binary checkpoint from the worker. Coalesces concurrent calls into a single flight.
+   */
+  requestSnapshot(timeoutMs = 10000): Promise<{
+    checkpoint: EncodedEngineCheckpoint;
+    canonicalState?: CanonicalWorldState;
+  }> {
+    if (this.inFlightSnapshotPromise) {
+      return this.inFlightSnapshotPromise;
+    }
+
+    const { requestId, promise } = this.createCorrelatedRequest<{
+      checkpoint: EncodedEngineCheckpoint;
+      canonicalState?: CanonicalWorldState;
+    }>(timeoutMs);
+
+    this.inFlightSnapshotPromise = promise.finally(() => {
+      this.inFlightSnapshotPromise = null;
     });
+
+    this.postMessage({
+      type: 'REQUEST_SNAPSHOT',
+      requestId,
+    });
+
+    return this.inFlightSnapshotPromise;
   }
 
   requestDiagnostics(): Promise<string> {
     return new Promise((resolve) => {
       this.pendingDiagnosticsResolve = resolve;
       this.postMessage({ type: 'REQUEST_DIAGNOSTICS' });
+  /**
+   * Requests diagnostic metrics from the Flight Recorder.
+   */
+  requestDiagnostics(timeoutMs = 5000): Promise<DiagnosticSnapshot> {
+    const { requestId, promise } = this.createCorrelatedRequest<DiagnosticSnapshot>(timeoutMs);
+    this.postMessage({
+      type: 'REQUEST_DIAGNOSTICS',
+      requestId,
     });
+    return promise;
   }
 
   private postMessage(msg: ClientWorkerInboundMessage): void {
@@ -229,6 +384,7 @@ export class WorkerBridge {
   terminate(): void {
     if (this.isTerminated) return;
     this.isTerminated = true;
+    this.rejectAllPending(new Error('Worker terminated'));
     this.worker.terminate();
   }
 }

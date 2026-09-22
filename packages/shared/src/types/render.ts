@@ -46,6 +46,30 @@ export interface EntityRenderData {
   healthRatio: number; // 0.0 to 1.0
   energyRatio: number; // 0.0 to 1.0
 }
+/**
+ * Complete vitals for a selected organism addressing it by durable entityId.
+ */
+export interface SelectedEntityVitals {
+  entityId: number;
+  parentEntityId: number;
+  idHash: number;
+  name: string;
+  species: string;
+  age: number;
+  maxLifespan: number;
+  energy: number;
+  health: number;
+  generation: number;
+  type: EntityTypeCode;
+  pigment: number;
+  speed: number;
+  maxSpeed: number;
+  perceptionRadius: number;
+  reproductionThreshold: number;
+  metabolismRate: number;
+  x: number;
+  y: number;
+}
 
 /**
  * Messages sent from Main Thread (Svelte / PixiJS) to Web Worker.

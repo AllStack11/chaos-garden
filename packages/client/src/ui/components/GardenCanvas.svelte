@@ -20,8 +20,10 @@
 
   let isPointerDown = false;
   let isBrushActive = false;
+  let pointerDownPos = { x: 0, y: 0 };
 
   function handlePointerDown(e: PointerEvent): void {
+  async function handlePointerDown(e: PointerEvent): Promise<void> {
     if (!viewport || !canvasElement) return;
 
     // First user click unlocks procedural soundscape
@@ -29,6 +31,7 @@
 
     canvasElement.setPointerCapture(e.pointerId);
     isPointerDown = true;
+    pointerDownPos = { x: e.clientX, y: e.clientY };
 
     const screenX = e.clientX;
     const screenY = e.clientY;
@@ -62,10 +65,23 @@
   }
 
   function handlePointerUp(e: PointerEvent): void {
+  async function handlePointerUp(e: PointerEvent): Promise<void> {
     if (!viewport || !canvasElement) return;
 
     if (canvasElement.hasPointerCapture(e.pointerId)) {
       canvasElement.releasePointerCapture(e.pointerId);
+    }
+
+    const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+
+    // If in INSPECT mode and pointer barely moved, treat as entity click/pick
+    if (curatorState.activeTool === 'INSPECT' && dist < 5 && e.button === 0) {
+      const worldPos = viewport.camera.screenToWorld(e.clientX, e.clientY);
+      const pickedEntityId = await bridge.pickEntityAt(worldPos, 32);
+      bridge.selectEntity(pickedEntityId);
+      if (pickedEntityId !== null) {
+        audio.sfx.playClick();
+      }
     }
 
     isPointerDown = false;
@@ -87,26 +103,32 @@
     switch (tool) {
       case 'WATER':
         bridge.dispatchCuratorAction('WATER_SOIL', worldPos, 0.4);
+        bridge.dispatchCuratorAction('WATER_SOIL', { position: worldPos, amount: 0.4 });
         audio.sfx.playWaterDrop();
         break;
       case 'NUTRIENTS':
         bridge.dispatchCuratorAction('DROP_NUTRIENT', worldPos, 0.4);
+        bridge.dispatchCuratorAction('DROP_NUTRIENT', { position: worldPos, amount: 0.4 });
         audio.sfx.playNutrientSparkle();
         break;
       case 'SPAWN_PLANT':
         bridge.dispatchCuratorAction('SPAWN_PLANT', worldPos);
+        bridge.dispatchCuratorAction('SPAWN_PLANT', { position: worldPos });
         audio.sfx.playBirth();
         break;
       case 'SPAWN_HERBIVORE':
         bridge.dispatchCuratorAction('SPAWN_HERBIVORE', worldPos);
+        bridge.dispatchCuratorAction('SPAWN_HERBIVORE', { position: worldPos });
         audio.sfx.playBirth();
         break;
       case 'SPAWN_CARNIVORE':
         bridge.dispatchCuratorAction('SPAWN_CARNIVORE', worldPos);
+        bridge.dispatchCuratorAction('SPAWN_CARNIVORE', { position: worldPos });
         audio.sfx.playBirth();
         break;
       case 'SPAWN_FUNGUS':
         bridge.dispatchCuratorAction('SPAWN_FUNGUS', worldPos);
+        bridge.dispatchCuratorAction('SPAWN_FUNGUS', { position: worldPos });
         audio.sfx.playBirth();
         break;
     }

@@ -8,6 +8,7 @@
 import type { WorkerBridge } from '../worker/WorkerBridge.js';
 import type { GardenViewport } from '../renderer/GardenViewport.js';
 import type { ProceduralSoundscape } from '../audio/ProceduralSoundscape.js';
+import { curatorSession } from '../storage/CuratorSession.js';
 
 export interface VisibilityManagerOptions {
   bridge: WorkerBridge;
@@ -68,6 +69,9 @@ export class VisibilityManager {
 
     // 3. Suspend Web Audio synthesis
     this.audio.suspend();
+
+    // 4. Suspend curator lease renewal attempts
+    curatorSession.setPageVisibility(true);
   }
 
   onEnterForeground(): void {
@@ -75,6 +79,7 @@ export class VisibilityManager {
     this.isBackground = false;
 
     // 1. Restore Web Worker to 60 TPS
+    // 1. Restore Web Worker to target TPS
     this.bridge.setThrottle(this.foregroundTps);
 
     // 2. Restart PixiJS rendering ticker
@@ -82,6 +87,9 @@ export class VisibilityManager {
 
     // 3. Resume Web Audio synthesis
     this.audio.resume();
+
+    // 4. Resume curator lease renewal attempts
+    curatorSession.setPageVisibility(false);
   }
 
   get isThrottled(): boolean {

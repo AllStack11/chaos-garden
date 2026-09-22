@@ -3,6 +3,7 @@
  *
  * Runs the @chaos-garden/engine World at a fixed timestep on an isolated thread.
  * Streams zero-copy binary render frames to the main thread via Transferable ArrayBuffers.
+ * Implements atomic candidate World verification, spatial picking, and World-owned curator mutations.
  */
 
 import {
@@ -18,6 +19,8 @@ import type {
   ClientWorkerInboundMessage,
   ClientWorkerOutboundMessage,
   SelectedEntityVitals,
+  BootstrapContinuationMode,
+  BootstrapStatusMessage,
 } from './types.js';
 import { SoilBufferPool } from './SoilBufferPool.js';
 
@@ -28,6 +31,7 @@ let isRunning = false;
 let targetTps = 60;
 let speedMultiplier = 1.0;
 let selectedEntityIdHash: number | null = null;
+let selectedEntityId: number | null = null;
 const soilPool = new SoilBufferPool();
 
 
@@ -278,6 +282,11 @@ function simulationLoop(): void {
 
     const census = world.getPopulationSummary();
     const vitals = getSelectedVitals();
+    const vitals = selectedEntityId !== null ? world.getEntityVitals(selectedEntityId) : null;
+    if (selectedEntityId !== null && vitals === null) {
+      // Entity died or deallocated
+      selectedEntityId = null;
+    }
 
     const telemetryMessage: ClientWorkerOutboundMessage = {
       type: 'TELEMETRY_PULSE',
@@ -327,6 +336,9 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
     case 'INIT': {
       stopLoop();
       world = new World({
+      selectedEntityId = null;
+
+      const candidateWorld = new World({
         seed: msg.seed,
         config: {
           ...DEFAULT_SIMULATION_CONFIG,
@@ -338,6 +350,12 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
 
       let hydrated = false;
       if (msg.initialStateJson) {
+      let mode: BootstrapContinuationMode = 'primordial';
+      let success = true;
+      let failureCode: BootstrapStatusMessage['failureCode'] = undefined;
+      let errorDetails: string | undefined = undefined;
+
+      if (msg.candidate?.checkpoint) {
         try {
           const parsed = JSON.parse(msg.initialStateJson);
           const stateData =
@@ -353,6 +371,13 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
             stateData.checkpoint
           ) {
             hydrated = await world.hydrateEngineCheckpoint(stateData.checkpoint);
+          const hydrated = await candidateWorld.hydrateEngineCheckpoint(msg.candidate.checkpoint);
+          if (hydrated) {
+            mode = 'exact';
+            world = candidateWorld;
+          } else {
+            failureCode = 'CHECKSUM_MISMATCH';
+            errorDetails = 'Checkpoint checksum verification or binary decoding failed';
           }
 
           // 2. Fall back to high-level canonical state snapshot
@@ -362,18 +387,65 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
                 ? stateData.canonicalState
                 : stateData;
             hydrated = world.hydrateCanonicalState(canonicalState);
+        } catch (err: unknown) {
+          failureCode = 'DECODE_ERROR';
+          errorDetails = err instanceof Error ? err.message : String(err);
+        }
+      } else if (msg.candidate?.canonicalState) {
+        try {
+          const hydrated = candidateWorld.hydrateCanonicalState(msg.candidate.canonicalState);
+          if (hydrated) {
+            mode = 'legacy';
+            world = candidateWorld;
+          } else {
+            failureCode = 'HYDRATION_FAILED';
+            errorDetails = 'Canonical state hydration failed';
           }
         } catch (e) {
           console.warn(
             '[SimulationWorker] Failed to hydrate initialStateJson, falling back to primordial seed:',
             e,
           );
+        } catch (err: unknown) {
+          failureCode = 'DECODE_ERROR';
+          errorDetails = err instanceof Error ? err.message : String(err);
         }
       }
 
       if (!hydrated) {
+      // If hydration failed or primordial requested, fall back cleanly
+      if (mode === 'primordial' || failureCode !== undefined) {
+        if (failureCode !== undefined) {
+          world = new World({
+            seed: msg.seed,
+            config: {
+              ...DEFAULT_SIMULATION_CONFIG,
+              gardenWidth: msg.width,
+              gardenHeight: msg.height,
+            },
+          });
+          mode = 'primordial';
+          success = false;
+        } else {
+          world = candidateWorld;
+        }
         world.seedPrimordialEcosystem();
       }
+
+      const activeWorld = world!;
+      soilPool.init(activeWorld.soil.cols, activeWorld.soil.rows);
+
+      const statusMsg: BootstrapStatusMessage = {
+        type: 'BOOTSTRAP_STATUS',
+        requestId: msg.requestId,
+        mode,
+        success,
+        tick: activeWorld.tick,
+        failureCode,
+        errorDetails,
+      };
+      self.postMessage(statusMsg);
+
       startLoop();
       break;
     }
@@ -400,8 +472,21 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
       break;
     }
 
+    case 'PICK_ENTITY_AT_WORLD_POSITION': {
+      const entityId = world
+        ? world.pickEntityAt({ x: msg.x, y: msg.y }, msg.maxRadius ?? 32)
+        : null;
+      self.postMessage({
+        type: 'PICK_RESULT',
+        requestId: msg.requestId,
+        entityId,
+      });
+      break;
+    }
+
     case 'SELECT_ENTITY': {
       selectedEntityIdHash = msg.idHash;
+      selectedEntityId = msg.entityId;
       break;
     }
 
@@ -418,12 +503,31 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
         spawnCreature(EntityTypeCode.CARNIVORE, position, world);
       } else if (action === 'SPAWN_FUNGUS') {
         spawnCreature(EntityTypeCode.FUNGUS, position, world);
+      const { action, position, amount, entityId } = msg;
+      if (action === 'WATER_SOIL' && position) {
+        world.waterSoil(position, amount ?? 0.4);
+      } else if (action === 'DROP_NUTRIENT' && position) {
+        world.fertilizeSoil(position, amount ?? 0.4);
+      } else if (action === 'SPAWN_PLANT' && position) {
+        world.spawnOrganism(EntityTypeCode.PLANT, position);
+      } else if (action === 'SPAWN_HERBIVORE' && position) {
+        world.spawnOrganism(EntityTypeCode.HERBIVORE, position);
+      } else if (action === 'SPAWN_CARNIVORE' && position) {
+        world.spawnOrganism(EntityTypeCode.CARNIVORE, position);
+      } else if (action === 'SPAWN_FUNGUS' && position) {
+        world.spawnOrganism(EntityTypeCode.FUNGUS, position);
+      } else if (action === 'CULL_ENTITY' && entityId !== undefined) {
+        world.terminateOrganism(entityId);
+        if (selectedEntityId === entityId) {
+          selectedEntityId = null;
+        }
       }
       break;
     }
 
     case 'REQUEST_SNAPSHOT': {
       if (!world) break;
+      const checkpoint = await world.exportEngineCheckpoint();
       const canonicalState = world.exportCanonicalState();
       const checkpoint = await world.exportEngineCheckpoint();
       self.postMessage({
@@ -432,6 +536,9 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
           canonicalState,
           checkpoint,
         }),
+        requestId: msg.requestId,
+        checkpoint,
+        canonicalState,
       });
       break;
     }
@@ -442,6 +549,8 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
       self.postMessage({
         type: 'DIAGNOSTICS_PAYLOAD',
         diagnosticsJson: JSON.stringify(diagnostics),
+        requestId: msg.requestId,
+        diagnostics,
       });
       break;
     }
