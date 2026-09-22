@@ -5,18 +5,20 @@
  * Fully decoupled from the 60 FPS render loop; updates only via 4-10 Hz TelemetryPulse.
  */
 
-import type { SelectedEntityVitals, TelemetryPulse } from '../worker/types.js';
 import type { SelectedEntityVitals, TelemetryPulse, BootstrapContinuationMode } from '../worker/types.js';
 
 export class GardenState {
-  tick = $state(0);
-  tps = $state(60);
-  targetTps = $state(60);
-  speedMultiplier = $state(1.0); // 0 = paused, 0.5, 1, 2, 5, 10
-  isPaused = $derived(this.speedMultiplier === 0);
-  bootstrapMode = $state<BootstrapContinuationMode | null>(null);
+  tick = (0);
+  tps = (60);
+  targetTps = (60);
+  speedMultiplier = (1.0); // 0 = paused, 0.5, 1, 2, 5, 10
+  bootstrapMode = <BootstrapContinuationMode | null>(null);
 
-  populations = $state({
+  get isPaused(): boolean {
+    return this.speedMultiplier === 0;
+  }
+
+  populations = ({
     plants: 0,
     herbivores: 0,
     carnivores: 0,
@@ -26,31 +28,31 @@ export class GardenState {
   });
 
   // Derived population percentages for HUD breakdown bars
-  plantRatio = $derived(
-    this.populations.totalLiving > 0
+  get plantRatio(): number {
+    return this.populations.totalLiving > 0
       ? this.populations.plants / this.populations.totalLiving
-      : 0,
-  );
+      : 0;
+  }
 
-  herbivoreRatio = $derived(
-    this.populations.totalLiving > 0
+  get herbivoreRatio(): number {
+    return this.populations.totalLiving > 0
       ? this.populations.herbivores / this.populations.totalLiving
-      : 0,
-  );
+      : 0;
+  }
 
-  carnivoreRatio = $derived(
-    this.populations.totalLiving > 0
+  get carnivoreRatio(): number {
+    return this.populations.totalLiving > 0
       ? this.populations.carnivores / this.populations.totalLiving
-      : 0,
-  );
+      : 0;
+  }
 
-  fungusRatio = $derived(
-    this.populations.totalLiving > 0
+  get fungusRatio(): number {
+    return this.populations.totalLiving > 0
       ? this.populations.fungi / this.populations.totalLiving
-      : 0,
-  );
+      : 0;
+  }
 
-  selectedEntity = $state<SelectedEntityVitals | null>(null);
+  selectedEntity = <SelectedEntityVitals | null>(null);
 
   updateFromTelemetry(pulse: TelemetryPulse): void {
     this.tick = pulse.tick;
@@ -75,4 +77,3 @@ export class GardenState {
 }
 
 export const gardenState = new GardenState();
-

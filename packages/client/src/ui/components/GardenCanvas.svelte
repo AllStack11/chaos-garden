@@ -22,7 +22,6 @@
   let isBrushActive = false;
   let pointerDownPos = { x: 0, y: 0 };
 
-  function handlePointerDown(e: PointerEvent): void {
   async function handlePointerDown(e: PointerEvent): Promise<void> {
     if (!viewport || !canvasElement) return;
 
@@ -64,7 +63,6 @@
     }
   }
 
-  function handlePointerUp(e: PointerEvent): void {
   async function handlePointerUp(e: PointerEvent): Promise<void> {
     if (!viewport || !canvasElement) return;
 
@@ -102,32 +100,26 @@
 
     switch (tool) {
       case 'WATER':
-        bridge.dispatchCuratorAction('WATER_SOIL', worldPos, 0.4);
         bridge.dispatchCuratorAction('WATER_SOIL', { position: worldPos, amount: 0.4 });
         audio.sfx.playWaterDrop();
         break;
       case 'NUTRIENTS':
-        bridge.dispatchCuratorAction('DROP_NUTRIENT', worldPos, 0.4);
         bridge.dispatchCuratorAction('DROP_NUTRIENT', { position: worldPos, amount: 0.4 });
         audio.sfx.playNutrientSparkle();
         break;
       case 'SPAWN_PLANT':
-        bridge.dispatchCuratorAction('SPAWN_PLANT', worldPos);
         bridge.dispatchCuratorAction('SPAWN_PLANT', { position: worldPos });
         audio.sfx.playBirth();
         break;
       case 'SPAWN_HERBIVORE':
-        bridge.dispatchCuratorAction('SPAWN_HERBIVORE', worldPos);
         bridge.dispatchCuratorAction('SPAWN_HERBIVORE', { position: worldPos });
         audio.sfx.playBirth();
         break;
       case 'SPAWN_CARNIVORE':
-        bridge.dispatchCuratorAction('SPAWN_CARNIVORE', worldPos);
         bridge.dispatchCuratorAction('SPAWN_CARNIVORE', { position: worldPos });
         audio.sfx.playBirth();
         break;
       case 'SPAWN_FUNGUS':
-        bridge.dispatchCuratorAction('SPAWN_FUNGUS', worldPos);
         bridge.dispatchCuratorAction('SPAWN_FUNGUS', { position: worldPos });
         audio.sfx.playBirth();
         break;
@@ -182,4 +174,3 @@
     onwheel={handleWheel}
   ></canvas>
 </div>
-

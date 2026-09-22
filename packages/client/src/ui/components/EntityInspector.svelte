@@ -2,13 +2,10 @@
   import GlassPanel from '../shared/GlassPanel.svelte';
   import VitalsBar from '../shared/VitalsBar.svelte';
   import { gardenState } from '../../state/gardenState.svelte.js';
-  import { curatorState } from '../../state/curatorState.svelte.js';
   import { EntityTypeCode } from '@chaos-garden/shared';
 
   interface Props {
     onFollow: () => void;
-    onFeed: (idHash: number) => void;
-    onCull: (idHash: number) => void;
     onFeed: (entityId: number) => void;
     onCull: (entityId: number) => void;
     onClose: () => void;
@@ -80,8 +77,6 @@
         <div>Perception: <span class="text-white font-bold">{entity.perceptionRadius}px</span></div>
         <div>Repro Thresh: <span class="text-white font-bold">{entity.reproductionThreshold}</span></div>
         <div>Metabolism: <span class="text-white font-bold">{entity.metabolismRate.toFixed(2)}</span></div>
-        <div>World Pos: <span class="text-slate-400">({entity.x}, {entity.y})</span></div>
-        <div>Parent ID: <span class="text-slate-400">{entity.parentIndex === -1 ? 'Primordial' : '#' + entity.parentIndex}</span></div>
         <div class="col-span-2">World Pos: <span class="text-slate-400">({entity.x}, {entity.y})</span></div>
       </div>
     </div>
@@ -96,14 +91,12 @@
       </button>
       <button
         class="px-2 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 rounded text-xs font-medium transition"
-        onclick={() => onFeed(entity.idHash)}
         onclick={() => onFeed(entity.entityId)}
       >
         🌿 Feed
       </button>
       <button
         class="px-2 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-500/40 text-rose-300 rounded text-xs font-medium transition"
-        onclick={() => onCull(entity.idHash)}
         onclick={() => onCull(entity.entityId)}
       >
         ⚡ Cull
@@ -111,4 +104,3 @@
     </div>
   </GlassPanel>
 {/if}
-

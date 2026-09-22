@@ -8,32 +8,12 @@
 import type {
   Vector2D,
   EntityTypeCode,
-  PopulationSummary,
-  WorkerInboundMessage as SharedWorkerInboundMessage,
-  WorkerOutboundMessage as SharedWorkerOutboundMessage,
   EncodedEngineCheckpoint,
   CanonicalWorldState,
   DiagnosticSnapshot,
   SelectedEntityVitals,
 } from '@chaos-garden/shared';
 
-export interface SelectedEntityVitals {
-  idHash: number;
-  name: string;
-  species: string;
-  age: number;
-  maxLifespan: number;
-  energy: number;
-  health: number;
-  generation: number;
-  type: EntityTypeCode;
-  pigment: number;
-  speed: number;
-  maxSpeed: number;
-  perceptionRadius: number;
-  reproductionThreshold: number;
-  metabolismRate: number;
-  parentIndex: number;
 export type { SelectedEntityVitals };
 
 export type BootstrapContinuationMode = 'exact' | 'legacy' | 'primordial';
@@ -65,6 +45,7 @@ export interface InitMessage {
   seed: number;
   width: number;
   height: number;
+  initialStateJson?: string;
   candidate?: BootstrapCandidate;
 }
 
@@ -97,11 +78,10 @@ export interface PickEntityMessage {
   maxRadius?: number;
 }
 
-export interface TelemetryPulse {
-  type: 'TELEMETRY_PULSE';
 export interface SelectEntityMessage {
   type: 'SELECT_ENTITY';
   entityId: number | null;
+  idHash?: number | null;
 }
 
 export interface CuratorActionMessage {
@@ -144,16 +124,6 @@ export interface BootstrapStatusMessage {
   mode: BootstrapContinuationMode;
   success: boolean;
   tick: number;
-  tps: number;
-  populations: {
-    plants: number;
-    herbivores: number;
-    carnivores: number;
-    fungi: number;
-    totalLiving: number;
-    totalBiomass: number;
-  };
-  selectedEntityVitals?: SelectedEntityVitals | null;
   failureCode?:
     | 'CHECKSUM_MISMATCH'
     | 'DECODE_ERROR'
@@ -203,16 +173,16 @@ export interface PickResultMessage {
 
 export interface SnapshotPayloadMessage {
   type: 'SNAPSHOT_PAYLOAD';
-  stateJson: string;
   requestId: number;
+  stateJson?: string;
   checkpoint: EncodedEngineCheckpoint;
   canonicalState?: CanonicalWorldState;
 }
 
 export interface DiagnosticsPayloadMessage {
   type: 'DIAGNOSTICS_PAYLOAD';
-  diagnosticsJson: string;
   requestId: number;
+  diagnosticsJson?: string;
   diagnostics: DiagnosticSnapshot;
 }
 
@@ -224,19 +194,3 @@ export type ClientWorkerOutboundMessage =
   | PickResultMessage
   | SnapshotPayloadMessage
   | DiagnosticsPayloadMessage;
-
-export type ReturnRenderBufferMessage = {
-  type: 'RETURN_RENDER_BUFFER';
-  buffer: Float32Array;
-};
-
-export type ReturnSoilBufferMessage = {
-  type: 'RETURN_SOIL_BUFFER';
-  moistureBuffer: Float32Array;
-  nitrateBuffer: Float32Array;
-};
-
-export type ClientWorkerInboundMessage =
-  | SharedWorkerInboundMessage
-  | ReturnRenderBufferMessage
-  | ReturnSoilBufferMessage;

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { WorkerBridge } from '../../src/worker/WorkerBridge.js';
 import type {
-  ClientWorkerInboundMessage,
   ClientWorkerOutboundMessage,
   TelemetryPulse,
   BootstrapCandidate,
@@ -29,16 +28,11 @@ class MockWorker {
   }
 }
 
-describe('WorkerBridge Unit Tests', () => {
-  it('initializes and posts INIT message to the worker', () => {
-    const mockWorker = new MockWorker() as unknown as Worker;
-    const bridge = new WorkerBridge({ worker: mockWorker });
 describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
   it('initializes with candidate and resolves on BOOTSTRAP_STATUS echoing requestId', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
-    bridge.init(42, 1600, 1200);
     const candidate: BootstrapCandidate = {
       kind: 'canonical',
       checkpoint: {
@@ -59,7 +53,6 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
       seed: 42,
       width: 1600,
       height: 1200,
-      initialStateJson: undefined,
       candidate,
     });
 
@@ -77,25 +70,13 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     expect(result.tick).toBe(200);
   });
 
-  it('initializes with optional initialStateJson snapshot', () => {
-    const mockWorker = new MockWorker() as unknown as Worker;
-    const bridge = new WorkerBridge({ worker: mockWorker });
   it('cancels in-flight requests when a new init is called', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
-    const snapshot = '{"tick":420,"entities":[]}';
-    bridge.init(42, 1600, 1200, snapshot);
     const firstInit = bridge.init(42, 1600, 1200);
-    // Call second init before first responds
     const secondInit = bridge.init(99, 1600, 1200);
 
-    expect(mockWorker.postMessage).toHaveBeenCalledWith({
-      type: 'INIT',
-      seed: 42,
-      width: 1600,
-      height: 1200,
-      initialStateJson: snapshot,
     await expect(firstInit).rejects.toThrow('Worker reinitialized');
 
     mockWorker.simulateMessage({
@@ -110,9 +91,6 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     expect(result.mode).toBe('primordial');
   });
 
-  it('routes SET_SPEED, SET_THROTTLE and CURATOR_ACTION messages', () => {
-    const mockWorker = new MockWorker() as unknown as Worker;
-    const bridge = new WorkerBridge({ worker: mockWorker });
   it('routes SET_SPEED, SET_THROTTLE, SELECT_ENTITY and CURATOR_ACTION messages', () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
@@ -129,7 +107,6 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
       targetTps: 5,
     });
 
-    bridge.dispatchCuratorAction('WATER_SOIL', { x: 100, y: 200 }, 0.5);
     bridge.selectEntity(1234);
     expect(mockWorker.postMessage).toHaveBeenCalledWith({
       type: 'SELECT_ENTITY',
@@ -158,9 +135,6 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     });
   });
 
-  it('dispatches returnRenderBuffer with transfer list', () => {
-    const mockWorker = new MockWorker() as unknown as Worker;
-    const bridge = new WorkerBridge({ worker: mockWorker });
   it('picks entity at world position correlating requestId', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
@@ -185,7 +159,7 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     expect(result).toBe(42);
   });
 
-  it('dispatches returnRenderBuffer and returnSoilBuffer with transfer list', () => {
+  it('dispatches returnRenderBuffer with transfer list', () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
@@ -202,8 +176,8 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
   });
 
   it('dispatches returnSoilBuffer with transfer list', () => {
-    const mockWorker = new MockWorker() as unknown as Worker;
-    const bridge = new WorkerBridge({ worker: mockWorker });
+    const mockWorker = new MockWorker();
+    const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
     const moisture = new Float32Array(100);
     const nitrates = new Float32Array(100);
@@ -220,25 +194,15 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
   });
 
   it('receives RENDER_FRAME and invokes callback', () => {
-  it('receives RENDER_FRAME, SOIL_TEXTURE_UPDATE, and TELEMETRY_PULSE callbacks', () => {
     const mockWorker = new MockWorker();
     let frameTick = -1;
     let count = -1;
-    let soilCols = 0;
-    let receivedPulse: TelemetryPulse | null = null;
 
-    const bridge = new WorkerBridge({
+    new WorkerBridge({
       worker: mockWorker as unknown as Worker,
       onRenderFrame: (tick, entityCount) => {
-      onRenderFrame: (tick) => {
         frameTick = tick;
         count = entityCount;
-      },
-      onSoilUpdate: (_t, cols) => {
-        soilCols = cols;
-      },
-      onTelemetry: (p) => {
-        receivedPulse = p;
       },
     });
 
@@ -261,7 +225,7 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     let moistureLen = 0;
     let nitrateLen = 0;
 
-    const bridge = new WorkerBridge({
+    new WorkerBridge({
       worker: mockWorker as unknown as Worker,
       onSoilUpdate: (_tick, cols, rows, mBuf, nBuf) => {
         soilCols = cols;
@@ -280,8 +244,6 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
       rows: 5,
       moistureBuffer: moisture,
       nitrateBuffer: nitrates,
-      moistureBuffer: new Float32Array(50),
-      nitrateBuffer: new Float32Array(50),
     });
 
     expect(soilCols).toBe(10);
@@ -294,7 +256,7 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     const mockWorker = new MockWorker();
     let receivedPulse: TelemetryPulse | null = null;
 
-    const bridge = new WorkerBridge({
+    new WorkerBridge({
       worker: mockWorker as unknown as Worker,
       onTelemetry: (pulse) => {
         receivedPulse = pulse;
@@ -320,16 +282,14 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     expect(receivedPulse).toEqual(pulse);
   });
 
-  it('resolves requestSnapshot when SNAPSHOT_PAYLOAD arrives', async () => {
   it('coalesces concurrent snapshot requests into a single in-flight promise', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
-    const snapshotPromise = bridge.requestSnapshot();
     const p1 = bridge.requestSnapshot();
     const p2 = bridge.requestSnapshot();
 
-    expect(p1).toBe(p2); // same promise reference
+    expect(p1).toBe(p2);
     expect(mockWorker.postMessage).toHaveBeenCalledTimes(1);
 
     const dummyCheckpoint: EncodedEngineCheckpoint = {
@@ -348,15 +308,12 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
       checkpoint: dummyCheckpoint,
     });
 
-    const result = await snapshotPromise;
-    expect(result).toBe('{"tick":500}');
     const res1 = await p1;
     const res2 = await p2;
     expect(res1.checkpoint).toEqual(dummyCheckpoint);
     expect(res2.checkpoint).toEqual(dummyCheckpoint);
   });
 
-  it('terminates the worker cleanly', () => {
   it('requests diagnostics and resolves with DiagnosticSnapshot', async () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
@@ -394,7 +351,7 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     const mockWorker = new MockWorker();
     const bridge = new WorkerBridge({ worker: mockWorker as unknown as Worker });
 
-    const timeoutPromise = bridge.pickEntityAt({ x: 0, y: 0 }, 10, 50); // 50ms timeout
+    const timeoutPromise = bridge.pickEntityAt({ x: 0, y: 0 }, 10, 50);
 
     await expect(timeoutPromise).rejects.toThrow('timed out after 50ms');
   });
@@ -409,11 +366,7 @@ describe('WorkerBridge Unit Tests (Phase 3 Correlated RPC)', () => {
     expect(mockWorker.terminate).toHaveBeenCalled();
     await expect(pending).rejects.toThrow('Worker terminated');
 
-    // After termination, postMessage should not be called
     bridge.setSpeed(1.0);
-    expect(mockWorker.postMessage).not.toHaveBeenCalled();
-    // PostMessage not called after termination
-    expect(mockWorker.postMessage).toHaveBeenCalledTimes(1); // only the pickEntityAt call
+    expect(mockWorker.postMessage).toHaveBeenCalledTimes(1);
   });
 });
-

@@ -1,9 +1,6 @@
 /**
  * Chaos Garden - Local-First Offline Persistence
  *
- * Employs IndexedDB for offline-first resilience.
- * Implements the 3-tier bootloader: Cloudflare D1 API -> Local IndexedDB Cache -> Primordial Seed.
- * Runs 30-second periodic background autosaves.
  * Implements Phase 3 Dual-Store IndexedDB architecture:
  * - 'canonical' store holds exactly 1 canonical API snapshot.
  * - 'localBranch' store holds up to 3 local user branches, evicting oldest on quota limit.
@@ -21,16 +18,12 @@ import type { BootstrapCandidate } from '../worker/types.js';
 import type { WorkerBridge } from '../worker/WorkerBridge.js';
 
 const DB_NAME = 'chaos_garden_db';
-const DB_VERSION = 1;
-const STORE_NAME = 'snapshots';
-const LATEST_KEY = 'latest_snapshot';
 const DB_VERSION = 2;
 const STORE_CANONICAL = 'canonical';
 const STORE_LOCAL_BRANCH = 'localBranch';
 const CANONICAL_KEY = 'current';
 const MAX_LOCAL_BRANCHES = 3;
 
-export type BootSource = 'API' | 'INDEXED_DB' | 'PRIMORDIAL';
 export interface CanonicalPersistenceRecord {
   kind: 'canonical';
   capturedAtMs: number;
@@ -65,6 +58,7 @@ export interface BootResult {
   data: string | null;
   candidate?: BootstrapCandidate;
   envelope?: GardenBootstrapResponse;
+  canonicalRecord?: CanonicalPersistenceRecord;
   branchRecord?: LocalBranchPersistenceRecord;
 }
 
@@ -91,18 +85,13 @@ export class LocalPersistence {
   private getDB(): Promise<IDBPDatabase> {
     if (!this.dbPromise) {
       this.dbPromise = openDB(DB_NAME, DB_VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
-            db.createObjectStore(STORE_NAME);
         upgrade(db, oldVersion) {
           if (oldVersion < 1) {
-            // Initial legacy store
             if (!db.objectStoreNames.contains('snapshots')) {
               db.createObjectStore('snapshots');
             }
           }
           if (oldVersion < 2) {
-            // Version 2: Dual store separation
             if (!db.objectStoreNames.contains(STORE_CANONICAL)) {
               db.createObjectStore(STORE_CANONICAL);
             }
@@ -119,14 +108,12 @@ export class LocalPersistence {
     return this.dbPromise;
   }
 
-  async saveSnapshot(stateJson: string): Promise<void> {
   /**
    * Replaces ONLY the canonical record. Never touches local branches.
    */
   async saveCanonical(envelope: GardenBootstrapResponse): Promise<void> {
     try {
       const db = await this.getDB();
-      await db.put(STORE_NAME, stateJson, LATEST_KEY);
       const tick = envelope.checkpoint?.tick ?? envelope.canonicalState.tick;
       const checksum = envelope.checkpoint?.checksum ?? envelope.canonicalState.checksum;
       const codecVersion = envelope.checkpoint?.version ?? 1;
@@ -144,21 +131,16 @@ export class LocalPersistence {
 
       await db.put(STORE_CANONICAL, record, CANONICAL_KEY);
     } catch (err) {
-      console.warn('[LocalPersistence] Failed to cache snapshot to IndexedDB:', err);
       console.warn('[LocalPersistence] Failed to save canonical record to IndexedDB:', err);
     }
   }
 
-  async loadCachedSnapshot(): Promise<string | null> {
   async loadCanonical(): Promise<CanonicalPersistenceRecord | null> {
     try {
       const db = await this.getDB();
-      const cached = await db.get(STORE_NAME, LATEST_KEY);
-      return cached ?? null;
       const record = await db.get(STORE_CANONICAL, CANONICAL_KEY);
       return record ?? null;
     } catch (err) {
-      console.warn('[LocalPersistence] Failed to read snapshot from IndexedDB:', err);
       console.warn('[LocalPersistence] Failed to load canonical record from IndexedDB:', err);
       return null;
     }
@@ -235,16 +217,21 @@ export class LocalPersistence {
     }
   }
 
+  async deleteLocalBranch(branchId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      await db.delete(STORE_LOCAL_BRANCH, branchId);
+    } catch (err) {
+      console.warn('[LocalPersistence] Failed to delete local branch ' + branchId + ':', err);
+    }
+  }
+
   /**
    * 3-tier offline-first bootloader:
-   * 1. Cloudflare D1 API (with 3-second timeout)
-   * 2. Local IndexedDB cache
    * 1. Cloudflare D1 API (with timeout)
    * 2. Local IndexedDB Cache (canonical by default, or explicit branch if selected)
    * 3. Primordial seeded genesis
    */
-  async bootload(apiUrl: string = '/api/garden'): Promise<BootResult> {
-    // 1. Try remote Cloudflare D1 API
   async bootload(
     apiUrl: string = '/api/garden',
     selectedBranchId?: string,
@@ -259,11 +246,12 @@ export class LocalPersistence {
           branchRecord: branch,
           candidate: {
             kind: 'localBranch',
-            checkpoint: branch.checkpoint,
-            canonicalState: branch.canonicalState,
             branchId: branch.branchId,
             label: branch.label,
+            checkpoint: branch.checkpoint,
+            canonicalState: branch.canonicalState,
           },
+          data: branch.canonicalState ? JSON.stringify(branch.canonicalState) : null,
         };
       }
     }
@@ -271,28 +259,25 @@ export class LocalPersistence {
     // 2. Try remote Cloudflare D1 API
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const response = await fetch(apiUrl, {
-        signal: controller.signal,
         headers: { Accept: 'application/json' },
+        signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        const payload = await response.text();
-        // Cache to local IndexedDB
-        await this.saveSnapshot(payload);
-        return { source: 'API', data: payload };
-        const json = await response.json();
-        // Handle standard success envelope { success: true, data: GardenBootstrapResponse }
+        const body = await response.json();
+        // Handle standard API success envelope { success: true, data: GardenBootstrapResponse }
         const envelope: GardenBootstrapResponse =
-          json && typeof json === 'object' && 'data' in json ? json.data : json;
+          body && typeof body === 'object' && 'data' in body && body.data
+            ? body.data
+            : body;
 
         if (envelope && envelope.canonicalState) {
-          // Cache to canonical IndexedDB store
           await this.saveCanonical(envelope);
+
           return {
             source: 'API',
             envelope,
@@ -301,46 +286,52 @@ export class LocalPersistence {
               checkpoint: envelope.checkpoint,
               canonicalState: envelope.canonicalState,
             },
+            data: JSON.stringify(envelope),
           };
         }
       }
-    } catch {
-      // Remote unavailable or timed out; fall through to IndexedDB
+    } catch (err) {
+      console.warn('[LocalPersistence] Remote API unreachable, falling back to local storage:', err);
     }
 
-    // 2. Try local IndexedDB
-    const cached = await this.loadCachedSnapshot();
-    if (cached) {
-      return { source: 'INDEXED_DB', data: cached };
-    // 3. Try local IndexedDB canonical cache
-    const canonicalRecord = await this.loadCanonical();
-    if (canonicalRecord && canonicalRecord.bootstrapEnvelope) {
-      const env = canonicalRecord.bootstrapEnvelope;
+    // 3. Fall back to local canonical IndexedDB cache
+    const cachedCanonical = await this.loadCanonical();
+    if (cachedCanonical && cachedCanonical.bootstrapEnvelope) {
+      const envelope = cachedCanonical.bootstrapEnvelope;
       return {
         source: 'INDEXED_DB_CANONICAL',
-        envelope: env,
+        canonicalRecord: cachedCanonical,
+        envelope,
         candidate: {
           kind: 'canonical',
-          checkpoint: env.checkpoint,
-          canonicalState: env.canonicalState,
+          checkpoint: envelope.checkpoint,
+          canonicalState: envelope.canonicalState,
         },
+        data: JSON.stringify(envelope),
       };
     }
 
-    // 3. Fallback to primordial genesis
-    return { source: 'PRIMORDIAL', data: null };
-    // 4. Fallback to primordial genesis
-    return { source: 'PRIMORDIAL' };
+    // 4. Primordial fallback
+    return {
+      source: 'PRIMORDIAL',
+      data: null,
+    };
   }
 
-  startAutosave(bridge: WorkerBridge, intervalMs: number = 30000): void {
-    this.stopAutosave();
+  /**
+   * Starts periodic background autosaving to the active local branch.
+   */
+  startAutosave(
+    bridge: WorkerBridge,
+    intervalMs: number = 30000,
+  ): () => void {
+    if (this.autosaveTimer) {
+      clearInterval(this.autosaveTimer);
+    }
+
     this.autosaveTimer = setInterval(async () => {
       try {
-        const snapshot = await bridge.requestSnapshot();
-        await this.saveSnapshot(snapshot);
         const { checkpoint, canonicalState } = await bridge.requestSnapshot();
-        // Autosave writes exclusively to localBranch store
         await this.saveLocalBranch(
           this.activeBranchId,
           this.activeBranchLabel,
@@ -348,9 +339,16 @@ export class LocalPersistence {
           canonicalState,
         );
       } catch (err) {
-        console.warn('[LocalPersistence] Autosave failed:', err);
+        console.warn('[LocalPersistence] Autosave tick failed:', err);
       }
     }, intervalMs);
+
+    return () => {
+      if (this.autosaveTimer) {
+        clearInterval(this.autosaveTimer);
+        this.autosaveTimer = null;
+      }
+    };
   }
 
   stopAutosave(): void {
@@ -362,4 +360,3 @@ export class LocalPersistence {
 }
 
 export const localPersistence = new LocalPersistence();
-

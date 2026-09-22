@@ -1,14 +1,11 @@
 /**
  * Chaos Garden - Main-Thread Worker Bridge
  *
- * Manages the lifecycle of SimulationWorker, provides typed RPC dispatch,
- * and maintains the zero-allocation transferable render buffer ping-pong exchange.
  * Manages the lifecycle of SimulationWorker, provides typed correlated RPC dispatch
  * with monotonic request IDs, timeout handling, cancellation on reinitialization,
  * single-flight snapshot coalescing, and zero-allocation transferable buffer exchange.
  */
 
-import type { Vector2D } from '@chaos-garden/shared';
 import type {
   Vector2D,
   EncodedEngineCheckpoint,
@@ -72,9 +69,6 @@ export class WorkerBridge {
   private onSoilUpdate?: SoilUpdateCallback;
   private onTelemetry?: TelemetryCallback;
 
-  private pendingSnapshotResolve: ((value: string) => void) | null = null;
-  private pendingDiagnosticsResolve: ((value: string) => void) | null = null;
-
   constructor(options: WorkerBridgeOptions = {}) {
     this.onRenderFrame = options.onRenderFrame;
     this.onSoilUpdate = options.onSoilUpdate;
@@ -127,10 +121,6 @@ export class WorkerBridge {
           break;
 
         case 'SNAPSHOT_PAYLOAD':
-          if (this.pendingSnapshotResolve) {
-            this.pendingSnapshotResolve(msg.stateJson);
-            this.pendingSnapshotResolve = null;
-          }
           this.resolvePending(msg.requestId, {
             checkpoint: msg.checkpoint,
             canonicalState: msg.canonicalState,
@@ -138,17 +128,12 @@ export class WorkerBridge {
           break;
 
         case 'DIAGNOSTICS_PAYLOAD':
-          if (this.pendingDiagnosticsResolve) {
-            this.pendingDiagnosticsResolve(msg.diagnosticsJson);
-            this.pendingDiagnosticsResolve = null;
-          }
           this.resolvePending(msg.requestId, msg.diagnostics);
           break;
       }
     };
 
     this.worker.onerror = (error: ErrorEvent) => {
-      console.error('[WorkerBridge] Simulation Worker uncaught error:', error);
       console.error('[WorkerBridge] Simulation Worker error event:', error);
       this.rejectAllPending(new Error('Simulation worker error: ' + (error.message || 'unknown error')));
     };
@@ -208,8 +193,6 @@ export class WorkerBridge {
     seed: number,
     width: number,
     height: number,
-    initialStateJson?: string,
-  ): void {
     candidate?: BootstrapCandidate,
     timeoutMs = 8000,
   ): Promise<BootstrapStatusMessage> {
@@ -223,7 +206,6 @@ export class WorkerBridge {
       seed,
       width,
       height,
-      initialStateJson,
       candidate,
     });
     return promise;
@@ -243,7 +225,6 @@ export class WorkerBridge {
     });
   }
 
-  selectEntity(idHash: number | null): void {
   /**
    * Deterministically queries the nearest entity at world coordinates.
    */
@@ -269,32 +250,36 @@ export class WorkerBridge {
   selectEntity(entityId: number | null): void {
     this.postMessage({
       type: 'SELECT_ENTITY',
-      idHash,
       entityId,
     });
   }
 
   dispatchCuratorAction(
-    action:
-      | 'DROP_NUTRIENT'
-      | 'WATER_SOIL'
-      | 'SPAWN_PLANT'
-      | 'SPAWN_HERBIVORE'
-      | 'SPAWN_CARNIVORE'
-      | 'SPAWN_FUNGUS',
-    position: Vector2D,
-    amount?: number,
     action: CuratorActionType,
-    options: { position?: Vector2D; amount?: number; entityId?: number } = {},
+    positionOrOptions?: Vector2D | { position?: Vector2D; amount?: number; entityId?: number },
+    amount?: number,
   ): void {
+    let position: Vector2D | undefined;
+    let amt = amount;
+    let entityId: number | undefined;
+
+    if (positionOrOptions) {
+      if ('x' in positionOrOptions && 'y' in positionOrOptions) {
+        position = positionOrOptions as Vector2D;
+      } else {
+        const opts = positionOrOptions as { position?: Vector2D; amount?: number; entityId?: number };
+        position = opts.position;
+        if (opts.amount !== undefined) amt = opts.amount;
+        entityId = opts.entityId;
+      }
+    }
+
     this.postMessage({
       type: 'CURATOR_ACTION',
       action,
       position,
-      amount,
-      position: options.position,
-      amount: options.amount,
-      entityId: options.entityId,
+      amount: amt,
+      entityId,
     });
   }
 
@@ -328,10 +313,6 @@ export class WorkerBridge {
     );
   }
 
-  requestSnapshot(): Promise<string> {
-    return new Promise((resolve) => {
-      this.pendingSnapshotResolve = resolve;
-      this.postMessage({ type: 'REQUEST_SNAPSHOT' });
   /**
    * Requests a binary checkpoint from the worker. Coalesces concurrent calls into a single flight.
    */
@@ -360,10 +341,6 @@ export class WorkerBridge {
     return this.inFlightSnapshotPromise;
   }
 
-  requestDiagnostics(): Promise<string> {
-    return new Promise((resolve) => {
-      this.pendingDiagnosticsResolve = resolve;
-      this.postMessage({ type: 'REQUEST_DIAGNOSTICS' });
   /**
    * Requests diagnostic metrics from the Flight Recorder.
    */
@@ -388,4 +365,3 @@ export class WorkerBridge {
     this.worker.terminate();
   }
 }
-

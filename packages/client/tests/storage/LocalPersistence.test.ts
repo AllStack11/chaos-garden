@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LocalPersistence } from '../../src/storage/LocalPersistence.js';
 import {
   LocalPersistence,
   type CanonicalPersistenceRecord,
@@ -11,7 +10,6 @@ import {
   DEFAULT_ATMOSPHERIC_STATE,
 } from '@chaos-garden/shared';
 
-describe('LocalPersistence Unit Tests', () => {
 describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
   let persistence: LocalPersistence;
 
@@ -19,8 +17,6 @@ describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
     persistence = new LocalPersistence();
   });
 
-  it('boots from API when remote endpoint returns valid response', async () => {
-    const mockPayload = JSON.stringify({ tick: 450, seed: 42 });
   it('boots from API when remote endpoint returns valid envelope and saves to canonical store', async () => {
     const mockEnvelope: GardenBootstrapResponse = {
       canonicalState: {
@@ -49,33 +45,24 @@ describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
 
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
-      text: async () => mockPayload,
-    })) as any;
       json: async () => ({ success: true, data: mockEnvelope }),
     })) as unknown as typeof fetch;
 
-    persistence.saveSnapshot = vi.fn(async () => {});
     persistence.saveCanonical = vi.fn(async () => {});
 
     const result = await persistence.bootload('/api/garden');
 
     expect(result.source).toBe('API');
-    expect(result.data).toBe(mockPayload);
-    expect(persistence.saveSnapshot).toHaveBeenCalledWith(mockPayload);
     expect(result.candidate?.kind).toBe('canonical');
     expect(result.candidate?.checkpoint).toEqual(mockEnvelope.checkpoint);
     expect(persistence.saveCanonical).toHaveBeenCalledWith(mockEnvelope);
   });
 
-  it('falls back to IndexedDB cache when API is unreachable', async () => {
   it('falls back to IndexedDB canonical cache when API is unreachable', async () => {
     globalThis.fetch = vi.fn(async () => {
       throw new Error('Network error');
-    }) as any;
     }) as unknown as typeof fetch;
 
-    const cachedPayload = JSON.stringify({ tick: 300, seed: 99 });
-    persistence.loadCachedSnapshot = vi.fn(async () => cachedPayload);
     const cachedEnvelope: GardenBootstrapResponse = {
       canonicalState: {
         id: 1,
@@ -107,14 +94,11 @@ describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
 
     const result = await persistence.bootload('/api/garden');
 
-    expect(result.source).toBe('INDEXED_DB');
-    expect(result.data).toBe(cachedPayload);
     expect(result.source).toBe('INDEXED_DB_CANONICAL');
     expect(result.candidate?.kind).toBe('canonical');
     expect(result.candidate?.canonicalState?.tick).toBe(300);
   });
 
-  it('falls back to PRIMORDIAL when both API and IndexedDB are unavailable', async () => {
   it('loads explicit local branch when selectedBranchId is passed', async () => {
     const branchCheckpoint: EncodedEngineCheckpoint = {
       version: 1,
@@ -151,12 +135,9 @@ describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
 
   it('falls back to PRIMORDIAL when both API and IndexedDB are empty', async () => {
     globalThis.fetch = vi.fn(async () => {
-      throw new Error('Network error');
-    }) as any;
       throw new Error('Network offline');
     }) as unknown as typeof fetch;
 
-    persistence.loadCachedSnapshot = vi.fn(async () => null);
     persistence.loadCanonical = vi.fn(async () => null);
 
     const result = await persistence.bootload('/api/garden');
@@ -166,4 +147,3 @@ describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
     expect(result.candidate).toBeUndefined();
   });
 });
-
