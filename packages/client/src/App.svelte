@@ -76,11 +76,13 @@
 
   function handleCullEntity(entityId: number): void {
     bridge?.dispatchCuratorAction('CULL_ENTITY', { entityId });
+    bridge?.selectEntity(null);
     audio?.sfx.playDeath();
     gardenState.selectedEntity = null;
   }
 
   function handleCloseInspector(): void {
+    bridge?.selectEntity(null);
     gardenState.selectedEntity = null;
     curatorState.isFollowCamActive = false;
     viewport?.camera.disengageFollow();
