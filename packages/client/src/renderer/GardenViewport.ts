@@ -105,13 +105,13 @@ export class GardenViewport {
   }
 
   stopTicker(): void {
-    if (this.app.ticker.started) {
+    if (this.app.ticker?.started) {
       this.app.ticker.stop();
     }
   }
 
   startTicker(): void {
-    if (!this.app.ticker.started) {
+    if (this.app.ticker && !this.app.ticker.started) {
       this.app.ticker.start();
     }
   }

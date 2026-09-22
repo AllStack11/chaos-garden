@@ -3,9 +3,12 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 export default defineConfig({
   plugins: [svelte()],
+  resolve: {
+    conditions: ['browser'],
+  },
   test: {
     include: ['tests/**/*.test.ts'],
-    environment: 'node',
+    environment: 'happy-dom',
     fileParallelism: false,
     poolOptions: {
       threads: {
@@ -14,6 +17,15 @@ export default defineConfig({
       forks: {
         execArgv: ['--expose-gc'],
       },
+    },
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts', 'src/**/*.svelte'],
+      exclude: [
+        'src/main.ts',
+        'src/worker/types.ts',
+        'src/worker/simulationWorker.ts',
+      ],
     },
   },
 });

@@ -148,5 +148,61 @@ describe('CuratorSession Unit Tests', () => {
     expect(res.status).toBe(409);
     expect(res.isStaleTickConflict).toBe(true);
   });
+
+  it('rejects checkpoint submission when no active lease is held', async () => {
+    session.setCredentials('token', 'curator-1');
+    const dummyCheckpoint: EncodedEngineCheckpoint = {
+      version: 1,
+      tick: 10,
+      seed: 42,
+      byteLength: 64,
+      checksum: 'sha-10',
+      payload: 'dummy',
+    };
+
+    const res = await session.submitCheckpoint(dummyCheckpoint, '/api/garden/checkpoint');
+    expect(res.success).toBe(false);
+    expect(res.status).toBe(403);
+    expect(res.error).toContain('No active curator lease');
+  });
+
+  it('clears session on 401/403 checkpoint submission rejection and handles network failure', async () => {
+    session.setCredentials('expired-token', 'curator-1');
+    // Force active lease
+    (session as any).activeLease = { leaseId: 'l1', expiresAtMs: Date.now() + 10000 };
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      text: async () => 'Unauthorized lease',
+    })) as unknown as typeof fetch;
+
+    const dummyCheckpoint: EncodedEngineCheckpoint = {
+      version: 1,
+      tick: 10,
+      seed: 42,
+      byteLength: 64,
+      checksum: 'sha-10',
+      payload: 'dummy',
+    };
+
+    const res = await session.submitCheckpoint(dummyCheckpoint, '/api/garden/checkpoint');
+    expect(res.success).toBe(false);
+    expect(res.status).toBe(401);
+    expect(session.isAuthenticated).toBe(false);
+
+    // Network error
+    session.setCredentials('token-2', 'curator-2');
+    (session as any).activeLease = { leaseId: 'l2', expiresAtMs: Date.now() + 10000 };
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('Connection refused');
+    }) as unknown as typeof fetch;
+
+    const res2 = await session.submitCheckpoint(dummyCheckpoint, '/api/garden/checkpoint');
+    expect(res2.success).toBe(false);
+    expect(res2.status).toBe(0);
+    expect(res2.error).toContain('Connection refused');
+  });
 });
+
 

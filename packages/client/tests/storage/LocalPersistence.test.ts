@@ -10,11 +10,62 @@ import {
   DEFAULT_ATMOSPHERIC_STATE,
 } from '@chaos-garden/shared';
 
+class InMemoryIDB {
+  canonical = new Map<string, any>();
+  branches = new Map<string, any>();
+
+  async put(store: string, value: any, key?: string) {
+    if (store === 'canonical') {
+      this.canonical.set(key ?? 'active_canonical', value);
+    } else {
+      this.branches.set(value.branchId, value);
+    }
+  }
+
+  async get(store: string, key: string) {
+    if (store === 'canonical') {
+      return this.canonical.get(key) ?? undefined;
+    }
+    return this.branches.get(key) ?? undefined;
+  }
+
+  async getAll(store: string) {
+    if (store === 'canonical') {
+      return Array.from(this.canonical.values());
+    }
+    return Array.from(this.branches.values());
+  }
+
+  async delete(store: string, key: string) {
+    if (store === 'canonical') {
+      this.canonical.delete(key);
+    } else {
+      this.branches.delete(key);
+    }
+  }
+
+  transaction(_storeName: string, _mode: string) {
+    const self = this;
+    const store = {
+      getAll: async () => Array.from(self.branches.values()),
+      delete: async (key: string) => { self.branches.delete(key); },
+      put: async (val: any) => { self.branches.set(val.branchId, val); },
+    };
+    return {
+      objectStore: () => store,
+      done: Promise.resolve(),
+    };
+  }
+}
+
 describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
   let persistence: LocalPersistence;
+  let mockDb: InMemoryIDB;
 
   beforeEach(() => {
     persistence = new LocalPersistence();
+    mockDb = new InMemoryIDB();
+    vi.spyOn(persistence as any, 'getDB').mockResolvedValue(mockDb as any);
   });
 
   it('boots from API when remote endpoint returns valid envelope and saves to canonical store', async () => {
@@ -145,5 +196,119 @@ describe('LocalPersistence Unit Tests (Phase 3 Dual-Store)', () => {
     expect(result.source).toBe('PRIMORDIAL');
     expect(result.data).toBeNull();
     expect(result.candidate).toBeUndefined();
+  });
+
+  it('saves and loads canonical records in IndexedDB', async () => {
+    const envelope: GardenBootstrapResponse = {
+      canonicalState: {
+        id: 1,
+        tick: 200,
+        epoch: 1,
+        timestamp: '2026-09-22T00:00:00Z',
+        seed: 42,
+        atmospheric: { ...DEFAULT_ATMOSPHERIC_STATE },
+        populationSummary: { plants: 0, herbivores: 0, carnivores: 0, fungi: 0, deadMatterCount: 0, totalLiving: 0, totalBiomass: 0, allTimeBirths: 0, allTimeDeaths: 0 },
+        entities: [],
+        deadMatter: [],
+        soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] },
+        checksum: 'snap-200',
+      },
+      events: [],
+    };
+
+    await persistence.saveCanonical(envelope);
+    const loaded = await persistence.loadCanonical();
+
+    expect(loaded).toBeDefined();
+    expect(loaded?.kind).toBe('canonical');
+    expect(loaded?.baseCheckpointTick).toBe(200);
+    expect(loaded?.baseCheckpointChecksum).toBe('snap-200');
+  });
+
+  it('saves, loads, and deletes local branches with retention policy of max 3 branches', async () => {
+    const makeCheckpoint = (tick: number): EncodedEngineCheckpoint => ({
+      version: 1,
+      tick,
+      seed: 42,
+      byteLength: 64,
+      checksum: `sha-${tick}`,
+      payload: `payload-${tick}`,
+    });
+
+    // Save 3 branches
+    await persistence.saveLocalBranch('branch_1', 'Branch 1', makeCheckpoint(100));
+    // Simulate slight time delay so timestamps differ
+    mockDb.branches.get('branch_1').capturedAtMs = 1000;
+
+    await persistence.saveLocalBranch('branch_2', 'Branch 2', makeCheckpoint(200));
+    mockDb.branches.get('branch_2').capturedAtMs = 2000;
+
+    await persistence.saveLocalBranch('branch_3', 'Branch 3', makeCheckpoint(300));
+    mockDb.branches.get('branch_3').capturedAtMs = 3000;
+
+    let branches = await persistence.loadLocalBranches();
+    expect(branches.length).toBe(3);
+
+    const b2 = await persistence.loadLocalBranch('branch_2');
+    expect(b2?.label).toBe('Branch 2');
+
+    // Saving 4th branch should evict oldest (branch_1)
+    await persistence.saveLocalBranch('branch_4', 'Branch 4', makeCheckpoint(400));
+    mockDb.branches.get('branch_4').capturedAtMs = 4000;
+
+    branches = await persistence.loadLocalBranches();
+    expect(branches.length).toBe(3);
+    expect(branches.find((b) => b.branchId === 'branch_1')).toBeUndefined();
+    expect(branches.find((b) => b.branchId === 'branch_4')).toBeDefined();
+
+    // Updating existing branch does not evict
+    await persistence.saveLocalBranch('branch_2', 'Branch 2 Updated', makeCheckpoint(250));
+    branches = await persistence.loadLocalBranches();
+    expect(branches.length).toBe(3);
+
+    // Deleting branch
+    await persistence.deleteLocalBranch('branch_2');
+    branches = await persistence.loadLocalBranches();
+    expect(branches.length).toBe(2);
+    expect(branches.find((b) => b.branchId === 'branch_2')).toBeUndefined();
+  });
+
+  it('handles active branch configuration and autosave loop', async () => {
+    persistence.setActiveBranch('custom_branch', 'Custom Branch Label');
+    expect((persistence as any).activeBranchId).toBe('custom_branch');
+    expect((persistence as any).activeBranchLabel).toBe('Custom Branch Label');
+
+    const mockBridge = {
+      requestSnapshot: vi.fn(async () => ({
+        checkpoint: {
+          version: 1,
+          tick: 999,
+          seed: 42,
+          byteLength: 32,
+          checksum: 'sha-999',
+          payload: 'data',
+        },
+        canonicalState: undefined,
+      })),
+    };
+
+    vi.spyOn(persistence, 'saveLocalBranch').mockResolvedValue(undefined);
+
+    vi.useFakeTimers();
+    const stopFn = persistence.startAutosave(mockBridge as any, 1000);
+
+    // Advance timer to trigger autosave
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mockBridge.requestSnapshot).toHaveBeenCalled();
+    expect(persistence.saveLocalBranch).toHaveBeenCalledWith(
+      'custom_branch',
+      'Custom Branch Label',
+      expect.objectContaining({ tick: 999 }),
+      undefined,
+    );
+
+    stopFn();
+    persistence.stopAutosave();
+    vi.useRealTimers();
   });
 });
