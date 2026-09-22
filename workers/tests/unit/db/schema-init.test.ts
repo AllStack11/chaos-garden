@@ -192,6 +192,10 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
              AND curator_id = ?
              AND expires_at_ms > ?
              AND authorized_tick < ?
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM engine_checkpoints
+           WHERE tick >= ?
          )`,
       )
       .bind(
@@ -203,6 +207,7 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
         'lease-bob',
         'curator-bob',
         1000000,
+        250,
         250,
       )
       .run();
@@ -220,6 +225,10 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
              AND curator_id = ?
              AND expires_at_ms > ?
              AND authorized_tick < ?
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM engine_checkpoints
+           WHERE tick >= ?
          )`,
       )
       .bind(
@@ -232,12 +241,47 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
         'curator-alice', // wrong curator
         1000000,
         260,
+        260,
       )
       .run();
     // Rejection: 0 rows inserted
     expect(invalidInsertAlice.meta.changes).toBe(0);
 
     // Check count in engine_checkpoints: exactly 1 (Bob's)
+    // Test 3: Attempting to insert a stale/reversed tick (240 when 250 already exists) is rejected
+    const reversedInsert = await db
+      .prepare(
+        `INSERT INTO engine_checkpoints (tick, engine_version, seed, checksum, payload)
+         SELECT ?, ?, ?, ?, ?
+         WHERE EXISTS (
+           SELECT 1 FROM curator_leases
+           WHERE id = 1
+             AND lease_id = ?
+             AND curator_id = ?
+             AND expires_at_ms > ?
+             AND authorized_tick < ?
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM engine_checkpoints
+           WHERE tick >= ?
+         )`,
+      )
+      .bind(
+        240,
+        2,
+        42,
+        'mock-checksum-3',
+        new Uint8Array([9, 10]),
+        'lease-bob',
+        'curator-bob',
+        1000000,
+        240,
+        240,
+      )
+      .run();
+    expect(reversedInsert.meta.changes).toBe(0);
+
+    // Check count in engine_checkpoints: exactly 1 (Bob's tick 250)
     const countRow = await db
       .prepare('SELECT COUNT(*) as count FROM engine_checkpoints')
       .first<{ count: number }>();

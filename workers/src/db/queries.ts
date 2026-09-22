@@ -877,6 +877,10 @@ export async function saveEngineCheckpoint(
              AND curator_id = ?
              AND expires_at_ms > ?
              AND authorized_tick < ?
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM engine_checkpoints
+           WHERE tick >= ?
          )`,
         [
           checkpoint.tick,
@@ -888,6 +892,7 @@ export async function saveEngineCheckpoint(
           authContext.curatorId,
           now,
           checkpoint.tick,
+          checkpoint.tick,
         ],
       );
 
@@ -897,11 +902,11 @@ export async function saveEngineCheckpoint(
           success: false,
           conflict: true,
           error:
-            "Curator lease has expired or was superseded prior to checkpoint persistence",
+            "Curator lease has expired, was superseded, or a checkpoint with an equal or higher tick has already been persisted",
         };
       }
 
-      // Atomically advance authorized_tick on singleton row
+      // Atomically advance authorized_tick on singleton row (ensuring it only strictly advances)
       await executeQuery(
         db,
         `UPDATE curator_leases
@@ -909,8 +914,9 @@ export async function saveEngineCheckpoint(
          WHERE id = 1
            AND lease_id = ?
            AND curator_id = ?
-           AND expires_at_ms > ?`,
-        [checkpoint.tick, authContext.leaseId, authContext.curatorId, now],
+           AND expires_at_ms > ?
+           AND authorized_tick < ?`,
+        [checkpoint.tick, authContext.leaseId, authContext.curatorId, now, checkpoint.tick],
       );
 
       return { success: true };
