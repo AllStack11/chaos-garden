@@ -38,11 +38,15 @@ export class SpatialHashGrid {
   /** Pre-allocated buffer for zero-closure neighbor queries */
   readonly queryBuffer: Int32Array;
 
+  /** Inverse cell size for fast multiplication instead of division */
+  readonly invCellSize: number;
+
   constructor(config: SpatialGridConfig = DEFAULT_SPATIAL_CONFIG) {
     this.worldWidth = config.worldWidth;
     this.worldHeight = config.worldHeight;
     this.cellSize = config.cellSize;
     this.maxEntities = config.maxEntities;
+    this.invCellSize = 1 / this.cellSize;
 
     this.cols = Math.ceil(this.worldWidth / this.cellSize);
     this.rows = Math.ceil(this.worldHeight / this.cellSize);
@@ -50,7 +54,6 @@ export class SpatialHashGrid {
 
     this.cellHead = new Int32Array(this.numBuckets);
     this.nextEntity = new Int32Array(this.maxEntities);
-    this.queryBuffer = new Int32Array(16);
     this.queryBuffer = new Int32Array(32);
 
     this.clear();
@@ -62,7 +65,56 @@ export class SpatialHashGrid {
    */
   clear(): void {
     this.cellHead.fill(-1);
-    this.nextEntity.fill(-1);
+  }
+
+  /**
+   * Fast batch rebuild from component storage arrays with 0 allocations.
+   */
+  rebuild(
+    activeCount: number,
+    dense: Uint32Array,
+    posX: Float32Array,
+    posY: Float32Array,
+  ): void {
+    this.cellHead.fill(-1);
+
+    const cols = this.cols;
+    const worldW = this.worldWidth;
+    const worldH = this.worldHeight;
+    const invCellSize = this.invCellSize;
+    const maxCol = cols - 1;
+    const maxRow = this.rows - 1;
+    const cellHead = this.cellHead;
+    const nextEntity = this.nextEntity;
+
+    for (let i = 0; i < activeCount; i++) {
+      const idx = dense[i];
+      let wx = posX[idx];
+      if (wx < 0) {
+        wx = (wx % worldW) + worldW;
+      } else if (wx >= worldW) {
+        wx = wx % worldW;
+      }
+
+      let wy = posY[idx];
+      if (wy < 0) {
+        wy = (wy % worldH) + worldH;
+      } else if (wy >= worldH) {
+        wy = wy % worldH;
+      }
+
+      let col = (wx * invCellSize) | 0;
+      if (col < 0) col = 0;
+      else if (col > maxCol) col = maxCol;
+
+      let row = (wy * invCellSize) | 0;
+      if (row < 0) row = 0;
+      else if (row > maxRow) row = maxRow;
+
+      const bucket = row * cols + col;
+      nextEntity[idx] = cellHead[bucket];
+      cellHead[bucket] = idx;
+    }
   }
 
   /**
@@ -146,10 +198,11 @@ export class SpatialHashGrid {
    * @returns Number of neighbor entities populated into queryBuffer.
    */
   query(x: number, y: number, radius: number): number {
-    const minCol = Math.floor((x - radius) / this.cellSize);
-    const maxCol = Math.floor((x + radius) / this.cellSize);
-    const minRow = Math.floor((y - radius) / this.cellSize);
-    const maxRow = Math.floor((y + radius) / this.cellSize);
+    const invCellSize = this.invCellSize;
+    const minCol = Math.floor((x - radius) * invCellSize);
+    const maxCol = Math.floor((x + radius) * invCellSize);
+    const minRow = Math.floor((y - radius) * invCellSize);
+    const maxRow = Math.floor((y + radius) * invCellSize);
 
     const cols = this.cols;
     const rows = this.rows;
@@ -196,5 +249,122 @@ export class SpatialHashGrid {
     }
 
     return count;
+  }
+
+  /**
+   * Finds the nearest candidate entity matching targetType and optional resource requirement,
+   * walking bucket chains directly with 0 allocations.
+   * Enforces exact toroidal radial distance.
+   * Breaks equal-distance ties deterministically by lower slot index.
+   *
+   * @returns Nearest entity index, or -1 if none found within radius.
+   */
+  findNearestTarget(
+    x: number,
+    y: number,
+    radius: number,
+    targetType: number,
+    storage: {
+      typeCodes: Uint8Array;
+      positionsX: Float32Array;
+      positionsY: Float32Array;
+      energies: Float32Array;
+      healths: Float32Array;
+    },
+    minResource: number = 0,
+  ): number {
+    const invCellSize = 1 / this.cellSize;
+    const minCol = Math.floor((x - radius) * invCellSize);
+    const maxCol = Math.floor((x + radius) * invCellSize);
+    const minRow = Math.floor((y - radius) * invCellSize);
+    const maxRow = Math.floor((y + radius) * invCellSize);
+
+    const cols = this.cols;
+    const rows = this.rows;
+    const worldW = this.worldWidth;
+    const worldH = this.worldHeight;
+    const radiusSq = radius * radius;
+
+    const typeCodes = storage.typeCodes;
+    const posXs = storage.positionsX;
+    const posYs = storage.positionsY;
+    const resources = targetType === 0 ? storage.energies : storage.healths;
+    const cellHead = this.cellHead;
+    const nextEntity = this.nextEntity;
+
+    let bestDistSq = radiusSq;
+    let bestSlot = -1;
+
+    // Fast path: >95% of queries do not touch the world border
+    if (minCol >= 0 && maxCol < cols && minRow >= 0 && maxRow < rows) {
+      for (let r = minRow; r <= maxRow; r++) {
+        const rBase = r * cols;
+        for (let c = minCol; c <= maxCol; c++) {
+          let curr = cellHead[rBase + c];
+          while (curr !== -1) {
+            if (typeCodes[curr] === targetType && resources[curr] > minResource) {
+              const dx = posXs[curr] - x;
+              const dxSq = dx * dx;
+              if (dxSq < bestDistSq) {
+                const dy = posYs[curr] - y;
+                const distSq = dxSq + dy * dy;
+                if (distSq < bestDistSq) {
+                  bestDistSq = distSq;
+                  bestSlot = curr;
+                } else if (distSq === bestDistSq && (bestSlot === -1 || curr < bestSlot)) {
+                  bestSlot = curr;
+                }
+              }
+            }
+            curr = nextEntity[curr];
+          }
+        }
+      }
+      return bestSlot;
+    }
+
+    // Border wrapping toroidal path
+    const halfW = worldW * 0.5;
+    const halfH = worldH * 0.5;
+    const colSpan = Math.min(maxCol - minCol + 1, cols);
+    const rowSpan = Math.min(maxRow - minRow + 1, rows);
+
+    for (let rOffset = 0; rOffset < rowSpan; rOffset++) {
+      let r = (minRow + rOffset) % rows;
+      if (r < 0) r += rows;
+      const rBase = r * cols;
+
+      for (let cOffset = 0; cOffset < colSpan; cOffset++) {
+        let c = (minCol + cOffset) % cols;
+        if (c < 0) c += cols;
+
+        let curr = cellHead[rBase + c];
+        while (curr !== -1) {
+          if (typeCodes[curr] === targetType && resources[curr] > minResource) {
+            let dx = posXs[curr] - x;
+            if (dx < 0) dx = -dx;
+            if (dx > halfW) dx = worldW - dx;
+
+            const dxSq = dx * dx;
+            if (dxSq < bestDistSq) {
+              let dy = posYs[curr] - y;
+              if (dy < 0) dy = -dy;
+              if (dy > halfH) dy = worldH - dy;
+
+              const distSq = dxSq + dy * dy;
+              if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                bestSlot = curr;
+              } else if (distSq === bestDistSq && (bestSlot === -1 || curr < bestSlot)) {
+                bestSlot = curr;
+              }
+            }
+          }
+          curr = nextEntity[curr];
+        }
+      }
+    }
+
+    return bestSlot;
   }
 }

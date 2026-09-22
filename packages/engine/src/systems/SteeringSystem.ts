@@ -34,25 +34,39 @@ export class SteeringSystem {
     const halfW = gardenWidth * 0.5;
     const halfH = gardenHeight * 0.5;
 
+    const types = storage.typeCodes;
+    const posXs = storage.positionsX;
+    const posYs = storage.positionsY;
+    const velXs = storage.velocitiesX;
+    const velYs = storage.velocitiesY;
+    const accXs = storage.accelerationsX;
+    const accYs = storage.accelerationsY;
+    const maxSpeeds = storage.maxSpeeds;
+    const maxForces = storage.maxForces;
+    const perceptionRadiis = storage.perceptionRadii;
+    const fleeRadiis = storage.fleeRadii;
+    const flockWeights = storage.flockingWeights;
+    const sizes = storage.sizes;
+
     for (let i = 0; i < activeCount; i++) {
       const idx = dense[i];
-      const type = storage.typeCodes[idx];
+      const type = types[idx];
 
       // Plants and fungi are sessile (no locomotion)
       if (type === EntityTypeCode.PLANT || type === EntityTypeCode.FUNGUS) {
         continue;
       }
 
-      const posX = storage.positionsX[idx];
-      const posY = storage.positionsY[idx];
-      const velX = storage.velocitiesX[idx];
-      const velY = storage.velocitiesY[idx];
-      const maxSpeed = storage.maxSpeeds[idx];
-      const maxForce = storage.maxForces[idx];
-      const perceptionRadius = storage.perceptionRadii[idx];
-      const fleeRadius = storage.fleeRadii[idx];
-      const flockWeight = storage.flockingWeights[idx];
-      const entitySize = storage.sizes[idx];
+      const posX = posXs[idx];
+      const posY = posYs[idx];
+      const velX = velXs[idx];
+      const velY = velYs[idx];
+      const maxSpeed = maxSpeeds[idx];
+      const maxForce = maxForces[idx];
+      const perceptionRadius = perceptionRadiis[idx];
+      const fleeRadius = fleeRadiis[idx];
+      const flockWeight = flockWeights[idx];
+      const entitySize = sizes[idx];
 
       let sepX = 0;
       let sepY = 0;
@@ -83,14 +97,14 @@ export class SteeringSystem {
         const otherIdx = neighbors[n];
         if (otherIdx === idx) continue;
 
-        const otherX = storage.positionsX[otherIdx];
+        const otherX = posXs[otherIdx];
         let dx = otherX - posX;
         if (dx > halfW) dx -= gardenWidth;
         else if (dx < -halfW) dx += gardenWidth;
         const dxSq = dx * dx;
         if (dxSq > searchRadiusSq) continue;
 
-        const otherY = storage.positionsY[otherIdx];
+        const otherY = posYs[otherIdx];
         let dy = otherY - posY;
         if (dy > halfH) dy -= gardenHeight;
         else if (dy < -halfH) dy += gardenHeight;
@@ -98,10 +112,10 @@ export class SteeringSystem {
 
         if (distSq === 0 || distSq > searchRadiusSq) continue;
 
-        const otherType = storage.typeCodes[otherIdx];
+        const otherType = types[otherIdx];
 
         // 1. Separation from any entity that is too close (collision avoidance)
-        const personalSpace = (entitySize + storage.sizes[otherIdx]) * 1.2;
+        const personalSpace = (entitySize + sizes[otherIdx]) * 1.2;
         if (distSq < personalSpace * personalSpace) {
           const dist = Math.sqrt(distSq);
           const invCube = 1 / (distSq * dist);
@@ -112,9 +126,9 @@ export class SteeringSystem {
         // 2. Flocking behaviors (same species / kingdom)
         if (flockWeight > 0 && otherType === type && distSq < perceptionRadiusSq) {
           flockmatesCount++;
-          alignX += storage.velocitiesX[otherIdx];
-          alignY += storage.velocitiesY[otherIdx];
           // Accumulate relative displacement vector to flockmate
+          alignX += velXs[otherIdx];
+          alignY += velYs[otherIdx];
           cohX += dx;
           cohY += dy;
         }
@@ -220,8 +234,8 @@ export class SteeringSystem {
         steerY = (steerY / steerLen) * maxForce;
       }
 
-      storage.accelerationsX[idx] += steerX;
-      storage.accelerationsY[idx] += steerY;
+      accXs[idx] += steerX;
+      accYs[idx] += steerY;
     }
   }
 }

@@ -1,0 +1,12 @@
+# Cloudflare Workers Local Development Environment Variables
+# Copy to .dev.vars for local development with wrangler:
+# cp workers/.dev.vars.example workers/.dev.vars
+# NOTE: .dev.vars is gitignored and must NEVER be committed to source control.
+# NOTE: Never expose CURATOR_SECRET in client-side Vite/Pages bundles (PUBLIC_*).
+
+# Curator authentication secret used by server-side processes/cron curators:
+CURATOR_SECRET="local-dev-curator-secret-do-not-use-in-production"
+
+# In production Cloudflare Workers, provision secrets via Wrangler CLI outside the browser:
+# npx wrangler secret put CURATOR_SECRET
+

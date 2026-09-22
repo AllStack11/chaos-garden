@@ -246,6 +246,130 @@ export interface HealthStatus {
   config: {
     tickIntervalMinutes: number;
   };
+  tick?: number;
+  version?: string;
+  databaseReady?: boolean;
+  activeCuratorLease?: boolean;
+}
+
+export interface EncodedEngineCheckpoint {
+  version: number;
+  tick: number;
+  seed: number;
+  byteLength: number;
+  checksum: string;
+  payload: string;
+}
+
+export interface CuratorLease {
+  leaseId: string;
+  curatorId: string;
+  grantedAtMs: number;
+  expiresAtMs: number;
+  authorizedTick: number;
+}
+
+export interface ChronicleEvent {
+  id: string;
+  tick: number;
+  timestamp: string;
+  type: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  description: string;
+  tags: string[];
+}
+
+export interface CanonicalWorldState {
+  id: number;
+  tick: number;
+  epoch: number;
+  timestamp: string;
+  seed: number;
+  atmospheric: {
+    temperature: number;
+    sunlight: number;
+    moisture: number;
+    weatherState?: WeatherStateName | ActiveWeatherState | null;
+  };
+  populationSummary: PopulationSummary;
+  entities: Entity[];
+  deadMatter: DeadMatter[];
+  soil: {
+    cols: number;
+    rows: number;
+    moisture: number[] | Float32Array;
+    nitrates: number[] | Float32Array;
+  };
+  checksum: string;
+  version?: number;
+  prngState?: number;
+  checkpoint?: EncodedEngineCheckpoint;
+}
+
+export interface CheckpointSubmission {
+  leaseId: string;
+  curatorId?: string;
+  tick: number;
+  checkpoint: EncodedEngineCheckpoint;
+  canonicalState?: CanonicalWorldState;
+  snapshot?: CanonicalWorldState;
+  chronicleEvents?: ChronicleEvent[];
+}
+
+export interface GardenBootstrapResponse {
+  canonicalState: CanonicalWorldState;
+  checkpoint?: EncodedEngineCheckpoint;
+  events: ChronicleEvent[];
+}
+
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64');
+  }
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 0x8000;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
+  return btoa(binary);
+}
+
+export function base64ToUint8Array(base64: string): Uint8Array {
+  if (typeof Buffer !== 'undefined') {
+    const buf = Buffer.from(base64, 'base64');
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  }
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
+  const subtle = typeof crypto !== 'undefined' ? crypto.subtle : (globalThis as unknown as { crypto?: { subtle?: SubtleCrypto } }).crypto?.subtle;
+  if (subtle) {
+    const arrayBuffer: ArrayBuffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const hashBuffer = await subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  if (typeof require !== 'undefined') {
+    try {
+      const nodeCrypto = require('crypto');
+      return nodeCrypto.createHash('sha256').update(bytes).digest('hex');
+    } catch {
+      // ignore
+    }
+  }
+  throw new Error('No crypto available to compute SHA-256');
 }
 
 /**
