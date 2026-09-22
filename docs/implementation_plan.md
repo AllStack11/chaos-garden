@@ -1,5 +1,7 @@
 # Chaos Garden - Architectural Redesign Implementation Plan
 
+> **Progress update (Phase 2 remediation):** Merged and architecturally cleared through PR #2. The engine now has bounded render-buffer backpressure, exact post-physics interactions, durable lineage IDs, integrity-checked CGS2 checkpoints, fail-closed curator authorization, atomic singleton leases, strictly monotonic checkpoint persistence, and a World-owned flight recorder. The direct Worker/D1 checkpoint and lease foundations were delivered in this remediation; the broader Phase 4 backend scope remains queued. See [`phase_2_remediation_design.md`](phase_2_remediation_design.md) for the completion record.
+
 A comprehensive architectural redesign and implementation roadmap for **Chaos Garden**, transitioning from a turn-based 15-minute cron slideshow with imperative custom elements to a continuous 60 FPS client-side biological simulation powered by a modular Entity Component System (ECS), PixiJS v8 hardware-accelerated bioluminescent rendering, Svelte 5 reactive HUD overlays, Web Audio procedural soundscapes, an **Anchor & Branch** canonical synchronization layer backed by Cloudflare D1, and a dedicated **Observability, Testing & LLM Diagnostics Subsystem**.
 
 Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
