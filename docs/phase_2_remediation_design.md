@@ -1,7 +1,7 @@
 # Phase 2 Remediation Design: Deterministic Engine Integration
 
 **Audience:** Coder / Implementation Engineer  
-**Status:** Approved design handoff  
+**Status:** Completed — merged and architecturally cleared
 **Scope:** Correct the Phase 2 engine contracts that prevent it from satisfying the published zero-allocation, Anchor & Branch, replay, and observability guarantees.
 
 ## Outcome
@@ -9,6 +9,19 @@
 After this work, the simulation has a bounded, allocation-free worker-to-renderer path; interaction rules use current, exact spatial relationships; snapshots preserve replay and lineage; and a versioned engine snapshot can be persisted and restored through the canonical Worker boundary.
 
 This is a remediation of Phase 2 and its direct client/server integration seams. Do not redesign the biological model, introduce a framework dependency into `@chaos-garden/engine`, or change the 8-float render stride.
+
+## Completion record
+
+The remediation was implemented and merged through PR #2. Architectural clearance confirmed the following outcomes:
+
+- A bounded three-buffer render pool drops presentation frames under backpressure without allocating or stalling simulation steps.
+- Biological interactions use exact toroidal nearest-target queries after physics integration; bounded presentation query buffers are not used for authoritative feeding decisions.
+- Immutable entity and parent identities survive slot reuse, snapshot export, hydration, and deterministic continuation.
+- CGS2 binary checkpoints carry a SHA-256 integrity checksum, validate all structural invariants before world mutation, and bootstrap the client through the checked hydration path.
+- Curator checkpoint authority is fail-closed outside explicit test environments. Singleton compare-and-swap lease acquisition and lease-conditioned, strictly monotonic checkpoint writes preserve the Anchor & Branch invariant under concurrent requests.
+- The World owns the 300-tick flight recorder and records scalar telemetry in the tick pipeline.
+
+The associated verification suite covers render-pool exhaustion, dense spatial neighborhoods, lineage recycling, corrupted checkpoints, fresh D1 schema initialization, lease contention, lease handoff, and reversed-order checkpoint submissions.
 
 ## Architectural decisions
 
