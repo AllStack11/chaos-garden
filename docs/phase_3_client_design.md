@@ -4,7 +4,7 @@
 
 **Package:** `@chaos-garden/client`
 
-**Status:** Revision required — this document supersedes the prior Phase 3 design.
+**Status:** Approved for merge — implemented and architecturally cleared in PR #4.
 
 **Foundation:** Phase 2 remediation merged in PR #2
 
@@ -12,7 +12,7 @@
 
 Phase 3 delivers the browser terrarium: Svelte 5 UI, PixiJS v8 renderer, Web Audio soundscape, and a Web Worker-hosted simulation. It must be implemented on top of the remediated engine and shared contracts. The Phase 2 remediation is a fixed dependency, not a source of code to reimplement or simplify.
 
-The original Phase 3 branch was created before Phase 2 remediation. Its engine and shared-package edits therefore cannot be merged as written: they remove or bypass durable IDs, three-buffer backpressure, integrity-checked checkpoints, post-physics interaction correctness, and World-owned diagnostics. Rebase Phase 3 onto current `main`; preserve the remediated `packages/engine` and `packages/shared` implementations; then make client-only, additive changes described here.
+The original Phase 3 branch was created before Phase 2 remediation. The approved implementation preserves the remediated engine and shared contracts, including durable IDs, three-buffer backpressure, integrity-checked checkpoints, post-physics interaction correctness, and World-owned diagnostics. Client changes are additive around those contracts.
 
 ### In scope
 
