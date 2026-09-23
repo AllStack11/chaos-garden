@@ -8,6 +8,8 @@
 
 **Foundation:** Phase 2 remediation merged in PR #2
 
+> **Historical design record:** This document describes the Phase 3 browser terrarium and its former browser-curator integration. The product now uses a Worker-owned canonical garden; the Astro frontend has been removed and its replacement will be separately built as an offline-capable, read-only observer. No browser lease or checkpoint submission path is deployed. See [`phase_4_server_design.md`](phase_4_server_design.md) for the current runtime model.
+
 ## 1. Decision and scope
 
 Phase 3 delivers the browser terrarium: Svelte 5 UI, PixiJS v8 renderer, Web Audio soundscape, and a Web Worker-hosted simulation. It must be implemented on top of the remediated engine and shared contracts. The Phase 2 remediation is a fixed dependency, not a source of code to reimplement or simplify.

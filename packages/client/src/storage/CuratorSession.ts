@@ -12,6 +12,8 @@ import type {
   CuratorLease,
   EncodedEngineCheckpoint,
   CheckpointSubmission,
+  CanonicalCheckpointSubmission,
+  ChronicleEvent,
 } from '@chaos-garden/shared';
 
 export interface CuratorSubmissionResult {
@@ -19,6 +21,7 @@ export interface CuratorSubmissionResult {
   status: number;
   error?: string;
   isStaleTickConflict?: boolean;
+  code?: string;
 }
 
 export class CuratorSession {
@@ -92,8 +95,12 @@ export class CuratorSession {
       }
 
       const json = await response.json();
+      const rawData = json && typeof json === 'object' && 'data' in json ? json.data : json;
       const lease: CuratorLease =
         json && typeof json === 'object' && 'data' in json ? json.data : json;
+        rawData && typeof rawData === 'object' && 'lease' in rawData
+          ? (rawData.lease as CuratorLease)
+          : (rawData as CuratorLease);
 
       if (lease && lease.leaseId) {
         this.activeLease = lease;
@@ -132,8 +139,13 @@ export class CuratorSession {
    */
   async submitCheckpoint(
     checkpoint: EncodedEngineCheckpoint,
+    baseCanonicalTickOrApiUrl: number | string = 0,
+    chronicleEvents?: ChronicleEvent[],
     apiUrl: string = '/api/garden/checkpoint',
   ): Promise<CuratorSubmissionResult> {
+    const baseCanonicalTick = typeof baseCanonicalTickOrApiUrl === 'number' ? baseCanonicalTickOrApiUrl : 0;
+    const effectiveApiUrl = typeof baseCanonicalTickOrApiUrl === 'string' ? baseCanonicalTickOrApiUrl : apiUrl;
+
     if (!this.isAuthenticated || !this.token) {
       return { success: false, status: 401, error: 'Unauthorized: No active curator credentials' };
     }
@@ -143,15 +155,15 @@ export class CuratorSession {
       return { success: false, status: 403, error: 'No active curator lease held' };
     }
 
-    const submission: CheckpointSubmission = {
+    const submission: CanonicalCheckpointSubmission = {
       leaseId: lease.leaseId,
-      curatorId: this.curatorId ?? undefined,
-      tick: checkpoint.tick,
+      baseCanonicalTick,
       checkpoint,
+      chronicleEvents,
     };
 
     try {
-      const response = await fetch(apiUrl, {
+      const response = await fetch(effectiveApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,11 +178,21 @@ export class CuratorSession {
 
       if (response.status === 409) {
         // Stale tick conflict: server has advanced beyond or equals this tick
+        let errorMsg = 'Conflict: Checkpoint tick is stale or conflict with server state';
+        let code: string | undefined;
+        try {
+          const json = await response.json();
+          errorMsg = json.message || json.error || errorMsg;
+          code = json.code;
+        } catch {
+          // ignore json parse error
+        }
         return {
           success: false,
           status: 409,
-          error: 'Conflict: Checkpoint tick is stale or conflict with server state',
+          error: errorMsg,
           isStaleTickConflict: true,
+          code,
         };
       }
 

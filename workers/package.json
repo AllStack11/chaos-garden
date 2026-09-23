@@ -7,15 +7,12 @@
   "scripts": {
     "dev": "wrangler dev -e dev --config wrangler.local.jsonc --persist-to .wrangler/local-state",
     "backend": "npm run dev",
-    "frontend": "echo '🎨 Workers: This script should be run from the root workspace' && exit 0",
     "deploy:workers": "npm run deploy",
-    "deploy:frontend": "echo '🎨 Workers: Frontend deploy is handled by frontend workspace' && exit 0",
-    "deploy": "wrangler deploy",
-    "db:init:local": "node scripts/init-local-db.js",
-    "db:init:local:verify": "node scripts/init-local-db.js --verify-only",
-    "db:init:chaos": "node scripts/init-local-db-chaos.js",
-    "db:init:remote": "node scripts/init-remote-db-prod-v3.js",
-    "db:init:remote:verify": "node scripts/init-remote-db-prod-v3.js --verify-only",
+    "deploy": "npm run build -w @chaos-garden/engine && wrangler deploy",
+    "db:cutover:local": "node scripts/init-canonical-db.js",
+    "db:cutover:remote": "node scripts/init-canonical-db.js --remote",
+    "db:init:local": "npm run db:cutover:local",
+    "db:init:remote": "npm run db:cutover:remote",
     "test": "vitest run tests/unit",
     "test:watch": "vitest tests/unit",
     "test:integration": "vitest run tests/integration",
@@ -27,13 +24,13 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@chaos-garden/shared": "file:../shared",
+    "@chaos-garden/shared": "file:../packages/shared",
     "cross-spawn": "^7.0.6",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^3.2.4",
     "@types/node": "^25.2.1",
+    "@vitest/coverage-v8": "^3.2.4",
     "miniflare": "^3.0.0",
     "typescript": "^5.3.0",
     "vitest": "^3.2.4",

@@ -44,7 +44,7 @@
     "command": ""
   },
   "alias": {
-    "@chaos-garden/shared": "../shared/types.ts"
+    "@chaos-garden/shared": "../packages/shared/src/index.ts"
   },
   "dev": {
     "ip": "localhost",

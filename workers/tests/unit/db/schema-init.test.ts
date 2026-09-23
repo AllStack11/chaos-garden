@@ -38,13 +38,13 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
     }
   });
 
-  it('initializes system_metadata with schema_version 1.9.0', async () => {
+  it('initializes system_metadata with schema_version 3.0.0', async () => {
     const row = await db
       .prepare("SELECT value FROM system_metadata WHERE key = 'schema_version'")
       .first<{ value: string }>();
 
     expect(row).toBeDefined();
-    expect(row?.value).toBe('1.9.0');
+    expect(row?.value).toBe('3.0.0');
   });
 
   it('creates singleton curator_leases row (id = 1) and enforces CHECK constraint', async () => {
@@ -69,6 +69,54 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
           `INSERT INTO curator_leases (id, lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick)
            VALUES (2, 'lease-2', 'curator-attacker', 0, 1000, 10)`,
         )
+        .run(),
+    ).rejects.toThrow();
+  });
+
+  it('creates singleton canonical_anchor row (id = 1) and enforces CHECK constraint', async () => {
+    const row = await db
+      .prepare('SELECT * FROM canonical_anchor WHERE id = 1')
+      .first<{
+        id: number;
+        checkpoint_id: number | null;
+        canonical_tick: number;
+        checksum: string | null;
+        updated_at_ms: number;
+      }>();
+
+    expect(row).toBeDefined();
+    expect(row?.id).toBe(1);
+    expect(row?.canonical_tick).toBe(0);
+
+    // Attempting to insert a row with id != 1 must fail due to CHECK (id = 1)
+    await expect(
+      db
+        .prepare(
+          `INSERT INTO canonical_anchor (id, canonical_tick, checksum, updated_at_ms)
+           VALUES (2, 10, 'sha256-invalid', 1000)`,
+        )
+        .run(),
+    ).rejects.toThrow();
+  });
+
+  it('enforces UNIQUE checksum on chronicle_events', async () => {
+    const insert1 = await db
+      .prepare(
+        `INSERT INTO chronicle_events (id, canonical_tick, occurred_at, type, severity, description, tags_json, checksum, created_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind('evt-1', 100, new Date().toISOString(), 'EXTINCTION', 'HIGH', 'Species died', '[]', 'test-checksum-dup', 1000)
+      .run();
+    expect(insert1.success).toBe(true);
+
+    // Duplicate checksum should throw unique constraint error
+    await expect(
+      db
+        .prepare(
+          `INSERT INTO chronicle_events (id, canonical_tick, occurred_at, type, severity, description, tags_json, checksum, created_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind('evt-2', 101, new Date().toISOString(), 'SPECIATION', 'MEDIUM', 'Species born', '[]', 'test-checksum-dup', 1001)
         .run(),
     ).rejects.toThrow();
   });

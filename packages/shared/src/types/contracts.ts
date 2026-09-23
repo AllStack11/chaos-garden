@@ -1,13 +1,13 @@
 /**
  * Chaos Garden - Client-Server API Contracts & Consensus Types
- * 
+ *
  * Formal network boundaries between the Cloudflare Worker backend
  * and the client-side Svelte/PixiJS runtime.
  */
 
-import type { Entity, DeadMatter, PopulationSummary } from './taxonomy.js';
-import type { SoilGridState } from './soil.js';
-import type { AtmosphericState } from './weather.js';
+import type { Entity, DeadMatter, PopulationSummary } from "./taxonomy.js";
+import type { SoilGridState } from "./soil.js";
+import type { AtmosphericState } from "./weather.js";
 
 /**
  * Exact, zero-loss snapshot of EntityPool state.
@@ -93,7 +93,7 @@ export interface EncodedEngineCheckpoint {
   seed: number;
   byteLength: number;
   checksum: string; // Hex-encoded SHA-256 hash of payload bytes
-  payload: string;   // Base64-encoded binary payload
+  payload: string; // Base64-encoded binary payload
 }
 
 /**
@@ -130,11 +130,66 @@ export interface GardenSnapshotResponse {
 
 /**
  * Canonical garden bootstrap response consumed by client.
+ * Standard Phase 4 versioned API success envelope (v1).
+ */
+export interface ApiSuccess<T> {
+  ok: true;
+  apiVersion: 1;
+  serverTime: string;
+  data: T;
+  // Backward compatibility fields
+  success?: true;
+  timestamp?: string;
+}
+
+/**
+ * Standard Phase 4 stable API error codes.
+ */
+export type ApiErrorCode =
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
+  | "LEASE_CONFLICT"
+  | "STALE_CANONICAL"
+  | "INVALID_CHECKPOINT"
+  | "INVALID_REQUEST"
+  | "NOT_FOUND"
+  | "RATE_LIMITED"
+  | "UNAVAILABLE";
+
+/**
+ * Standard Phase 4 versioned API error envelope (v1).
+ */
+export interface ApiError {
+  ok: false;
+  apiVersion: 1;
+  code: ApiErrorCode;
+  message: string;
+  requestId: string;
+  details?: unknown;
+  // Backward compatibility fields
+  success?: false;
+  error?: string;
+  timestamp?: string;
+}
+
+/**
+ * Canonical garden bootstrap response data consumed by client.
+ */
+export interface GardenBootstrapData {
+  canonicalState: CanonicalWorldState;
+  checkpoint?: EncodedEngineCheckpoint;
+  events: ChronicleEvent[];
+  exactContinuation: boolean;
+}
+
+/**
+ * Canonical garden bootstrap response consumed by client (legacy & v1 compatible).
  */
 export interface GardenBootstrapResponse {
   canonicalState: CanonicalWorldState;
   checkpoint?: EncodedEngineCheckpoint;
   events: ChronicleEvent[];
+  exactContinuation?: boolean;
 }
 
 /**
@@ -151,15 +206,68 @@ export interface CuratorLease {
 
 /**
  * Payload sent to POST /api/garden/checkpoint by an authorized curator.
+ * Request payload for POST /api/garden/lease.
+ */
+export interface LeaseRequest {
+  curatorId?: string;
+  renewLeaseId?: string;
+  authorizedTick?: number;
+  ttlMs?: number;
+}
+
+/**
+ * Response payload for POST /api/garden/lease.
+ */
+export interface LeaseResponse {
+  lease: CuratorLease;
+}
+
+/**
+ * Phase 4 Canonical Checkpoint Submission payload sent to POST /api/garden/checkpoint.
+ */
+export interface CanonicalCheckpointSubmission {
+  leaseId: string;
+  baseCanonicalTick: number;
+  checkpoint: EncodedEngineCheckpoint;
+  canonicalState?: CanonicalWorldState;
+  chronicleEvents?: ChronicleEvent[];
+}
+
+/**
+ * Backward-compatible payload sent to POST /api/garden/checkpoint by an authorized curator.
  */
 export interface CheckpointSubmission {
   leaseId: string;
   curatorId?: string;
   tick: number;
+  baseCanonicalTick?: number;
   checkpoint: EncodedEngineCheckpoint;
   canonicalState?: CanonicalWorldState;
   snapshot?: CanonicalWorldState;
   chronicleEvents?: ChronicleEvent[];
+}
+
+/**
+ * Result returned upon successful atomic commit of a canonical checkpoint.
+ */
+export interface CheckpointCommitResult {
+  committed: boolean;
+  tick?: number;
+  canonicalTick: number;
+  checksum: string;
+  committedAt: string;
+  chronicleEventIds: string[];
+}
+
+/**
+ * Database record representing the singleton canonical anchor (id = 1).
+ */
+export interface CanonicalAnchorRecord {
+  id: number;
+  checkpointId: number | null;
+  canonicalTick: number;
+  checksum: string | null;
+  updatedAtMs: number;
 }
 
 /**
@@ -170,7 +278,7 @@ export interface ChronicleEvent {
   tick: number;
   timestamp: string;
   type: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   description: string;
   tags: string[];
 }
@@ -179,11 +287,47 @@ export interface ChronicleEvent {
  * Response for GET /api/health
  */
 export interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy";
   tick: number;
   timestamp: string;
   version: string;
   databaseReady: boolean;
   activeCuratorLease: boolean;
+  gardenState?: {
+    tick: number;
+    timestamp: string;
+  } | null;
+  config?: {
+    tickIntervalMinutes: number;
+  };
+  canonicalTick?: number;
+  schemaVersion?: string;
 }
 
+/**
+ * Public bounded operational diagnostics summary (GET /api/diagnostics/summary).
+ */
+export interface DiagnosticsSummary {
+  schemaVersion: string;
+  canonicalAgeMs: number;
+  lastCommitAgeMs: number | null;
+  checkpointByteSize: number;
+  canonicalTick: number;
+  activeCuratorLease: boolean;
+  metrics: {
+    gardenReads: number;
+    checkpointCommits: number;
+    rejectedWrites: number;
+    serverErrors: number;
+  };
+}
+
+/**
+ * Query parameters for GET /api/garden/stats
+ */
+export interface GardenStatsQuery {
+  fromTick?: number;
+  toTick?: number;
+  bucket?: number;
+  windowTicks?: number;
+}

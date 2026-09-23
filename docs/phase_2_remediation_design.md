@@ -169,7 +169,7 @@ Do not make the client infer a snapshot from the current `{ gardenState, entitie
 - Hash exactly the payload bytes with Web Crypto SHA-256 at the Worker/client boundary. Do not use `snap-${tick}-${count}` as a checksum.
 - Reject unsupported versions, a capacity mismatch, invalid dense/free counts, column length mismatch, malformed IDs, or a checksum mismatch before mutating a `World`.
 - The snapshot must include the PRNG state, entity-ID counter, pool state, all component columns, and soil buffers.
-- Retain at most 500 checkpoints using a transactional pruning query. Snapshot writes must remain on the curator checkpoint cadence, not the 60 TPS simulation cadence.
+- Retain at most 500 checkpoints using a transactional pruning query. In the implemented Worker-owned design, snapshots are written only by the 15-minute scheduled Worker (about 5.2 days of retained history), never at the 60 TPS simulation cadence. See [`phase_4_server_design.md`](phase_4_server_design.md).
 
 ### Tests
 

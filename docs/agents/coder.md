@@ -178,7 +178,7 @@ git checkout -b <category>/<package>-<slug>
 ```
 
 Categories: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `chore`.
-Packages: `shared`, `engine`, `workers`, `frontend`, `repo`.
+Packages: `shared`, `engine`, `workers`, `client`, `repo`.
 
 ### 2. Pre-Push Verification Gate
 

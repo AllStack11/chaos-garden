@@ -19,26 +19,28 @@ The **System Architect** is responsible for:
 
 ## 2. Core System Architecture Context
 
-### Package Topology (`packages/`)
+### Package Topology
 
 ```
 chaos-garden/
 ├── packages/
 │   ├── shared/   # Contracts, vector math, Mulberry32 PRNG, binary stride protocol
 │   ├── engine/   # Standalone ECS (SoA + generational pool), steering, soil grid
-│   ├── client/   # Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio + Web Worker
-│   └── server/   # Cloudflare Workers + D1 SQLite (canonical epochs, curator leases)
+│   └── client/   # Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio + Web Worker
+└── workers/      # Cloudflare Workers + D1 SQLite (canonical epochs, sole curator)
 ```
 
-### Consensus & Synchronization: The "Anchor & Branch" Model
+### Consensus & Synchronization: Worker-Owned Canonical Model
 
-- **Bootstrap**: Clients load the canonical world state snapshot (`GET /api/garden`) from Cloudflare D1 on boot.
+- **Bootstrap**: Public observers load the anchored canonical state (`GET /api/garden`) from Cloudflare D1.
 - **Local Sandbox**: The simulation runs at full fidelity (60 FPS) in the user's Web Worker. Viewers scrub time (1x–10x) and apply curator interventions locally without desynchronizing other users.
-- **Canonical Heartbeat**: The Cloudflare Worker scheduled cron advances background macro-cycles (world age, seasons, global weather).
-- **Curator Lease Checkpoints**: A single active viewer can acquire a temporary "Curator Lease" (2-minute TTL in D1) to commit validated milestone snapshots (`POST /api/garden/checkpoint`).
-- **Chronicle Discoveries**: All clients can submit noteworthy evolutionary milestones and extinction survivals to the persistent global timeline.
+- **Canonical Authority**: The scheduled Cloudflare Worker is the only process that advances and persists the ecosystem. Browsers have no mutation, lease, authentication, or checkpoint-submission route.
+- **Internal Lease and CAS**: A singleton D1 lease prevents overlapping cron runs; the canonical-anchor compare-and-swap fence rejects a commit computed from a stale anchor.
+- **Chronicle**: The Worker persists bounded read-only chronicle events with each canonical commit.
 
 ### Data Bus & Zero-Copy Threading
+
+The deployed observer does not run a browser simulation loop. The following protocol remains the contract for the reusable `@chaos-garden/client` terrarium package and headless simulation tooling.
 
 - **Worker $\leftrightarrow$ PixiJS Render Bus**: Must use flat transferable `Float32Array` buffers with an 8-float stride (32 bytes/entity):
   `[ID_HASH, POS_X, POS_Y, ROTATION, SIZE, TYPE_CODE, HEALTH_RATIO, ENERGY_RATIO]`.
@@ -57,7 +59,7 @@ chaos-garden/
 ### Cloudflare Free-Tier Budgeting
 
 - **D1 Row Writes**: Storing compact serialized macro snapshot rows uses $<300$ writes/day ($<0.3\%$ of D1's 100,000/day free limit).
-- **D1 Storage**: Rolling 500-snapshot ring buffer keeps DB storage $<50$ MB ($<1\%$ of D1's 5 GB free limit).
+- **D1 Storage**: Rolling 500-snapshot ring buffer retains about 5.2 days at a 15-minute cadence and uses roughly 500 MB of payload storage plus D1 overhead (about 10% of a 5 GB allowance). This is the accepted Phase 4 budget; verify the cap and monitor deployed size.
 - **Worker CPU**: Simple snapshot reads and lease updates complete in $<5$ ms.
 - **Pages Bandwidth**: 100% free unlimited edge distribution.
 
@@ -68,12 +70,12 @@ chaos-garden/
 When reviewing any plan, PR, or proposed change, the Architect must enforce these checks:
 
 1. **Zero-Allocation Rule**: Does this change allocate objects, closures, or arrays inside the 60 FPS simulation or render loops? If yes, reject or refactor to TypedArrays / pooling.
-2. **Main-Thread Decoupling**: Does heavy computation run on the main thread instead of the Web Worker? Never block the main thread.
-3. **Consensus Safety**: Does this allow arbitrary clients to overwrite canonical D1 state? All writes must go through curator lease verification or scheduled heartbeats.
+2. **Main-Thread Decoupling**: Does heavy computation run on a browser main thread? The deployed observer must remain lightweight; reusable browser simulations belong in a Web Worker.
+3. **Consensus Safety**: Does this allow a process other than the scheduled Worker to overwrite canonical D1 state? Canonical writes must use the internal lease and anchor-CAS fence.
 4. **Trophic Order Invariance**: Are reproduction thresholds strictly ordered: `plant < herbivore < carnivore`? (Producers must reproduce before primary consumers).
 5. **Determinism**: Is all randomness routed through the seeded Mulberry32 PRNG? Unseeded `Math.random()` in the engine violates replayability.
-6. **Battery & Thermal Throttling**: Does the system respect the Page Visibility API, stepping down to 5 TPS on tab blur?
-7. **Offline Resilience**: Does the client gracefully fall back to local cached snapshots if D1 is unreachable?
+6. **Battery & Thermal Throttling**: Does any optional browser simulation respect the Page Visibility API? The deployed observer must not introduce a continuous browser loop.
+7. **Observer Resilience**: Does a D1 failure produce a clear unavailable or stale-state experience without allowing browser-side canonical mutation?
 
 ---
 

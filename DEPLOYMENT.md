@@ -1,108 +1,49 @@
-# Chaos Garden Deployment
+# Chaos Garden deployment
 
-This guide gets Chaos Garden live on Cloudflare using your existing Cloudflare account and GitHub repo.
+Chaos Garden currently deploys only the Worker-owned canonical ecosystem. The Astro frontend has been removed; a separately built offline-capable observer will add Pages deployment later.
 
-## 1) Prerequisites
+## Prerequisites
 
-- Cloudflare account
-- GitHub repo with this project
-- Wrangler authenticated locally (`npx wrangler login`)
-- Node.js 20+
+- Cloudflare account and Wrangler authentication (`npx wrangler login`)
+- Node.js 22.5+
+- A D1 database named `chaos-garden-db`
 
-## 2) One-time Cloudflare setup
+## 1. Configure D1
 
-### Create D1 database
-
-Run:
+Create the database if necessary:
 
 ```bash
 npx wrangler d1 create chaos-garden-db
 ```
 
-Copy the returned `database_id` and place it in:
-
-- `workers/wrangler.jsonc` at `d1_databases[0].database_id`
-- `workers/wrangler.jsonc` at `env.dev.d1_databases[0].database_id`
-
-### Initialize remote D1 schema + seed data
-
-From repository root:
+Place the returned database ID in `workers/wrangler.jsonc`, then initialize the canonical schema:
 
 ```bash
 npm run db:init:remote
 ```
 
-This resets the remote D1 database, applies `workers/schema.sql`, and seeds the v3 production resilience baseline population.
+This command executes `workers/canonical-cutover.sql` against the selected D1 database. It initializes canonical tables and singleton rows, cleanses legacy pre-v3 records, and prepares the database for the first scheduled Worker execution to create the primordial canonical checkpoint.
 
-Optional custom seed:
-
-```bash
-npm run db:init:remote -- --seed=12345
-```
-
-### Deploy Workers API once
+## 2. Deploy the Worker
 
 ```bash
 npm run deploy:workers
 ```
 
-Or run DB init + Worker deploy together:
+The deploy command builds `@chaos-garden/engine` before invoking Wrangler because the Worker imports the engine build output. Verify:
 
-```bash
-npm run deploy:workers:with-db-init
+```text
+https://<worker-url>/api/health
 ```
 
-After deploy, note your Worker URL:
+The Worker advances the canonical world every 15 minutes. Its public API is read-only: `/api/garden` and `/api/health`.
 
-- `https://chaos-garden-api.<your-subdomain>.workers.dev`
+## 3. Post-deployment checks
 
-### Create Cloudflare Pages project
+- `GET /api/health` returns HTTP 200 after schema initialization.
+- After the next cron invocation, `GET /api/garden` returns an exact canonical continuation.
+- The cron trigger is `*/15 * * * *` in the Worker dashboard.
 
-Create a Pages project in Cloudflare dashboard (or via Wrangler) named `chaos-garden-frontend`.
+## D1 retention
 
-## 3) Configure CORS for production
-
-Set `CORS_ORIGIN` in `workers/wrangler.jsonc` to your Pages production URL, for example:
-
-```json
-"CORS_ORIGIN": "https://your-app-title.pages.dev"
-```
-
-Then deploy Worker again:
-
-```bash
-npm run deploy:workers
-```
-
-## 4) GitHub Actions deployment (recommended)
-
-This repo now includes `.github/workflows/deploy.yml`.
-
-Add these GitHub repository secrets:
-
-- `CLOUDFLARE_API_TOKEN`: token with Workers + Pages + D1 permissions
-- `CLOUDFLARE_ACCOUNT_ID`: your Cloudflare account id
-- `CLOUDFLARE_PAGES_PROJECT_NAME`: e.g. `chaos-garden-frontend`
-- `PUBLIC_API_URL`: your Worker URL, e.g. `https://chaos-garden-api.<subdomain>.workers.dev`
-
-After secrets are set, pushing to `main` deploys both Worker and Pages.
-
-## 5) Local/manual deploy commands
-
-From repository root:
-
-```bash
-npm run deploy:workers
-PUBLIC_API_URL=https://chaos-garden-api.<subdomain>.workers.dev npm run deploy:frontend
-```
-
-## 6) Quick verification
-
-- Worker health endpoint: `https://<worker-url>/api/health`
-- Frontend loads and shows live data
-- Cron trigger exists in Worker dashboard (`*/15 * * * *`)
-
-## Notes
-
-- `npm run db:init:remote` is destructive for the target D1 database (it drops and recreates schema).
-- Use `npm run db:init:remote:verify` to validate database invariants.
+The Worker retains the newest 500 checkpoints and their canonical-state records, approximately 5.2 days at the 15-minute cadence. The accepted storage budget is roughly 500 MB of checkpoint/state payloads plus D1 overhead; monitor actual database size after rollout.
