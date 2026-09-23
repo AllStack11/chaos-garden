@@ -33,13 +33,13 @@ The compare-and-swap fence rejects an overlapping execution that computed from a
 
 ## Persistence
 
-| Table | Purpose |
-| --- | --- |
-| `engine_checkpoints` | Exact binary continuation checkpoint. |
-| `canonical_world_states` | Readable canonical state associated with a checkpoint. |
-| `canonical_anchor` | Singleton pointer to the current canonical checkpoint. |
-| `curator_leases` | Singleton internal overlap guard for scheduled Worker execution. |
-| `chronicle_events` | Read-only bounded event stream. |
+| Table                    | Purpose                                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| `engine_checkpoints`     | Exact binary continuation checkpoint.                            |
+| `canonical_world_states` | Readable canonical state associated with a checkpoint.           |
+| `canonical_anchor`       | Singleton pointer to the current canonical checkpoint.           |
+| `curator_leases`         | Singleton internal overlap guard for scheduled Worker execution. |
+| `chronicle_events`       | Read-only bounded event stream.                                  |
 
 `canonical_world_states` does not embed the binary checkpoint; `engine_checkpoints` is the single durable copy of checkpoint bytes.
 
@@ -54,10 +54,10 @@ The canonical D1 database uses schema version `3.0.0`, initialized via `workers/
 
 ## Public API
 
-| Route | Behavior |
-| --- | --- |
+| Route             | Behavior                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/garden` | Returns the anchored canonical state, exact-continuation checkpoint, and recent chronicle events. Returns a non-exact response when the anchor is incomplete or mismatched. |
-| `GET /api/health` | Returns health status, canonical tick, schema version, and whether the internal lease is active. |
+| `GET /api/health` | Returns health status, canonical tick, schema version, and whether the internal lease is active.                                                                            |
 
 All public API routes are read-only.
 
@@ -67,12 +67,12 @@ The commit batch retains the latest **500** checkpoints and deletes older, non-a
 
 At one snapshot every 15 minutes, 500 records cover about **5.2 days**. At the measured default 2,000-slot engine capacity:
 
-| Component | Approximate payload per snapshot |
-| --- | ---: |
-| Binary checkpoint BLOB | 342 KB |
-| Canonical-state JSON | 661 KB |
-| Total | 1.0 MB |
-| 500-snapshot window | 500 MB |
+| Component              | Approximate payload per snapshot |
+| ---------------------- | -------------------------------: |
+| Binary checkpoint BLOB |                           342 KB |
+| Canonical-state JSON   |                           661 KB |
+| Total                  |                           1.0 MB |
+| 500-snapshot window    |                           500 MB |
 
 The accepted production envelope is approximately **500 MB of payload data plus D1/SQLite overhead**, below the 5 GB D1 storage allowance. This replaces the former <50 MB target. The Worker must retain the 500-row cap and monitor actual database size after release.
 
