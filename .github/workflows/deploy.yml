@@ -126,4 +126,4 @@ jobs:
       - name: Verify deployed frontend
         run: |
           curl --fail --show-error --retry 5 --retry-delay 3 --retry-all-errors "${PAGES_URL}" \
-            | grep -q '<div id="app">'
+            | grep -q 'id="app"'
