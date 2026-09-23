@@ -129,18 +129,18 @@ describe('canonical bootstrap', () => {
     await worker.scheduled({ cron: '*/15 * * * *' }, { DB: db });
 
     const newAnchor = await getCanonicalAnchor(db);
-    expect(newAnchor?.canonicalTick).toBe(300);
+    expect(newAnchor?.canonicalTick).toBe(1200);
     expect(newAnchor?.checkpointId).not.toBeNull();
 
     const response = await worker.fetch(new Request('https://garden.test/api/garden'), { DB: db });
     expect(response.status).toBe(200);
     const body = await response.json() as { data: { exactContinuation: boolean; checkpoint?: { tick: number } } };
     expect(body.data.exactContinuation).toBe(true);
-    expect(body.data.checkpoint?.tick).toBe(300);
+    expect(body.data.checkpoint?.tick).toBe(1200);
 
     await migrateToCanonicalSchema(db);
     const preservedAnchor = await getCanonicalAnchor(db);
-    expect(preservedAnchor?.canonicalTick).toBe(300);
+    expect(preservedAnchor?.canonicalTick).toBe(1200);
     expect(preservedAnchor?.checkpointId).toBe(newAnchor?.checkpointId);
     const preservedCheckpoints = await db.prepare('SELECT COUNT(*) as count FROM engine_checkpoints').first<{ count: number }>();
     expect(preservedCheckpoints?.count).toBe(1);

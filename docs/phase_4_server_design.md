@@ -26,7 +26,7 @@ Future offline-capable observer
 
 1. Reads the current anchor and acquires or renews the internal Worker lease.
 2. Hydrates the referenced checkpoint, or seeds the primordial ecosystem when the anchor is empty.
-3. Advances 900 deterministic engine ticks.
+3. Advances 1,200 deterministic engine ticks.
 4. Commits the checkpoint, canonical state, and anchor in one D1 batch guarded by the expected anchor tick and the internal lease.
 
 The compare-and-swap fence rejects an overlapping execution that computed from an older anchor. Public HTTP routes do not expose mutation methods.
@@ -65,7 +65,7 @@ All public API routes are read-only.
 
 The commit batch retains the latest **500** checkpoints and deletes older, non-anchored checkpoint rows. Deleting a checkpoint cascades to its canonical-state row.
 
-At one snapshot every 15 minutes, 500 records cover about **5.2 days**. At the measured default 2,000-slot engine capacity:
+At one snapshot every minute, 500 records cover about **8 hours and 20 minutes**. At the measured default 2,000-slot engine capacity:
 
 | Component              | Approximate payload per snapshot |
 | ---------------------- | -------------------------------: |

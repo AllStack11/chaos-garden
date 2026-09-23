@@ -4,7 +4,7 @@ Chaos Garden is a deterministic ecosystem curated exclusively by a scheduled Clo
 
 ## Runtime model
 
-1. Every 15 minutes, the scheduled Worker hydrates the canonical engine checkpoint.
+1. Every minute, the scheduled Worker hydrates the canonical engine checkpoint.
 2. It advances a fixed deterministic batch of simulation ticks.
 3. It atomically persists the next checkpoint, canonical world state, and anchor pointer in D1.
 4. `GET /api/garden` serves the anchored state; no browser mutation, curator lease, authentication, or checkpoint endpoint is exposed.
@@ -20,7 +20,7 @@ The Worker uses an internal singleton lease and an anchor compare-and-swap fence
 
 ## D1 retention and storage
 
-The database keeps the latest **500** canonical checkpoints. At the 15-minute cron cadence this represents about **5.2 days** of history.
+The database keeps the latest **500** canonical checkpoints. At the one-minute cron cadence this represents about **8 hours and 20 minutes** of history.
 
 At the default 2,000-slot engine capacity, a checkpoint is approximately 342 KB and its persisted canonical-state JSON is approximately 661 KB. The 500-snapshot window therefore uses roughly **500 MB of payload storage**, plus SQLite/D1 index overhead. This is an accepted, bounded design budget within the 5 GB D1 storage allowance; monitor the actual D1 size after deployment.
 

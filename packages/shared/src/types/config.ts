@@ -42,11 +42,11 @@ export interface SimulationConfig {
 /** Calendar scale used by the observer HUD and canonical scheduler. */
 export const SIMULATED_TICKS_PER_DAY = 1200;
 
-/** One simulated day passes in one hour at normal observer speed. */
-export const NORMAL_OBSERVER_TPS = SIMULATED_TICKS_PER_DAY / (60 * 60);
+/** One simulated day passes in one minute at normal observer speed. */
+export const NORMAL_OBSERVER_TPS = SIMULATED_TICKS_PER_DAY / 60;
 
-/** The canonical Worker commits four evenly spaced checkpoints per simulated day. */
-export const CANONICAL_TICKS_PER_SCHEDULE = SIMULATED_TICKS_PER_DAY / 4;
+/** The canonical Worker commits one complete simulated day each minute. */
+export const CANONICAL_TICKS_PER_SCHEDULE = SIMULATED_TICKS_PER_DAY;
 
 export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   gardenWidth: 1600,

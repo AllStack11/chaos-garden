@@ -35,7 +35,7 @@ describe('VisibilityManager Unit Tests', () => {
     manager.onEnterBackground();
 
     expect(manager.isThrottled).toBe(true);
-    expect(mockBridge.setThrottle).toHaveBeenCalledWith(1 / 30);
+    expect(mockBridge.setThrottle).toHaveBeenCalledWith(2);
     expect(mockViewport.stopTicker).toHaveBeenCalled();
     expect(mockAudio.suspend).toHaveBeenCalled();
   });
@@ -51,7 +51,7 @@ describe('VisibilityManager Unit Tests', () => {
     manager.onEnterForeground();
 
     expect(manager.isThrottled).toBe(false);
-    expect(mockBridge.setThrottle).toHaveBeenCalledWith(1 / 3);
+    expect(mockBridge.setThrottle).toHaveBeenCalledWith(20);
     expect(mockViewport.startTicker).toHaveBeenCalled();
     expect(mockAudio.resume).toHaveBeenCalled();
   });

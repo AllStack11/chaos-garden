@@ -36,7 +36,7 @@ The deploy command builds `@chaos-garden/engine` before invoking Wrangler becaus
 https://<worker-url>/api/health
 ```
 
-The Worker advances the canonical world every 15 minutes. Its public API is read-only: `/api/garden` and `/api/health`.
+The Worker advances the canonical world every minute. Its public API is read-only: `/api/garden` and `/api/health`.
 
 ## 3. Deploy the frontend
 
@@ -76,4 +76,4 @@ first deployment or when an intentional cutover is required.
 
 ## D1 retention
 
-The Worker retains the newest 500 checkpoints and their canonical-state records, approximately 5.2 days at the 15-minute cadence. The accepted storage budget is roughly 500 MB of checkpoint/state payloads plus D1 overhead; monitor actual database size after rollout.
+The Worker retains the newest 500 checkpoints and their canonical-state records, approximately 8 hours and 20 minutes at the one-minute cadence. The accepted storage budget is roughly 500 MB of checkpoint/state payloads plus D1 overhead; monitor actual database size after rollout.
