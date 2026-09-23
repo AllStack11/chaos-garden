@@ -1,0 +1,45 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate redesigned workspaces
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type check
+        run: npm run type-check:all
+
+      - name: Run tests
+        run: npm run test:all
+
+      - name: Run deterministic simulation checks
+        run: npm run sim:run -- --seed=42 --ticks=500 --headless
+
+      - name: Run simulation allocation audit
+        run: npm run audit:sim
+
+      - name: Build reusable browser client
+        run: npm run client:build

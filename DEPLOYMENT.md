@@ -44,6 +44,22 @@ The Worker advances the canonical world every 15 minutes. Its public API is read
 - After the next cron invocation, `GET /api/garden` returns an exact canonical continuation.
 - The cron trigger is `*/15 * * * *` in the Worker dashboard.
 
+## GitHub Actions
+
+Pull requests to `main` run the workspace verification suite in `ci.yml`:
+type checks, tests, deterministic simulation checks, the allocation audit, and
+the reusable browser-client build. A merge to `main` runs the same checks before
+`deploy.yml` deploys the Worker and verifies its public health endpoint.
+
+Configure these repository secrets for deployment:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+The deployment workflow deliberately does not run the D1 cutover. Run
+`npm run db:init:remote` as a planned, one-time schema operation before the
+first deployment or when an intentional cutover is required.
+
 ## D1 retention
 
 The Worker retains the newest 500 checkpoints and their canonical-state records, approximately 5.2 days at the 15-minute cadence. The accepted storage budget is roughly 500 MB of checkpoint/state payloads plus D1 overhead; monitor actual database size after rollout.
