@@ -15,7 +15,7 @@ The Worker uses an internal singleton lease and an anchor compare-and-swap fence
 
 - `packages/shared/` — contracts, PRNG, math, binary checkpoint protocol, and chronicle utilities.
 - `packages/engine/` — deterministic ECS simulation.
-- `packages/client/` — reusable browser simulation and persistence components; not part of the currently deployed product.
+- `packages/client/` — Vite/Svelte observer deployed to Cloudflare Pages; it reads canonical state from the Worker API.
 - `workers/` — Cloudflare Worker API, scheduled canonical advancement, and D1 persistence.
 
 ## D1 retention and storage

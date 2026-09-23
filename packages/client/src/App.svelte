@@ -23,6 +23,8 @@
 
   let audioVolume = $state(0.7);
   let audioMuted = $state(false);
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '') ?? '';
+  const gardenApiUrl = `${apiBaseUrl}/api/garden`;
 
   function handleViewportReady(v: GardenViewport): void {
     viewport = v;
@@ -134,7 +136,7 @@
     });
 
     // Offline-first bootloader
-    const bootResult = await localPersistence.bootload();
+    const bootResult = await localPersistence.bootload(gardenApiUrl);
     const status = await bridge.init(42, 1600, 1200, bootResult.candidate);
     gardenState.bootstrapMode = status.mode;
 

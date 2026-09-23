@@ -7,6 +7,9 @@ export default defineConfig({
     pool: 'forks',
     poolOptions: {
       forks: {
+        // V8 coverage writes a shared temporary directory; parallel forks can
+        // race while finalizing reports on CI runners.
+        singleFork: true,
         execArgv: ['--max-old-space-size=4096', '--max-semi-space-size=128'],
       },
     },
