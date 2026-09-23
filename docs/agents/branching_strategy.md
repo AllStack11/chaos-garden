@@ -36,14 +36,14 @@ All branches are cut from the latest `origin/main` using this standard naming sc
   - `test`: Adding or refining test suites and invariant verifiers.
   - `docs`: Documentation, agent instructions, or architecture diagrams.
   - `chore`: Dependency updates, tooling, or repository maintenance.
-- **`<package>`**: Primary monorepo package affected (`shared`, `engine`, `workers`, `frontend`, or `repo` for cross-cutting changes).
+- **`<package>`**: Primary monorepo package affected (`shared`, `engine`, `workers`, `client`, or `repo` for cross-cutting changes).
 - **`<slug>`**: 2–4 lowercase words separated by hyphens describing the change.
 
 ### Examples:
 - `feat/engine-spatial-hash-opt`
 - `fix/workers-curator-lease-ttl`
 - `perf/engine-soa-stride-pack`
-- `feat/frontend-audio-soundscape`
+- `feat/client-audio-soundscape`
 - `docs/repo-branching-strategy`
 
 ---

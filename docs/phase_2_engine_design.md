@@ -21,15 +21,15 @@ The goal of **Phase 2** is to build a modular, high-performance, deterministic, 
 
 ## 2. Package Topology & Workspace Alignment
 
-The root workspace is updated to include all packages under `packages/`:
+The root workspace includes `packages/` and `workers/`:
 
 ```
 chaos-garden/
 ├── packages/
 │   ├── shared/   # [PHASE 1] Contracts, PRNG, zero-allocation stride & math helpers
 │   ├── engine/   # [PHASE 2] Standalone ECS (SoA + Generational Pool), Boids, Soil
-│   ├── client/   # [PHASE 3] Vite + Svelte 5 + PixiJS v8 + Web Audio
-│   └── server/   # [PHASE 4] Cloudflare Worker + D1 SQLite
+│   └── client/   # [PHASE 3] Vite + Svelte 5 + PixiJS v8 + Web Audio
+└── workers/      # [PHASE 4] Cloudflare Worker + D1 SQLite
 ```
 
 ### Shared Package Enhancements

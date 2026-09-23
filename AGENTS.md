@@ -39,15 +39,15 @@ The following principles apply to all agents, regardless of role or host operati
 
 ## Monorepo Architecture Overview
 
-The codebase is organized as a 4-package npm workspace under `packages/`:
+The codebase is organized as an npm workspace under `packages/` and `workers/`:
 
 ```
 chaos-garden/
 ├── packages/
 │   ├── shared/   # @chaos-garden/shared: Cross-layer types, vector math, PRNG, binary stride protocol
 │   ├── engine/   # @chaos-garden/engine: Standalone ECS (SoA + Generational Free-List), boids, soil grid
-│   ├── client/   # @chaos-garden/client: Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio + Web Worker
-│   └── server/   # @chaos-garden/server: Cloudflare Workers + D1 SQLite (canonical epochs, curator leases)
+│   └── client/   # @chaos-garden/client: Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio + Web Worker
+└── workers/      # @chaos-garden/workers: Cloudflare Workers + D1 SQLite (canonical epochs, sole curator)
 ```
 
 ---

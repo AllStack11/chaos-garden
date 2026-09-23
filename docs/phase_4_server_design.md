@@ -43,6 +43,15 @@ The compare-and-swap fence rejects an overlapping execution that computed from a
 
 `canonical_world_states` does not embed the binary checkpoint; `engine_checkpoints` is the single durable copy of checkpoint bytes.
 
+## Canonical Cutover & Schema Migration
+
+The canonical D1 database uses schema version `3.0.0`, initialized via `workers/canonical-cutover.sql` (or `migrateToCanonicalSchema` in code). The cutover is version-aware and fully idempotent:
+
+1. **Legacy Pre-v3 Cleansing**: If `schema_version` is not `'3.0.0'`, the migration resets the canonical anchor and lease singletons, and cleanses legacy browser-authored checkpoints and world states. This prevents legacy checkpoint rows from colliding with new Worker-authored ticks (e.g. tick 900).
+2. **Post-v3 Preservation**: When executed on an already-upgraded v3 database, all existing canonical checkpoints and anchor records are preserved without modification.
+3. **Legacy Table Removal**: Drops retired persistence tables (`simulation_events`, `entities`, `dead_matter`, `garden_state`, `simulation_control`, `api_metric_buckets`).
+4. **Parity Enforcement**: `workers/tests/unit/db/cutover-parity.test.ts` guarantees SQL statement parity between the raw SQL cutover script and TypeScript migration string.
+
 ## Public API
 
 | Route | Behavior |

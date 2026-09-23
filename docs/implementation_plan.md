@@ -99,15 +99,15 @@ chaos-garden/
 │   │   ├── spatial/    # SpatialHashGrid bucket partitioning
 │   │   ├── diagnostics/# Flight Recorder, ring buffer metrics, invariant auditors
 │   │   └── cli/        # Headless simulation runner (sim:run, audit:sim)
-│   ├── client/         # [NEXT] Vite + Svelte 5 (Runes) + Tailwind CSS + PixiJS v8 + Web Audio
-│   │   ├── worker/     # Web Worker hosting @chaos-garden/engine (Zero-copy Transferable Buffers)
-│   │   ├── renderer/   # PixiJS v8 batched renderers, dynamic soil texture, fullscreen bloom
-│   │   ├── audio/      # Web Audio API generative procedural synthesizer & soundscape
-│   │   ├── power/      # Page Visibility API throttling (battery & thermal manager)
-│   │   └── ui/         # Svelte 5 glassmorphic HUD, curator toolbar, LLM 1-click inspector
-│   └── server/         # [QUEUED] Cloudflare Worker API + Cloudflare D1 SQLite database
-│       ├── api/        # /api/garden, /api/garden/checkpoint, /api/diagnostics/summary
-│       └── db/         # D1 schema, migrations, epoch checkpoints, diagnostic log buffer
+│   └── client/         # [COMPLETED] Vite + Svelte 5 (Runes) + Tailwind CSS + PixiJS v8 + Web Audio
+│       ├── worker/     # Web Worker hosting @chaos-garden/engine (Zero-copy Transferable Buffers)
+│       ├── renderer/   # PixiJS v8 batched renderers, dynamic soil texture, fullscreen bloom
+│       ├── audio/      # Web Audio API generative procedural synthesizer & soundscape
+│       ├── power/      # Page Visibility API throttling (battery & thermal manager)
+│       └── ui/         # Svelte 5 glassmorphic HUD, curator toolbar, LLM 1-click inspector
+└── workers/            # [COMPLETED] Cloudflare Worker API + Cloudflare D1 SQLite database
+    ├── src/            # advanceCanonicalGarden, /api/garden, /api/health
+    └── db/             # D1 schema v3, queries, migrations, 500-snapshot retention
 ```
 
 ---
@@ -189,24 +189,24 @@ PR #4 delivers the Vite + Svelte 5 + PixiJS v8 browser terrarium on the remediat
 
 **Detailed specification:** [`phase_4_server_design.md`](phase_4_server_design.md). Delivered on feature branch `feat/workers-phase4-canonical`.
 
-Streamlined Cloudflare Workers and D1 database to serve as the high-integrity source of truth for the canonical global terrarium.
+Streamlined Cloudflare Workers and D1 database to serve as the high-integrity source of truth for the canonical global terrarium, with the scheduled Worker as sole curator.
 
-- **Canonical Persistence & Fencing**:
+- **Worker-Owned Canonical Authority**:
+  - Scheduled Cloudflare Worker (`*/15 * * * *`) is the only process that advances the canonical ecosystem (900 ticks/advance).
+  - No browser mutation, curator lease acquisition, or checkpoint submission routes are exposed.
+- **Canonical Persistence & CAS Commit**:
   - `canonical_anchor` (singleton `id = 1`) maintaining atomic monotonic progression pointers.
-  - CAS single-curator lease authorization (`curator_leases` singleton `id = 1`) with monotonic write fencing (`baseCanonicalTick`).
-  - Strict 1 MiB payload cap and deterministic SHA-256 payload integrity validation.
-  - Idempotent resubmission acceptance (returns HTTP 200 without duplicate rows).
+  - `engine_checkpoints` storing raw binary continuation checkpoints; `canonical_world_states` storing human/client-readable state JSON.
+  - CAS internal lease authorization (`curator_leases` singleton `id = 1`) and anchor fence preventing overlapping cron runs from duplicate advancement.
 - **Chronicle Event Deduplication**:
   - `chronicle_events` table with unique deterministic event checksums (`sha256(canonicalTick + occurredAt + type + severity + description + tagsJson)`).
-- **Hourly Metrics Aggregation**:
-  - `api_metric_buckets` table capturing hourly write/read request counters and failure codes.
-- **Unified Versioned HTTP Contract**:
-  - Standardized v1 response envelopes (`ok: true, apiVersion: 1, serverTime, data`, typed stable error codes: `UNAUTHENTICATED`, `FORBIDDEN`, `LEASE_CONFLICT`, `STALE_CANONICAL`, `INVALID_CHECKPOINT`, `INVALID_REQUEST`, `NOT_FOUND`, `RATE_LIMITED`, `UNAVAILABLE`).
-  - Sanitized health and diagnostics endpoints preventing database error and stack trace leakage.
-- **Client Synchronization**:
-  - `CuratorSession` and `LocalPersistence` handle envelope unpacking, `baseCanonicalTick` fencing, and `exactContinuation` verification.
-- **Automated D1 v2.0.0 Migration**:
-  - Zero-downtime, idempotent schema migration from `1.9.0` to `2.0.0` preserving historical checkpoints.
+- **Rolling Bounded Retention**:
+  - Retains the latest 500 checkpoints and cascades deletion to dependent canonical world states (~5.2 days of history, capping payload storage at ~500 MB).
+- **Version-Aware Idempotent Cutover (Schema v3.0.0)**:
+  - Automated cutover (`workers/canonical-cutover.sql` and `migrateToCanonicalSchema`) cleanses pre-v3 browser-authored data while preserving v3 canonical snapshots and dropping retired legacy tables.
+- **Public Read-Only API**:
+  - Standardized v1 response envelopes for `GET /api/garden` (exact-continuation checkpoint, state, and chronicle events) and `GET /api/health`.
+  - Isolate transient failure recovery ensures rejected D1 readiness promises clear for subsequent requests.
 
 ---
 
@@ -235,9 +235,9 @@ Streamlined Cloudflare Workers and D1 database to serve as the high-integrity so
    ```bash
    npm run test -w @chaos-garden/shared
    ```
-4. **Server API & Diagnostics Tests** (`packages/server`):
+4. **Worker API & Cutover Tests** (`workers`):
    ```bash
-   npm run test -w @chaos-garden/server
+   npm run test:ci -w @chaos-garden/workers
    ```
 
 ### Manual Verification

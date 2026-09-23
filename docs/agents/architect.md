@@ -19,15 +19,15 @@ The **System Architect** is responsible for:
 
 ## 2. Core System Architecture Context
 
-### Package Topology (`packages/`)
+### Package Topology
 
 ```
 chaos-garden/
 ├── packages/
 │   ├── shared/   # Contracts, vector math, Mulberry32 PRNG, binary stride protocol
 │   ├── engine/   # Standalone ECS (SoA + generational pool), steering, soil grid
-│   ├── client/   # Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio + Web Worker
-│   └── server/   # Cloudflare Workers + D1 SQLite (canonical epochs, curator leases)
+│   └── client/   # Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio + Web Worker
+└── workers/      # Cloudflare Workers + D1 SQLite (canonical epochs, sole curator)
 ```
 
 ### Consensus & Synchronization: Worker-Owned Canonical Model
