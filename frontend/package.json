@@ -19,11 +19,10 @@
     "clean": "rm -rf dist .astro",
     "type-check": "astro check",
     "db:init:local": "echo '🎨 Frontend: No database to initialize - this script is handled by the workers workspace' && exit 0",
-    "db:init:remote": "echo '🎨 Frontend: No remote database to initialize - handled by workers workspace' && exit 0",
-    "db:init:remote:verify": "echo '🎨 Frontend: No remote database to verify - handled by workers workspace' && exit 0"
+    "db:init:remote": "echo '🎨 Frontend: No remote database to initialize - handled by workers workspace' && exit 0"
   },
   "dependencies": {
-    "@chaos-garden/shared": "file:../shared"
+    "@chaos-garden/shared": "file:../packages/shared"
   },
   "devDependencies": {
     "@astrojs/check": "^0.3.4",

@@ -38,13 +38,13 @@ describe('Database Schema Initialization & Integrity (workers/schema.sql)', () =
     }
   });
 
-  it('initializes system_metadata with schema_version 2.0.0', async () => {
+  it('initializes system_metadata with schema_version 3.0.0', async () => {
     const row = await db
       .prepare("SELECT value FROM system_metadata WHERE key = 'schema_version'")
       .first<{ value: string }>();
 
     expect(row).toBeDefined();
-    expect(row?.value).toBe('2.0.0');
+    expect(row?.value).toBe('3.0.0');
   });
 
   it('creates singleton curator_leases row (id = 1) and enforces CHECK constraint', async () => {

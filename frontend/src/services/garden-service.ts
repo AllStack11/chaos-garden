@@ -7,12 +7,11 @@
 
 import { ApiClient } from './api-client';
 import type {
-  GardenResponse,
   HealthStatus,
-  GardenStatsResponse
 } from '../env.d.ts';
+import type { GardenBootstrapData } from '@chaos-garden/shared';
 
-export type GardenData = GardenResponse['data'];
+export type GardenData = GardenBootstrapData;
 
 export class GardenService {
   private client: ApiClient;
@@ -43,7 +42,11 @@ export class GardenService {
    */
   async fetchGardenData(): Promise<GardenData> {
     const response = await this.client.get<GardenData>('/api/garden');
-    return this.unwrapResponse('garden data', response);
+    const data = this.unwrapResponse('garden data', response);
+    if (data.exactContinuation !== true || !data.checkpoint || !data.canonicalState) {
+      throw new Error('Canonical bootstrap is not an exact continuation; refusing to hydrate cached state');
+    }
+    return data;
   }
 
   /**
@@ -54,11 +57,4 @@ export class GardenService {
     return this.unwrapResponse('health status', response);
   }
 
-  /**
-   * Fetch aggregated and historical statistics for the dashboard.
-   */
-  async fetchGardenStats(windowTicks: number = 120): Promise<GardenStatsResponse> {
-    const response = await this.client.get<GardenStatsResponse>(`/api/garden/stats?windowTicks=${windowTicks}`);
-    return this.unwrapResponse('garden stats', response);
-  }
 }

@@ -105,4 +105,4 @@ PUBLIC_API_URL=https://chaos-garden-api.<subdomain>.workers.dev npm run deploy:f
 ## Notes
 
 - `npm run db:init:remote` is destructive for the target D1 database (it drops and recreates schema).
-- Use `npm run db:init:remote:verify` to validate database invariants.
+- The canonical schema initializer is the only database bootstrap command; verify the Worker health endpoint after deployment.

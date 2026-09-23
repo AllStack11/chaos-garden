@@ -1,22 +1,7 @@
 /// <reference path="../.astro/types.d.ts" />
 /// <reference types="astro/client" />
 
-import type { 
-  GardenState as SharedGardenState, 
-  Entity as SharedEntity, 
-  SimulationEvent as SharedSimulationEvent,
-  PopulationSummary as SharedPopulationSummary,
-  HealthStatus as SharedHealthStatus,
-  GardenResponse as SharedGardenResponse,
-  GardenStatsResponse as SharedGardenStatsResponse,
-  GardenStatsPoint as SharedGardenStatsPoint,
-  GardenStatsAggregate as SharedGardenStatsAggregate,
-  GardenInsight as SharedGardenInsight,
-  EventTypeBreakdown as SharedEventTypeBreakdown,
-  EventSeverityBreakdown as SharedEventSeverityBreakdown,
-  GardenEntityVitals as SharedGardenEntityVitals,
-  DeadMatter as SharedDeadMatter
-} from '../../shared/types';
+import type { HealthStatus as SharedHealthStatus } from '@chaos-garden/shared';
 
 /**
  * Environment variables available in the frontend.
@@ -35,50 +20,5 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-// Re-export shared types for use in frontend components
-export type GardenState = SharedGardenState;
-export type Entity = SharedEntity;
-export type DeadMatter = SharedDeadMatter;
-export type SimulationEvent = SharedSimulationEvent;
-export type PopulationSummary = SharedPopulationSummary;
+// Re-export the API health type used by the canonical data service.
 export type HealthStatus = SharedHealthStatus;
-export type GardenResponse = SharedGardenResponse;
-export type GardenStatsResponse = SharedGardenStatsResponse;
-export type GardenStatsPoint = SharedGardenStatsPoint;
-export type GardenStatsAggregate = SharedGardenStatsAggregate;
-export type GardenInsight = SharedGardenInsight;
-export type EventTypeBreakdown = SharedEventTypeBreakdown;
-export type EventSeverityBreakdown = SharedEventSeverityBreakdown;
-export type GardenEntityVitals = SharedGardenEntityVitals;
-
-export interface TickResponse {
-  success: boolean;
-  data: {
-    message: string;
-    tickNumber: number;
-    duration: number;
-    newEntities: number;
-    deaths: number;
-    populations: PopulationSummary;
-    timestamp: string;
-  };
-  error?: string;
-  details?: unknown;
-}
-
-export interface InterventionRequest {
-  type: string;
-  params?: Record<string, unknown>;
-}
-
-export interface InterventionResponse {
-  success: boolean;
-  data: {
-    message: string;
-    type: string;
-    params?: Record<string, unknown>;
-    timestamp: string;
-  };
-  error?: string;
-  details?: unknown;
-}
