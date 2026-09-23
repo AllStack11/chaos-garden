@@ -11,6 +11,9 @@ import { base64ToUint8Array, computeChronicleEventChecksum, uint8ArrayToBase64, 
 import type { D1Database } from "../types/worker";
 import { executeBatch, executeQuery, queryAll, queryFirst } from "./connection";
 
+/** 500 quarter-hour snapshots bound canonical storage to roughly two weeks. */
+export const MAX_RETAINED_CANONICAL_SNAPSHOTS = 500;
+
 interface CheckpointRow {
   id: number;
   tick: number;
@@ -130,6 +133,9 @@ export async function commitCanonicalCheckpoint(db: D1Database, submission: Cano
     statements.push({ query: `INSERT OR IGNORE INTO chronicle_events (id, canonical_tick, occurred_at, type, severity, description, tags_json, checksum, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, params: [event.id || checksum, event.tick ?? submission.checkpoint.tick, occurredAt, event.type, event.severity, event.description, JSON.stringify(tags), checksum, now] });
   }
   statements.push({ query: `UPDATE curator_leases SET authorized_tick = ?, updated_at = datetime('now') WHERE id = 1 AND lease_id = ? AND curator_id = ? AND authorized_tick < ?`, params: [submission.checkpoint.tick, submission.leaseId, curatorId, submission.checkpoint.tick] });
+  // The batch keeps retention atomic with a successful CAS commit. Deleting a
+  // checkpoint cascades to its world-state row, so the two sets cannot drift.
+  statements.push({ query: `DELETE FROM engine_checkpoints WHERE id != (SELECT checkpoint_id FROM canonical_anchor WHERE id = 1) AND id IN (SELECT id FROM engine_checkpoints ORDER BY tick DESC LIMIT -1 OFFSET ?)`, params: [MAX_RETAINED_CANONICAL_SNAPSHOTS] });
   const results = await executeBatch<{ meta?: { changes?: number } }>(db, statements);
   if ((results[0]?.meta?.changes ?? 0) !== 1 || (results[1]?.meta?.changes ?? 0) !== 1) return { success: false, conflict: true, error: "Canonical checkpoint CAS failed" };
   return { success: true, result: { committed: true, tick: submission.checkpoint.tick, canonicalTick: submission.checkpoint.tick, checksum: submission.checkpoint.checksum, committedAt: new Date(now).toISOString(), chronicleEventIds: [] } };

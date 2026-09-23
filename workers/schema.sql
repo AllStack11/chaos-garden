@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS engine_checkpoints (
   payload BLOB NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_engine_checkpoints_tick ON engine_checkpoints(tick DESC);
 
 CREATE TABLE IF NOT EXISTS canonical_anchor (
   id INTEGER PRIMARY KEY CHECK (id = 1),

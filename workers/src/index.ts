@@ -1,3 +1,4 @@
+// `npm run deploy` builds this workspace dependency before Wrangler bundles.
 import { World } from '../../packages/engine/dist/index.js';
 import type { D1Database, ScheduledEvent } from './types/worker';
 import { CURRENT_SCHEMA_VERSION } from './db/migrations';
@@ -105,7 +106,6 @@ export async function advanceCanonicalGarden(db: D1Database): Promise<void> {
   const checkpoint = await world.exportEngineCheckpoint();
   const canonicalState = world.exportCanonicalState() as unknown as import('@chaos-garden/shared').CanonicalWorldState;
   canonicalState.checksum = checkpoint.checksum;
-  canonicalState.checkpoint = checkpoint;
   const commit = await commitCanonicalCheckpoint(db, { leaseId: lease.lease.leaseId, baseCanonicalTick, checkpoint, canonicalState, chronicleEvents: [] }, WORKER_CURATOR_ID);
   if (!commit.success) throw new Error(commit.error ?? 'Canonical checkpoint commit failed');
 }

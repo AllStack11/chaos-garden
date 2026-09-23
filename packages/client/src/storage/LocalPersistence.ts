@@ -112,6 +112,7 @@ export class LocalPersistence {
    * Replaces ONLY the canonical record. Never touches local branches.
    */
   async saveCanonical(envelope: GardenBootstrapResponse): Promise<void> {
+    if (!this.isExactCanonicalEnvelope(envelope)) return;
     try {
       const db = await this.getDB();
       const tick = envelope.checkpoint?.tick ?? envelope.canonicalState.tick;
@@ -133,6 +134,13 @@ export class LocalPersistence {
     } catch (err) {
       console.warn('[LocalPersistence] Failed to save canonical record to IndexedDB:', err);
     }
+  }
+
+  /** Rejects partial or stale bootstrap data before it reaches observer cache. */
+  private isExactCanonicalEnvelope(envelope: GardenBootstrapResponse | null | undefined): envelope is GardenBootstrapResponse & { checkpoint: EncodedEngineCheckpoint } {
+    const checkpoint = envelope?.checkpoint;
+    const canonicalState = envelope?.canonicalState;
+    return Boolean(envelope?.exactContinuation === true && checkpoint && canonicalState && checkpoint.tick === canonicalState.tick && checkpoint.checksum === canonicalState.checksum && checkpoint.payload.length > 0);
   }
 
   async loadCanonical(): Promise<CanonicalPersistenceRecord | null> {
@@ -275,7 +283,7 @@ export class LocalPersistence {
             ? body.data
             : body;
 
-        if (envelope && envelope.canonicalState) {
+        if (this.isExactCanonicalEnvelope(envelope)) {
           await this.saveCanonical(envelope);
 
           return {
@@ -296,7 +304,7 @@ export class LocalPersistence {
 
     // 3. Fall back to local canonical IndexedDB cache
     const cachedCanonical = await this.loadCanonical();
-    if (cachedCanonical && cachedCanonical.bootstrapEnvelope) {
+    if (cachedCanonical && this.isExactCanonicalEnvelope(cachedCanonical.bootstrapEnvelope)) {
       const envelope = cachedCanonical.bootstrapEnvelope;
       return {
         source: 'INDEXED_DB_CANONICAL',

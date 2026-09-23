@@ -95,7 +95,7 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
         entities: [],
         deadMatter: [],
         soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] },
-        checksum: "snap-450-20",
+        checksum: "sha-450",
       },
       checkpoint: {
         version: 1,
@@ -106,6 +106,7 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
         payload: "payload450",
       },
       events: [],
+      exactContinuation: true,
     };
 
     globalThis.fetch = vi.fn(async () => ({
@@ -150,16 +151,18 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
         entities: [],
         deadMatter: [],
         soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] },
-        checksum: "snap-300-9",
+        checksum: "sha-300",
       },
+      checkpoint: { version: 1, tick: 300, seed: 99, byteLength: 32, checksum: "sha-300", payload: "payload300" },
       events: [],
+      exactContinuation: true,
     };
 
     const cachedRecord: CanonicalPersistenceRecord = {
       kind: "canonical",
       capturedAtMs: Date.now() - 10000,
       baseCheckpointTick: 300,
-      baseCheckpointChecksum: "snap-300-9",
+      baseCheckpointChecksum: "sha-300",
       codecVersion: 1,
       bootstrapEnvelope: cachedEnvelope,
       byteSize: 500,
@@ -245,9 +248,11 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
         entities: [],
         deadMatter: [],
         soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] },
-        checksum: "snap-200",
+        checksum: "sha-200",
       },
+      checkpoint: { version: 1, tick: 200, seed: 42, byteLength: 32, checksum: "sha-200", payload: "payload200" },
       events: [],
+      exactContinuation: true,
     };
 
     await persistence.saveCanonical(envelope);
@@ -256,7 +261,7 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
     expect(loaded).toBeDefined();
     expect(loaded?.kind).toBe("canonical");
     expect(loaded?.baseCheckpointTick).toBe(200);
-    expect(loaded?.baseCheckpointChecksum).toBe("snap-200");
+    expect(loaded?.baseCheckpointChecksum).toBe("sha-200");
   });
 
   it("saves, loads, and deletes local branches with retention policy of max 3 branches", async () => {
@@ -389,7 +394,7 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
         entities: [],
         deadMatter: [],
         soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] },
-        checksum: "snap-600",
+        checksum: "sha-600",
       },
       checkpoint: {
         version: 2,

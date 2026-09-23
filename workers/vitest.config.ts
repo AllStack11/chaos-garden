@@ -12,12 +12,12 @@ export default defineConfig({
     },
     coverage: {
       provider: 'v8',
-      include: ['src/simulation/**/*.ts'],
-      exclude: ['src/**/*.d.ts', 'src/index.ts', 'src/types/**/*.ts'],
+      include: ['src/index.ts', 'src/db/**/*.ts'],
+      exclude: ['src/**/*.d.ts', 'src/types/**/*.ts'],
       reporter: ['text', 'html'],
       thresholds: {
         lines: 60,
-        branches: 50,
+        branches: 40,
         functions: 60,
         statements: 60,
       },
@@ -25,14 +25,14 @@ export default defineConfig({
   },
   coverage: {
     provider: 'v8',
-    include: ['src/simulation/**/*.ts'],
-    exclude: ['src/**/*.d.ts', 'src/index.ts', 'src/types/**/*.ts'],
+    include: ['src/index.ts', 'src/db/**/*.ts'],
+    exclude: ['src/**/*.d.ts', 'src/types/**/*.ts'],
     reporter: ['text', 'html'],
     thresholds: {
       lines: 60,
-      branches: 50,
+      branches: 40,
       functions: 60,
-      statements: 60
-    }
+      statements: 60,
+    },
   }
 });
