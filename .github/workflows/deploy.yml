@@ -41,5 +41,8 @@ jobs:
       - name: Type check
         run: npm run type-check:all
 
+      - name: Apply canonical D1 cutover
+        run: npm run db:cutover:remote
+
       - name: Deploy Worker
         run: npm run deploy:workers

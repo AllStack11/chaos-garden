@@ -54,7 +54,7 @@ function error(message: string, origin: string, status: number): Response {
 
 async function ensureDatabaseReady(db: D1Database): Promise<void> {
   if (!databaseReadyPromise) {
-    databaseReadyPromise = (async () => {
+    const readyPromise = (async () => {
       const [version, anchor] = await Promise.all([
         db.prepare("SELECT value FROM system_metadata WHERE key = 'schema_version'").first<{ value: string }>(),
         db.prepare('SELECT id FROM canonical_anchor WHERE id = 1').first<{ id: number }>(),
@@ -63,6 +63,15 @@ async function ensureDatabaseReady(db: D1Database): Promise<void> {
         throw new Error(`Database is not initialized for canonical schema ${CURRENT_SCHEMA_VERSION}`);
       }
     })();
+    databaseReadyPromise = readyPromise;
+    try {
+      await readyPromise;
+    } catch (cause) {
+      // A D1 outage must not poison this isolate after the service recovers.
+      if (databaseReadyPromise === readyPromise) databaseReadyPromise = null;
+      throw cause;
+    }
+    return;
   }
   await databaseReadyPromise;
 }
