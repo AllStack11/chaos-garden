@@ -200,6 +200,57 @@ INSERT OR REPLACE INTO curator_leases (id, lease_id, curator_id, granted_at_ms, 
 VALUES (1, 'initial', 'none', 0, 0, 0, datetime('now'), datetime('now'));
 
 -- ==========================================
+-- Canonical Anchor Table
+-- ==========================================
+-- Single read pointer for the durable global terrarium anchor.
+-- Guarantees the canonical tick and active checkpoint are atomically aligned.
+
+CREATE TABLE IF NOT EXISTS canonical_anchor (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  checkpoint_id INTEGER,
+  canonical_tick INTEGER NOT NULL DEFAULT 0,
+  checksum TEXT,
+  updated_at_ms INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (checkpoint_id) REFERENCES engine_checkpoints(id)
+);
+
+INSERT OR REPLACE INTO canonical_anchor (id, checkpoint_id, canonical_tick, checksum, updated_at_ms)
+VALUES (1, NULL, 0, NULL, 0);
+
+-- ==========================================
+-- Chronicle Events Table
+-- ==========================================
+-- Append-only global history feed for human-narrative ecological milestones.
+-- Deduplicated via unique deterministic checksums.
+
+CREATE TABLE IF NOT EXISTS chronicle_events (
+  id TEXT PRIMARY KEY,
+  canonical_tick INTEGER NOT NULL,
+  occurred_at TEXT NOT NULL,
+  type TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+  description TEXT NOT NULL,
+  tags_json TEXT NOT NULL,
+  checksum TEXT NOT NULL UNIQUE,
+  created_at_ms INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chronicle_events_tick ON chronicle_events(canonical_tick DESC);
+
+-- ==========================================
+-- API Metric Buckets Table
+-- ==========================================
+-- Aggregated hourly operational health counters retained for 30 days.
+
+CREATE TABLE IF NOT EXISTS api_metric_buckets (
+  bucket_start_ms INTEGER PRIMARY KEY,
+  garden_reads INTEGER NOT NULL DEFAULT 0,
+  checkpoint_commits INTEGER NOT NULL DEFAULT 0,
+  rejected_writes INTEGER NOT NULL DEFAULT 0,
+  server_errors INTEGER NOT NULL DEFAULT 0
+);
+
+-- ==========================================
 -- Metadata Table (for future migrations)
 -- ==========================================
 -- Tracks schema version and other system metadata.
@@ -212,7 +263,7 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 -- Insert initial schema version
 INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
-VALUES ('schema_version', '1.9.0', datetime('now'));
+VALUES ('schema_version', '2.0.0', datetime('now'));
 
 -- ==========================================
 -- Initial Data Seeding

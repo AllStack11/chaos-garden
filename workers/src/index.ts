@@ -24,11 +24,18 @@ import {
   getSimulationEventSeverityBreakdownFromDatabase,
   getLatestEngineCheckpoint,
   getLatestCheckpointTick,
+  getEngineCheckpointById,
   saveEngineCheckpoint,
   pruneEngineCheckpoints,
   getActiveCuratorLease,
   hasActiveCuratorLease,
   acquireOrRenewCuratorLease,
+  getCanonicalAnchor,
+  getChronicleEvents,
+  commitCanonicalCheckpoint,
+  recordApiMetric,
+  getDiagnosticsSummary,
+  getGardenStatsBucketed,
 } from './db/queries';
 import { executeQuery } from './db/connection';
 import {
@@ -43,7 +50,10 @@ import {
   type GardenBootstrapResponse,
   type CanonicalWorldState,
   type CheckpointSubmission,
+  type CanonicalCheckpointSubmission,
   type ChronicleEvent,
+  type DiagnosticsSummary,
+  type ApiErrorCode,
   base64ToUint8Array,
   computeSha256Hex,
 } from '@chaos-garden/shared';
@@ -60,6 +70,7 @@ export interface Env {
   CORS_ORIGIN?: string;
   CURATOR_SECRET?: string;
   CURATOR_TOKEN?: string;
+  CANONICAL_WRITES_DISABLED?: string | boolean;
 }
 
 interface AuthenticatedCurator {
@@ -124,6 +135,10 @@ function authenticateCuratorRequest(
 }
 
 let databaseReadyPromise: Promise<void> | null = null;
+
+export function resetDatabaseReadyForTesting(): void {
+  databaseReadyPromise = null;
+}
 
 async function ensureDatabaseReady(db: D1Database): Promise<void> {
   if (!databaseReadyPromise) {
@@ -222,41 +237,76 @@ function resolveCorsOrigin(request: Request, configuredOrigin: string): string {
 // Response Helpers
 // ==========================================
 
-/** Create a successful JSON response */
-function createSuccessResponse(data: unknown, corsOrigin: string, status = 200): Response {
-  return new Response(JSON.stringify({
+function generateRequestId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `req-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+}
+
+/** Create a successful JSON response adhering to Phase 4 v1 contracts while maintaining backwards compatibility */
+function createSuccessResponse<T>(
+  data: T,
+  corsOrigin: string,
+  status = 200,
+  extraHeaders: Record<string, string> = {}
+): Response {
+  const now = new Date().toISOString();
+  const responseBody = {
+    ok: true,
+    apiVersion: 1,
+    serverTime: now,
     success: true,
+    timestamp: now,
     data,
-    timestamp: new Date().toISOString()
-  }), {
+    ...(typeof data === 'object' && data !== null && !Array.isArray(data) ? data : {}),
+  };
+
+  return new Response(JSON.stringify(responseBody), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      ...getCorsHeaders(corsOrigin)
-    }
+      ...getCorsHeaders(corsOrigin),
+      ...extraHeaders,
+    },
   });
 }
 
-/** Create an error response */
+/** Create an error response adhering to Phase 4 v1 contracts while maintaining backwards compatibility */
 function createErrorResponse(
   message: string,
   corsOrigin: string,
   status = 500,
   details?: unknown,
-  isDevelopment = false
+  isDevelopment = false,
+  code?: ApiErrorCode,
+  requestId?: string,
+  extraHeaders: Record<string, string> = {}
 ): Response {
-  const responseBody: {
-    success: false;
-    error: string;
-    details?: unknown;
-    timestamp: string;
-  } = {
-    success: false,
+  const reqId = requestId || generateRequestId();
+
+  let errorCode: ApiErrorCode = code || 'INVALID_REQUEST';
+  if (!code) {
+    if (status === 401) errorCode = 'UNAUTHENTICATED';
+    else if (status === 403) errorCode = 'FORBIDDEN';
+    else if (status === 404) errorCode = 'NOT_FOUND';
+    else if (status === 409) errorCode = 'LEASE_CONFLICT';
+    else if (status === 413) errorCode = 'INVALID_REQUEST';
+    else if (status === 429) errorCode = 'RATE_LIMITED';
+    else if (status === 503) errorCode = 'UNAVAILABLE';
+    else if (status >= 500) errorCode = 'UNAVAILABLE';
+  }
+
+  const responseBody: Record<string, unknown> = {
+    ok: false,
+    apiVersion: 1,
+    code: errorCode,
+    message,
+    requestId: reqId,
     error: message,
+    success: false,
     timestamp: new Date().toISOString(),
   };
 
-  // Only include detailed error information in development mode
   if (isDevelopment && details !== undefined) {
     responseBody.details = details;
   }
@@ -266,13 +316,14 @@ function createErrorResponse(
     headers: {
       'Content-Type': 'application/json',
       ...getCorsHeaders(corsOrigin),
+      ...extraHeaders,
     },
   });
 }
 
 /** Create a not found response */
 function createNotFoundResponse(corsOrigin: string, message = 'Resource not found'): Response {
-  return createErrorResponse(message, corsOrigin, 404);
+  return createErrorResponse(message, corsOrigin, 404, undefined, false, 'NOT_FOUND');
 }
 
 const MIN_STATS_WINDOW_TICKS = 10;
@@ -310,8 +361,7 @@ function parseWindowTicks(searchParams: URLSearchParams): ParsedStatsWindow {
 
 /**
  * Handle GET /api/garden
- * Returns current garden state with all entities and recent events.
- * Returns canonical garden bootstrap state with checkpoint and events.
+ * Returns canonical garden bootstrap state with checkpoint and chronicle events.
  */
 async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
@@ -319,46 +369,82 @@ async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> 
 
   try {
     await logger.info('api_get_garden', 'Fetching current garden state');
+    recordApiMetric(env.DB, 'garden_reads').catch(() => {});
 
-    // Get latest garden state
-    const gardenState = await getLatestGardenStateFromDatabase(env.DB);
-    if (!gardenState) {
+    // 1. Get canonical anchor and latest garden state in parallel
+    const [anchor, gardenState] = await Promise.all([
+      getCanonicalAnchor(env.DB),
+      getLatestGardenStateFromDatabase(env.DB),
+    ]);
+
+    if (!gardenState && !anchor) {
       return createNotFoundResponse(corsOrigin, 'No garden state found - garden may not be initialized');
     }
 
-    // Get all living entities, dead matter, recent events, and latest engine checkpoint
-    const [entities, deadMatter, events, checkpoint] = await Promise.all([
+    // 2. Get all living entities, dead matter, chronicle events, and checkpoint
+    const [entities, deadMatter, rawChronicleEvents, checkpoint] = await Promise.all([
       getAllLivingEntitiesFromDatabase(env.DB),
       getDeadMatterFromDatabase(env.DB),
-      getRecentSimulationEventsFromDatabase(env.DB, 20),
-      getLatestEngineCheckpoint(env.DB),
+      getChronicleEvents(env.DB, 50),
+      anchor?.checkpointId
+        ? getEngineCheckpointById(env.DB, anchor.checkpointId)
+        : getLatestEngineCheckpoint(env.DB),
     ]);
 
-    const chronicleEvents: ChronicleEvent[] = events.map((e) => ({
-      id: String(e.id),
-      tick: e.tick,
-      timestamp: e.timestamp,
-      type: e.eventType,
-      severity: e.severity,
-      description: e.description,
-      tags: e.tags ?? [],
-    }));
+    let chronicleEvents: ChronicleEvent[] = [];
+    if (rawChronicleEvents.length > 0) {
+      chronicleEvents = rawChronicleEvents;
+    } else {
+      const legacyEvents = await getRecentSimulationEventsFromDatabase(env.DB, 20);
+      chronicleEvents = legacyEvents.map((e) => ({
+        id: String(e.id),
+        tick: e.tick,
+        timestamp: e.timestamp,
+        type: e.eventType,
+        severity: e.severity,
+        description: e.description,
+        tags: e.tags ?? [],
+      }));
+    }
 
-    const effectiveTick = checkpoint?.tick ?? gardenState.tick;
+    const effectiveTick = anchor?.canonicalTick ?? checkpoint?.tick ?? gardenState?.tick ?? 0;
+    const exactContinuation = !!(
+      checkpoint &&
+      anchor &&
+      checkpoint.tick === anchor.canonicalTick &&
+      (!anchor.checksum || checkpoint.checksum === anchor.checksum)
+    );
 
     const canonicalState: CanonicalWorldState = {
-      id: gardenState.id ?? 1,
+      id: gardenState?.id ?? 1,
       tick: effectiveTick,
       epoch: Math.floor(effectiveTick / 1200),
-      timestamp: gardenState.timestamp,
+      timestamp: gardenState?.timestamp ?? new Date().toISOString(),
       seed: checkpoint?.seed ?? 42,
       atmospheric: {
-        temperature: gardenState.environment.temperature,
-        sunlight: gardenState.environment.sunlight,
-        moisture: gardenState.environment.moisture,
-        weatherState: gardenState.environment.weatherState ?? undefined,
+        temperature: gardenState?.environment?.temperature ?? 20,
+        sunlight: gardenState?.environment?.sunlight ?? 0.5,
+        moisture: gardenState?.environment?.moisture ?? 0.5,
+        weatherState: gardenState?.environment?.weatherState ?? undefined,
       },
-      populationSummary: gardenState.populationSummary,
+      populationSummary: gardenState?.populationSummary ?? {
+        plants: 0,
+        herbivores: 0,
+        carnivores: 0,
+        fungi: 0,
+        deadPlants: 0,
+        deadHerbivores: 0,
+        deadCarnivores: 0,
+        deadFungi: 0,
+        allTimeDeadPlants: 0,
+        allTimeDeadHerbivores: 0,
+        allTimeDeadCarnivores: 0,
+        allTimeDeadFungi: 0,
+        totalLiving: 0,
+        totalDead: 0,
+        allTimeDead: 0,
+        total: 0,
+      },
       entities,
       deadMatter,
       soil: {
@@ -367,20 +453,16 @@ async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> 
         moisture: [],
         nitrates: [],
       },
-      checksum: checkpoint?.checksum ?? `state-${gardenState.tick}`,
+      checksum: checkpoint?.checksum ?? `state-${effectiveTick}`,
       checkpoint: checkpoint ?? undefined,
     };
 
-    const responseData: GardenBootstrapResponse & {
-      gardenState: typeof gardenState;
-      entities: typeof entities;
-      deadMatter: typeof deadMatter;
-      timestamp: string;
-    } = {
+    const responseData = {
       canonicalState,
       checkpoint: checkpoint ?? undefined,
       events: chronicleEvents,
-      gardenState,
+      exactContinuation,
+      gardenState: gardenState ?? undefined,
       entities,
       deadMatter,
       timestamp: new Date().toISOString(),
@@ -389,17 +471,19 @@ async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> 
     await logger.debug('api_get_garden_success', 'Garden state retrieved', {
       tick: canonicalState.tick,
       hasCheckpoint: !!checkpoint,
+      exactContinuation,
       entityCount: entities.length,
       deadMatterCount: deadMatter.length,
-      eventCount: events.length
+      eventCount: chronicleEvents.length,
     });
 
-    return createSuccessResponse(responseData, corsOrigin);
-
+    return createSuccessResponse(responseData, corsOrigin, 200, {
+      'Cache-Control': 'public, max-age=15, stale-while-revalidate=45',
+    });
   } catch (error) {
     const logger = createApplicationLogger(env.DB, 'API');
     await logger.error('api_get_garden_failed', 'Failed to fetch garden state', {
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
 
     return createErrorResponse(
@@ -415,6 +499,7 @@ async function handleGetGarden(env: Env, corsOrigin: string): Promise<Response> 
 /**
  * Handle GET /api/garden/stats
  * Returns historical and derived statistics for dashboard analytics.
+ * Supports bounded bucketing with ?fromTick=&toTick=&bucket=
  */
 async function handleGetGardenStats(request: Request, env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
@@ -422,6 +507,47 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
 
   try {
     const url = new URL(request.url);
+    const fromTickParam = url.searchParams.get('fromTick');
+    const toTickParam = url.searchParams.get('toTick');
+
+    if (fromTickParam !== null && toTickParam !== null) {
+      const fromTick = parseInt(fromTickParam, 10);
+      const toTick = parseInt(toTickParam, 10);
+
+      if (isNaN(fromTick) || isNaN(toTick) || fromTick < 0 || toTick < fromTick) {
+        return createErrorResponse(
+          'Invalid tick range: fromTick and toTick must be non-negative integers with fromTick <= toTick',
+          corsOrigin,
+          400,
+          undefined,
+          isDevelopment,
+          'INVALID_REQUEST'
+        );
+      }
+
+      if (toTick - fromTick > 50000) {
+        return createErrorResponse(
+          'Tick range exceeds maximum span of 50,000 ticks',
+          corsOrigin,
+          400,
+          undefined,
+          isDevelopment,
+          'INVALID_REQUEST'
+        );
+      }
+
+      const bucketParam = url.searchParams.get('bucket');
+      let bucket = bucketParam ? parseInt(bucketParam, 10) : 1;
+      if (isNaN(bucket) || bucket < 1) {
+        bucket = Math.max(1, Math.ceil((toTick - fromTick) / 500));
+      }
+
+      const bucketedRows = await getGardenStatsBucketed(env.DB, fromTick, toTick, bucket);
+      return createSuccessResponse(bucketedRows, corsOrigin, 200, {
+        'Cache-Control': 'public, max-age=60',
+      });
+    }
+
     const parsedWindow = parseWindowTicks(url.searchParams);
     if (!parsedWindow.valid) {
       return createErrorResponse(
@@ -429,7 +555,8 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_REQUEST'
       );
     }
 
@@ -463,14 +590,6 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
     const insights = buildInsights(effectiveHistory, derived, eventBreakdown, severityBreakdown);
     const entityVitals = calculateEntityVitals(livingEntities);
 
-    await logger.debug('api_get_garden_stats_success', 'Garden stats retrieved', {
-      tick: latestGardenState.tick,
-      windowTicks,
-      historyPoints: effectiveHistory.length,
-      eventTypeCount: eventBreakdown.length,
-      insightCount: insights.length,
-    });
-
     return createSuccessResponse({
       current: latestGardenState,
       history: effectiveHistory,
@@ -481,7 +600,9 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
       entityVitals,
       windowTicks,
       generatedAt: new Date().toISOString(),
-    }, corsOrigin);
+    }, corsOrigin, 200, {
+      'Cache-Control': 'public, max-age=60',
+    });
   } catch (error) {
     await logger.error('api_get_garden_stats_failed', 'Failed to fetch garden stats', {
       error: error instanceof Error ? error.message : String(error),
@@ -504,29 +625,45 @@ async function handleGetGardenStats(request: Request, env: Env, corsOrigin: stri
 async function handlePostLease(request: Request, env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
   const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
+  const requestId = generateRequestId();
 
   try {
     const body = (await request.json().catch(() => ({}))) as {
       curatorId?: string;
       authorizedTick?: number;
       leaseId?: string;
+      renewLeaseId?: string;
       ttlMs?: number;
     };
 
     // Authenticate and authorize curator identity
     const auth = authenticateCuratorRequest(request, env, body.curatorId);
     if (!auth.success) {
-      return createErrorResponse(auth.error, corsOrigin, auth.status, undefined, isDevelopment);
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      return createErrorResponse(
+        auth.error,
+        corsOrigin,
+        auth.status,
+        undefined,
+        isDevelopment,
+        auth.status === 401 ? 'UNAUTHENTICATED' : auth.status === 403 ? 'FORBIDDEN' : 'UNAVAILABLE',
+        requestId
+      );
     }
 
     const curatorId = auth.curator.curatorId;
+    const requestedLeaseId = body.renewLeaseId || body.leaseId;
 
     let authorizedTick = body.authorizedTick;
     if (typeof authorizedTick !== 'number') {
-      authorizedTick = await getLatestCheckpointTick(env.DB);
-      if (authorizedTick < 0) {
-        const latestState = await getLatestGardenStateFromDatabase(env.DB);
-        authorizedTick = latestState?.tick ?? 0;
+      const anchor = await getCanonicalAnchor(env.DB);
+      authorizedTick = anchor?.canonicalTick ?? 0;
+      if (authorizedTick === 0) {
+        authorizedTick = await getLatestCheckpointTick(env.DB);
+        if (authorizedTick < 0) {
+          const latestState = await getLatestGardenStateFromDatabase(env.DB);
+          authorizedTick = latestState?.tick ?? 0;
+        }
       }
     }
 
@@ -534,17 +671,20 @@ async function handlePostLease(request: Request, env: Env, corsOrigin: string): 
       env.DB,
       curatorId,
       authorizedTick,
-      body.leaseId,
+      requestedLeaseId,
       body.ttlMs ?? 120000
     );
 
     if ('error' in result) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         result.error,
         corsOrigin,
         409,
         { conflictingCuratorId: result.conflictingCuratorId },
-        isDevelopment
+        isDevelopment,
+        'LEASE_CONFLICT',
+        requestId
       );
     }
 
@@ -556,12 +696,15 @@ async function handlePostLease(request: Request, env: Env, corsOrigin: string): 
 
     return createSuccessResponse(result.lease, corsOrigin, 200);
   } catch (error) {
+    recordApiMetric(env.DB, 'server_errors').catch(() => {});
     return createErrorResponse(
       'Failed to acquire curator lease',
       corsOrigin,
       500,
       error instanceof Error ? error.message : String(error),
-      isDevelopment
+      isDevelopment,
+      'UNAVAILABLE',
+      requestId
     );
   }
 }
@@ -569,68 +712,133 @@ async function handlePostLease(request: Request, env: Env, corsOrigin: string): 
 /**
  * Handle POST /api/garden/checkpoint
  * Validates curator lease, monotonic tick, SHA-256 integrity, binary header,
- * and atomically persists the deterministic engine checkpoint.
+ * and atomically persists the deterministic engine checkpoint and chronicle events.
  */
 async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
   const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
+  const requestId = generateRequestId();
 
   try {
-    // 0. Verify curator authorization
-    const auth = authenticateCuratorRequest(request, env);
-    if (!auth.success) {
-      return createErrorResponse(auth.error, corsOrigin, auth.status, undefined, isDevelopment);
+    // 0. Emergency killswitch check
+    if (env.CANONICAL_WRITES_DISABLED === 'true' || env.CANONICAL_WRITES_DISABLED === true) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      return createErrorResponse(
+        'Service Unavailable: Emergency killswitch active (CANONICAL_WRITES_DISABLED)',
+        corsOrigin,
+        503,
+        undefined,
+        isDevelopment,
+        'UNAVAILABLE',
+        requestId
+      );
     }
 
-    const submission = (await request.json().catch(() => null)) as CheckpointSubmission | null;
+    // 1. Verify curator authorization
+    const auth = authenticateCuratorRequest(request, env);
+    if (!auth.success) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      return createErrorResponse(
+        auth.error,
+        corsOrigin,
+        auth.status,
+        undefined,
+        isDevelopment,
+        auth.status === 401 ? 'UNAUTHENTICATED' : auth.status === 403 ? 'FORBIDDEN' : 'UNAVAILABLE',
+        requestId
+      );
+    }
+
+    // 2. Body limit check (1 MiB cap)
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > 1024 * 1024) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      return createErrorResponse(
+        'Payload Too Large: checkpoint submission exceeds 1 MiB limit',
+        corsOrigin,
+        413,
+        undefined,
+        isDevelopment,
+        'INVALID_REQUEST',
+        requestId
+      );
+    }
+
+    const rawText = await request.text().catch(() => '');
+    if (rawText.length > 1024 * 1024) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      return createErrorResponse(
+        'Payload Too Large: checkpoint submission exceeds 1 MiB limit',
+        corsOrigin,
+        413,
+        undefined,
+        isDevelopment,
+        'INVALID_REQUEST',
+        requestId
+      );
+    }
+
+    let submission: CanonicalCheckpointSubmission;
+    try {
+      submission = JSON.parse(rawText);
+    } catch {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      return createErrorResponse(
+        'Malformed JSON request body',
+        corsOrigin,
+        400,
+        undefined,
+        isDevelopment,
+        'INVALID_REQUEST',
+        requestId
+      );
+    }
+
     if (!submission || !submission.leaseId || !submission.checkpoint) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Missing leaseId or checkpoint in request payload',
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_REQUEST',
+        requestId
       );
     }
 
-    // 1. Verify active curator lease
+    // 3. Verify active curator lease
     const activeLease = await getActiveCuratorLease(env.DB, submission.leaseId);
     if (!activeLease) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Invalid or expired curator lease',
         corsOrigin,
         403,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'FORBIDDEN',
+        requestId
       );
     }
 
     // Verify lease owner matches authenticated curator
     if (activeLease.curatorId !== auth.curator.curatorId) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Forbidden: Curator identity does not match active lease holder',
         corsOrigin,
         403,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'FORBIDDEN',
+        requestId
       );
     }
 
     const checkpoint = submission.checkpoint;
 
-    // 2. Monotonic tick check
-    const lastTick = await getLatestCheckpointTick(env.DB);
-    if (checkpoint.tick <= lastTick) {
-      return createErrorResponse(
-        `Checkpoint tick (${checkpoint.tick}) must be strictly greater than last checkpoint tick (${lastTick})`,
-        corsOrigin,
-        409,
-        undefined,
-        isDevelopment
-      );
-    }
-
-    // 3. Format and envelope validation
+    // 4. Format and envelope validation
     if (
       typeof checkpoint.tick !== 'number' ||
       typeof checkpoint.version !== 'number' ||
@@ -639,192 +847,276 @@ async function handlePostCheckpoint(request: Request, env: Env, corsOrigin: stri
       !checkpoint.checksum ||
       !checkpoint.payload
     ) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Malformed EncodedEngineCheckpoint envelope',
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
-    // 4. Decode payload bytes
+    // 5. Decode payload bytes
     let rawBytes: Uint8Array;
     try {
       rawBytes = base64ToUint8Array(checkpoint.payload);
     } catch {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Malformed base64 payload in checkpoint',
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
     if (rawBytes.byteLength !== checkpoint.byteLength) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         `Payload byte length mismatch: expected ${checkpoint.byteLength}, got ${rawBytes.byteLength}`,
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
-    // 5. SHA-256 checksum verification
+    // 6. SHA-256 checksum verification
     const computedChecksum = await computeSha256Hex(rawBytes);
     if (computedChecksum.toLowerCase() !== checkpoint.checksum.toLowerCase()) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         `Checksum mismatch: computed ${computedChecksum}, expected ${checkpoint.checksum}`,
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
-    // 6. Binary header validation (minimum 44 bytes for CGS2 format)
+    // 7. Binary header validation (minimum 44 bytes for CGS2 format)
     if (rawBytes.byteLength < 44) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Checkpoint binary payload smaller than header length',
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
     const view = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
     const magic = view.getUint32(0, true);
     if (magic !== 0x43475332) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         'Invalid checkpoint magic bytes (expected CGS2)',
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
     const headerVersion = view.getUint32(4, true);
     if (headerVersion !== checkpoint.version) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         `Header version (${headerVersion}) does not match checkpoint version (${checkpoint.version})`,
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
     const headerTick = view.getUint32(8, true);
     if (headerTick !== checkpoint.tick) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
       return createErrorResponse(
         `Header tick (${headerTick}) does not match checkpoint tick (${checkpoint.tick})`,
         corsOrigin,
         400,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'INVALID_CHECKPOINT',
+        requestId
       );
     }
 
-    // 7. Atomic persistence to engine_checkpoints conditioned on active curator lease
-    const saveResult = await saveEngineCheckpoint(env.DB, checkpoint, {
-      leaseId: activeLease.leaseId,
-      curatorId: auth.curator.curatorId,
-      nowMs: Date.now(),
-    });
-    if (!saveResult.success) {
-      const statusCode = saveResult.conflict ? 409 : 500;
+    // 8. Commit canonical checkpoint atomically with write fencing & idempotency
+    const commitResult = await commitCanonicalCheckpoint(
+      env.DB,
+      submission,
+      {
+        leaseId: activeLease.leaseId,
+        curatorId: auth.curator.curatorId,
+        nowMs: Date.now(),
+      }
+    );
+
+    if (!commitResult.success || !commitResult.result) {
+      recordApiMetric(env.DB, 'rejected_writes').catch(() => {});
+      if (commitResult.staleCanonical) {
+        return createErrorResponse(
+          commitResult.error || 'Stale base canonical tick',
+          corsOrigin,
+          409,
+          undefined,
+          isDevelopment,
+          'STALE_CANONICAL',
+          requestId
+        );
+      }
+      if (commitResult.conflict) {
+        return createErrorResponse(
+          commitResult.error || 'Checkpoint commit conflict',
+          corsOrigin,
+          409,
+          undefined,
+          isDevelopment,
+          'LEASE_CONFLICT',
+          requestId
+        );
+      }
       return createErrorResponse(
-        saveResult.error || 'Failed to save engine checkpoint',
+        commitResult.error || 'Failed to commit canonical checkpoint',
         corsOrigin,
-        statusCode,
+        500,
         undefined,
-        isDevelopment
+        isDevelopment,
+        'UNAVAILABLE',
+        requestId
       );
     }
 
-    // 8. Prune older checkpoints to maintain maximum 500 retained rows
-    await pruneEngineCheckpoints(env.DB, 500);
+    // 9. Success response
+    recordApiMetric(env.DB, 'checkpoint_commits').catch(() => {});
+    const isIdempotent = commitResult.idempotent === true;
+    const statusCode = isIdempotent ? 200 : 201;
 
-    await logger.info('api_checkpoint_saved', 'Engine checkpoint committed successfully', {
+    const responseData = {
+      committed: true,
+      tick: commitResult.result.tick,
+      canonicalTick: commitResult.result.canonicalTick,
+      checksum: commitResult.result.checksum,
+      committedAt: commitResult.result.committedAt,
+      chronicleEventIds: commitResult.result.chronicleEventIds,
+    };
+
+    await logger.info('api_checkpoint_saved', 'Canonical checkpoint committed successfully', {
       tick: checkpoint.tick,
       checksum: checkpoint.checksum,
-      byteLength: checkpoint.byteLength,
+      idempotent: isIdempotent,
     });
 
-    return createSuccessResponse(
-      {
-        tick: checkpoint.tick,
-        checksum: checkpoint.checksum,
-        byteLength: checkpoint.byteLength,
-      },
-      corsOrigin,
-      201
-    );
+    return createSuccessResponse(responseData, corsOrigin, statusCode);
   } catch (error) {
+    recordApiMetric(env.DB, 'server_errors').catch(() => {});
     return createErrorResponse(
       'Failed to process checkpoint submission',
       corsOrigin,
       500,
       error instanceof Error ? error.message : String(error),
-      isDevelopment
+      isDevelopment,
+      'UNAVAILABLE',
+      requestId
     );
   }
 }
 
 /**
  * Handle GET /api/health
- * Returns system health status.
+ * Returns system health status (sanitized public operational metadata).
  */
 async function handleGetHealth(env: Env, corsOrigin: string): Promise<Response> {
   const isDevelopment = env.ENVIRONMENT !== 'production';
   const logger = createApplicationLogger(env.DB, 'API', undefined, isDevelopment);
 
   try {
-    // Get latest state to check if system is operational
-    const [gardenState, hasLease, checkpoint] = await Promise.all([
+    const [gardenState, hasLease, checkpoint, anchor] = await Promise.all([
       getLatestGardenStateFromDatabase(env.DB),
       hasActiveCuratorLease(env.DB),
       getLatestEngineCheckpoint(env.DB),
+      getCanonicalAnchor(env.DB),
     ]);
 
-    const tick = checkpoint?.tick ?? gardenState?.tick ?? 0;
+    const tick = anchor?.canonicalTick ?? checkpoint?.tick ?? gardenState?.tick ?? 0;
 
     const health: HealthStatus = {
       status: 'healthy',
       tick,
       timestamp: new Date().toISOString(),
-      version: '1.9.0',
+      version: CURRENT_SCHEMA_VERSION,
       databaseReady: true,
       activeCuratorLease: hasLease,
+      canonicalTick: tick,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       gardenState: gardenState ? {
         tick: gardenState.tick,
-        timestamp: gardenState.timestamp
+        timestamp: gardenState.timestamp,
       } : null,
       config: {
-        tickIntervalMinutes: 15
-      }
+        tickIntervalMinutes: 15,
+      },
     };
 
-    await logger.debug('api_health', 'Health check performed', { status: health.status, tick: health.gardenState?.tick });
+    await logger.debug('api_health', 'Health check performed', { status: health.status, tick: health.tick });
 
-    return createSuccessResponse(health, corsOrigin);
-
+    return createSuccessResponse(health, corsOrigin, 200);
   } catch (error) {
     const logger = createApplicationLogger(env.DB, 'API');
     await logger.error('api_health_failed', 'Health check failed', {
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
 
+    // Sanitized: no secret, stack trace, or DB error detail in public health
     return createErrorResponse(
       'System unhealthy',
       corsOrigin,
       503,
-      error instanceof Error ? error.message : String(error),
-      isDevelopment
+      undefined,
+      false,
+      'UNAVAILABLE'
+    );
+  }
+}
+
+/**
+ * Handle GET /api/diagnostics/summary
+ * Returns operational diagnostics summary with 60s edge cache.
+ */
+async function handleGetDiagnosticsSummary(env: Env, corsOrigin: string): Promise<Response> {
+  try {
+    const summary = await getDiagnosticsSummary(env.DB);
+    return createSuccessResponse(summary, corsOrigin, 200, {
+      'Cache-Control': 'public, max-age=60',
+    });
+  } catch (error) {
+    return createErrorResponse(
+      'Failed to retrieve diagnostics summary',
+      corsOrigin,
+      500,
+      undefined,
+      false,
+      'UNAVAILABLE'
     );
   }
 }
@@ -919,18 +1211,22 @@ export default {
       return handleGetHealth(env, corsOrigin);
     }
 
+    if (path === '/api/diagnostics/summary' && request.method === 'GET') {
+      return handleGetDiagnosticsSummary(env, corsOrigin);
+    }
+
     // Handle root path
     if (path === '/' || path === '/api') {
       return new Response(JSON.stringify({
         name: 'Chaos Garden API',
-        version: '1.0.0',
+        version: CURRENT_SCHEMA_VERSION,
         endpoints: [
-          { path: '/api/garden', method: 'GET', description: 'Get current garden state' },
           { path: '/api/garden', method: 'GET', description: 'Get canonical garden bootstrap state' },
           { path: '/api/garden/checkpoint', method: 'POST', description: 'Commit validated engine checkpoint (curator lease protected)' },
           { path: '/api/garden/lease', method: 'POST', description: 'Acquire or renew temporary curator lease' },
           { path: '/api/garden/stats', method: 'GET', description: 'Get historical garden analytics' },
-          { path: '/api/health', method: 'GET', description: 'System health check' }
+          { path: '/api/health', method: 'GET', description: 'System health check' },
+          { path: '/api/diagnostics/summary', method: 'GET', description: 'Aggregated operational diagnostics and metrics' }
         ],
         timestamp: new Date().toISOString()
       }), {

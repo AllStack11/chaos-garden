@@ -27,8 +27,19 @@ import type {
   ActiveWeatherState,
   EncodedEngineCheckpoint,
   CuratorLease,
+  ChronicleEvent,
+  CanonicalAnchorRecord,
+  CanonicalCheckpointSubmission,
+  CheckpointCommitResult,
+  DiagnosticsSummary,
 } from "@chaos-garden/shared";
-import { uint8ArrayToBase64, base64ToUint8Array } from "@chaos-garden/shared";
+import {
+  uint8ArrayToBase64,
+  base64ToUint8Array,
+  computeChronicleEventChecksum,
+  validateChronicleEvent,
+  MAX_CHRONICLE_EVENTS_PER_SUBMISSION,
+} from "@chaos-garden/shared";
 import { queryFirst, queryAll, executeQuery, executeBatch } from "./connection";
 import type { D1Database } from "../types/worker";
 import { extractTraits } from "../simulation/environment/helpers";
@@ -838,6 +849,33 @@ export async function getLatestEngineCheckpoint(
   };
 }
 
+export async function getEngineCheckpointById(
+  db: D1Database,
+  id: number,
+): Promise<EncodedEngineCheckpoint | null> {
+  const row = await queryFirst<EngineCheckpointRow>(
+    db,
+    `SELECT id, tick, engine_version, seed, checksum, payload, created_at
+     FROM engine_checkpoints
+     WHERE id = ?`,
+    [id],
+  );
+
+  if (!row) return null;
+
+  const bytes = normalizeBlobToUint8Array(row.payload);
+  const base64Payload = uint8ArrayToBase64(bytes);
+
+  return {
+    version: row.engine_version,
+    tick: row.tick,
+    seed: row.seed,
+    byteLength: bytes.byteLength,
+    checksum: row.checksum,
+    payload: base64Payload,
+  };
+}
+
 export async function getLatestCheckpointTick(db: D1Database): Promise<number> {
   const row = await queryFirst<{ max_tick: number | null }>(
     db,
@@ -916,7 +954,13 @@ export async function saveEngineCheckpoint(
            AND curator_id = ?
            AND expires_at_ms > ?
            AND authorized_tick < ?`,
-        [checkpoint.tick, authContext.leaseId, authContext.curatorId, now, checkpoint.tick],
+        [
+          checkpoint.tick,
+          authContext.leaseId,
+          authContext.curatorId,
+          now,
+          checkpoint.tick,
+        ],
       );
 
       return { success: true };
@@ -1081,4 +1125,492 @@ export async function acquireOrRenewCuratorLease(
     error: "Active curator lease is currently held by another curator",
     conflictingCuratorId: active?.curatorId,
   };
+}
+
+// ==========================================
+// Phase 4: Canonical Anchor & Chronicle Queries
+// ==========================================
+
+export interface CanonicalAnchorRow {
+  id: number;
+  checkpoint_id: number | null;
+  canonical_tick: number;
+  checksum: string | null;
+  updated_at_ms: number;
+}
+
+export async function getCanonicalAnchor(
+  db: D1Database,
+): Promise<CanonicalAnchorRecord | null> {
+  const row = await queryFirst<CanonicalAnchorRow>(
+    db,
+    `SELECT id, checkpoint_id, canonical_tick, checksum, updated_at_ms
+     FROM canonical_anchor
+     WHERE id = 1`,
+  );
+  if (!row) return null;
+  return {
+    id: row.id,
+    checkpointId: row.checkpoint_id,
+    canonicalTick: row.canonical_tick,
+    checksum: row.checksum,
+    updatedAtMs: row.updated_at_ms,
+  };
+}
+
+export interface ChronicleEventRow {
+  id: string;
+  canonical_tick: number;
+  occurred_at: string;
+  type: string;
+  severity: string;
+  description: string;
+  tags_json: string;
+  checksum: string;
+  created_at_ms: number;
+}
+
+export async function getChronicleEvents(
+  db: D1Database,
+  limit: number = 50,
+): Promise<ChronicleEvent[]> {
+  const rows = await queryAll<ChronicleEventRow>(
+    db,
+    `SELECT id, canonical_tick, occurred_at, type, severity, description, tags_json, checksum, created_at_ms
+     FROM chronicle_events
+     ORDER BY canonical_tick DESC, created_at_ms DESC
+     LIMIT ?`,
+    [limit],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    tick: row.canonical_tick,
+    timestamp: row.occurred_at,
+    type: row.type,
+    severity: row.severity as ChronicleEvent["severity"],
+    description: row.description,
+    tags: safeParseJson<string[]>(row.tags_json, []),
+  }));
+}
+
+export interface CommitCanonicalResult {
+  success: boolean;
+  result?: CheckpointCommitResult;
+  conflict?: boolean;
+  staleCanonical?: boolean;
+  idempotent?: boolean;
+  error?: string;
+}
+
+export async function commitCanonicalCheckpoint(
+  db: D1Database,
+  submission: CanonicalCheckpointSubmission,
+  authContext: CheckpointAuthorizationContext,
+): Promise<CommitCanonicalResult> {
+  const now = authContext.nowMs ?? Date.now();
+  const currentAnchor = await getCanonicalAnchor(db);
+
+  // 1. Stale base check: submission's base canonical tick must match current anchor tick
+  if (
+    currentAnchor &&
+    submission.baseCanonicalTick !== currentAnchor.canonicalTick
+  ) {
+    return {
+      success: false,
+      staleCanonical: true,
+      error: `Stale base canonical tick: submission base is ${submission.baseCanonicalTick} but current anchor is ${currentAnchor.canonicalTick}`,
+    };
+  }
+
+  // 2. Monotonic tick check & Idempotent retry check
+  if (currentAnchor) {
+    if (submission.checkpoint.tick === currentAnchor.canonicalTick) {
+      if (
+        submission.checkpoint.checksum.toLowerCase() ===
+        (currentAnchor.checksum ?? "").toLowerCase()
+      ) {
+        // Idempotent retry: exact same tick and checksum committed previously
+        return {
+          success: true,
+          idempotent: true,
+          result: {
+            committed: true,
+            tick: currentAnchor.canonicalTick,
+            canonicalTick: currentAnchor.canonicalTick,
+            checksum: currentAnchor.checksum ?? submission.checkpoint.checksum,
+            committedAt: new Date(
+              currentAnchor.updatedAtMs || now,
+            ).toISOString(),
+            chronicleEventIds: [],
+          },
+        };
+      }
+      return {
+        success: false,
+        conflict: true,
+        error: `Conflicting checkpoint checksum for existing canonical tick ${currentAnchor.canonicalTick}`,
+      };
+    }
+    if (submission.checkpoint.tick < currentAnchor.canonicalTick) {
+      return {
+        success: false,
+        conflict: true,
+        error: `Checkpoint tick (${submission.checkpoint.tick}) must be strictly greater than canonical anchor tick (${currentAnchor.canonicalTick})`,
+      };
+    }
+  }
+
+  // 3. Chronicle events validation and checksum computation
+  const rawChronicle = submission.chronicleEvents ?? [];
+  if (rawChronicle.length > MAX_CHRONICLE_EVENTS_PER_SUBMISSION) {
+    return {
+      success: false,
+      error: `Chronicle events count (${rawChronicle.length}) exceeds maximum allowed (${MAX_CHRONICLE_EVENTS_PER_SUBMISSION})`,
+    };
+  }
+
+  const validatedEvents: Array<{
+    id: string;
+    canonicalTick: number;
+    occurredAt: string;
+    type: string;
+    severity: string;
+    description: string;
+    tagsJson: string;
+    checksum: string;
+  }> = [];
+
+  for (const raw of rawChronicle) {
+    const val = validateChronicleEvent(raw);
+    if (!val.valid) {
+      return { success: false, error: `Invalid chronicle event: ${val.error}` };
+    }
+    const tick = raw.tick ?? submission.checkpoint.tick;
+    const occurredAt = raw.timestamp || new Date(now).toISOString();
+    const tags = raw.tags ?? [];
+    const checksum = await computeChronicleEventChecksum({
+      canonicalTick: tick,
+      occurredAt,
+      type: raw.type,
+      severity: raw.severity,
+      description: raw.description,
+      tags,
+    });
+    const eventId =
+      raw.id ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `event-${now}-${Math.floor(Math.random() * 100000)}`);
+    validatedEvents.push({
+      id: eventId,
+      canonicalTick: tick,
+      occurredAt,
+      type: raw.type,
+      severity: raw.severity,
+      description: raw.description,
+      tagsJson: JSON.stringify(tags),
+      checksum,
+    });
+  }
+
+  // 4. Decode payload bytes to ArrayBuffer
+  const bytes = base64ToUint8Array(submission.checkpoint.payload);
+  const arrayBuffer = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  );
+
+  // 5. Construct atomic D1 batch statements
+  const statements: Array<{ query: string; params: unknown[] }> = [];
+
+  // Statement 1: Insert into engine_checkpoints conditioned on active lease & tick > max tick
+  statements.push({
+    query: `INSERT INTO engine_checkpoints (tick, engine_version, seed, checksum, payload)
+            SELECT ?, ?, ?, ?, ?
+            WHERE EXISTS (
+              SELECT 1 FROM curator_leases
+              WHERE id = 1
+                AND lease_id = ?
+                AND curator_id = ?
+                AND expires_at_ms > ?
+                AND authorized_tick < ?
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM engine_checkpoints
+              WHERE tick >= ?
+            )`,
+    params: [
+      submission.checkpoint.tick,
+      submission.checkpoint.version,
+      submission.checkpoint.seed,
+      submission.checkpoint.checksum,
+      arrayBuffer,
+      authContext.leaseId,
+      authContext.curatorId,
+      now,
+      submission.checkpoint.tick,
+      submission.checkpoint.tick,
+    ],
+  });
+
+  // Statement 2: Update canonical_anchor pointer
+  const expectedAnchorTick = currentAnchor?.canonicalTick ?? 0;
+  statements.push({
+    query: `UPDATE canonical_anchor
+            SET checkpoint_id = (SELECT id FROM engine_checkpoints WHERE tick = ?),
+                canonical_tick = ?,
+                checksum = ?,
+                updated_at_ms = ?
+            WHERE id = 1
+              AND (canonical_tick = ? OR (canonical_tick = 0 AND checkpoint_id IS NULL))`,
+    params: [
+      submission.checkpoint.tick,
+      submission.checkpoint.tick,
+      submission.checkpoint.checksum,
+      now,
+      expectedAnchorTick,
+    ],
+  });
+
+  // Statement 3..N: Insert deduplicated chronicle events
+  for (const event of validatedEvents) {
+    statements.push({
+      query: `INSERT OR IGNORE INTO chronicle_events (id, canonical_tick, occurred_at, type, severity, description, tags_json, checksum, created_at_ms)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        event.id,
+        event.canonicalTick,
+        event.occurredAt,
+        event.type,
+        event.severity,
+        event.description,
+        event.tagsJson,
+        event.checksum,
+        now,
+      ],
+    });
+  }
+
+  // Statement N+1: Update curator_leases authorized_tick
+  statements.push({
+    query: `UPDATE curator_leases
+            SET authorized_tick = ?, updated_at = datetime('now')
+            WHERE id = 1
+              AND lease_id = ?
+              AND curator_id = ?
+              AND expires_at_ms > ?
+              AND authorized_tick < ?`,
+    params: [
+      submission.checkpoint.tick,
+      authContext.leaseId,
+      authContext.curatorId,
+      now,
+      submission.checkpoint.tick,
+    ],
+  });
+
+  // Statement N+2: Record metric
+  const bucketStartMs = Math.floor(now / 3600000) * 3600000;
+  statements.push({
+    query: `INSERT INTO api_metric_buckets (bucket_start_ms, checkpoint_commits)
+            VALUES (?, 1)
+            ON CONFLICT(bucket_start_ms) DO UPDATE SET checkpoint_commits = checkpoint_commits + 1`,
+    params: [bucketStartMs],
+  });
+
+  try {
+    const batchResults = await executeBatch<any>(db, statements);
+    const insertResult = batchResults[0];
+    const changes = insertResult?.meta?.changes ?? 0;
+
+    if (changes !== 1) {
+      return {
+        success: false,
+        conflict: true,
+        error:
+          "Curator lease has expired, was superseded, or a checkpoint with an equal or higher tick has already been persisted",
+      };
+    }
+
+    // Post-commit pruning (non-blocking errors)
+    try {
+      await pruneEngineCheckpoints(db, 500);
+      await pruneChronicleEvents(db, 10000);
+      await pruneApiMetricBuckets(db);
+    } catch (pruneErr) {
+      console.warn("Failed to prune after checkpoint commit:", pruneErr);
+    }
+
+    return {
+      success: true,
+      result: {
+        committed: true,
+        tick: submission.checkpoint.tick,
+        canonicalTick: submission.checkpoint.tick,
+        checksum: submission.checkpoint.checksum,
+        committedAt: new Date(now).toISOString(),
+        chronicleEventIds: validatedEvents.map((e) => e.id),
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export async function recordApiMetric(
+  db: D1Database,
+  metricType:
+    | "garden_reads"
+    | "checkpoint_commits"
+    | "rejected_writes"
+    | "server_errors",
+  nowMs: number = Date.now(),
+): Promise<void> {
+  const bucketStartMs = Math.floor(nowMs / 3600000) * 3600000;
+  await executeQuery(
+    db,
+    `INSERT INTO api_metric_buckets (bucket_start_ms, ${metricType})
+     VALUES (?, 1)
+     ON CONFLICT(bucket_start_ms) DO UPDATE SET ${metricType} = ${metricType} + 1`,
+    [bucketStartMs],
+  );
+}
+
+export async function getDiagnosticsSummary(
+  db: D1Database,
+  nowMs: number = Date.now(),
+): Promise<DiagnosticsSummary> {
+  const [anchor, latestCheckpoint, metricsRows, activeLease, schemaVersionRow] =
+    await Promise.all([
+      getCanonicalAnchor(db),
+      getLatestEngineCheckpoint(db),
+      queryAll<{
+        garden_reads: number | null;
+        checkpoint_commits: number | null;
+        rejected_writes: number | null;
+        server_errors: number | null;
+      }>(
+        db,
+        `SELECT SUM(garden_reads) as garden_reads,
+              SUM(checkpoint_commits) as checkpoint_commits,
+              SUM(rejected_writes) as rejected_writes,
+              SUM(server_errors) as server_errors
+       FROM api_metric_buckets
+       WHERE bucket_start_ms > ?`,
+        [nowMs - 24 * 60 * 60 * 1000],
+      ),
+      hasActiveCuratorLease(db),
+      queryFirst<{ value: string }>(
+        db,
+        "SELECT value FROM system_metadata WHERE key = 'schema_version'",
+      ),
+    ]);
+
+  const canonicalAgeMs = anchor?.updatedAtMs
+    ? Math.max(0, nowMs - anchor.updatedAtMs)
+    : 0;
+  const lastCommitAgeMs = anchor?.updatedAtMs
+    ? Math.max(0, nowMs - anchor.updatedAtMs)
+    : null;
+  const checkpointByteSize = latestCheckpoint?.byteLength ?? 0;
+  const canonicalTick = anchor?.canonicalTick ?? 0;
+
+  const metrics = metricsRows[0] ?? {
+    garden_reads: 0,
+    checkpoint_commits: 0,
+    rejected_writes: 0,
+    server_errors: 0,
+  };
+
+  return {
+    schemaVersion: schemaVersionRow?.value ?? "2.0.0",
+    canonicalAgeMs,
+    lastCommitAgeMs,
+    checkpointByteSize,
+    canonicalTick,
+    activeCuratorLease: activeLease,
+    metrics: {
+      gardenReads: metrics.garden_reads ?? 0,
+      checkpointCommits: metrics.checkpoint_commits ?? 0,
+      rejectedWrites: metrics.rejected_writes ?? 0,
+      serverErrors: metrics.server_errors ?? 0,
+    },
+  };
+}
+
+export async function pruneChronicleEvents(
+  db: D1Database,
+  maxRetained: number = 10000,
+  maxAgeMs: number = 180 * 24 * 60 * 60 * 1000,
+): Promise<void> {
+  const cutoffMs = Date.now() - maxAgeMs;
+  await executeQuery(
+    db,
+    `DELETE FROM chronicle_events
+     WHERE created_at_ms < ?
+        OR id NOT IN (
+          SELECT id FROM chronicle_events
+          ORDER BY canonical_tick DESC, created_at_ms DESC
+          LIMIT ?
+        )`,
+    [cutoffMs, maxRetained],
+  );
+}
+
+export async function pruneApiMetricBuckets(
+  db: D1Database,
+  maxAgeMs: number = 30 * 24 * 60 * 60 * 1000,
+): Promise<void> {
+  const cutoffMs = Date.now() - maxAgeMs;
+  await executeQuery(
+    db,
+    `DELETE FROM api_metric_buckets WHERE bucket_start_ms < ?`,
+    [cutoffMs],
+  );
+}
+
+export interface GardenStatsBucketRow {
+  bucket_tick: number;
+  plants: number;
+  herbivores: number;
+  carnivores: number;
+  fungi: number;
+  total_living: number;
+  total_dead: number;
+  temperature: number;
+  sunlight: number;
+  moisture: number;
+}
+
+export async function getGardenStatsBucketed(
+  db: D1Database,
+  fromTick: number,
+  toTick: number,
+  bucketSize: number,
+): Promise<GardenStatsBucketRow[]> {
+  const safeBucket = Math.max(1, bucketSize);
+  const rows = await queryAll<GardenStatsBucketRow>(
+    db,
+    `SELECT (tick / ?) * ? as bucket_tick,
+            AVG(plants) as plants,
+            AVG(herbivores) as herbivores,
+            AVG(carnivores) as carnivores,
+            AVG(fungi) as fungi,
+            AVG(total_living) as total_living,
+            AVG(total_dead) as total_dead,
+            AVG(temperature) as temperature,
+            AVG(sunlight) as sunlight,
+            AVG(moisture) as moisture
+     FROM garden_state
+     WHERE tick >= ? AND tick <= ?
+     GROUP BY bucket_tick
+     ORDER BY bucket_tick ASC
+     LIMIT 500`,
+    [safeBucket, safeBucket, fromTick, toTick],
+  );
+  return rows;
 }

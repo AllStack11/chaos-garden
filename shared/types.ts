@@ -239,17 +239,72 @@ export interface PopulationSummary {
 export interface HealthStatus {
   status: 'healthy' | 'unhealthy' | 'degraded';
   timestamp: string;
-  gardenState: {
+  gardenState?: {
     tick: number;
     timestamp: string;
   } | null;
-  config: {
+  config?: {
     tickIntervalMinutes: number;
   };
   tick?: number;
   version?: string;
   databaseReady?: boolean;
   activeCuratorLease?: boolean;
+  canonicalTick?: number;
+  schemaVersion?: string;
+}
+
+/**
+ * Standard Phase 4 versioned API success envelope (v1).
+ */
+export interface ApiSuccess<T> {
+  ok: true;
+  apiVersion: 1;
+  serverTime: string;
+  data: T;
+  // Backward compatibility fields
+  success?: true;
+  timestamp?: string;
+}
+
+/**
+ * Standard Phase 4 stable API error codes.
+ */
+export type ApiErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'FORBIDDEN'
+  | 'LEASE_CONFLICT'
+  | 'STALE_CANONICAL'
+  | 'INVALID_CHECKPOINT'
+  | 'INVALID_REQUEST'
+  | 'NOT_FOUND'
+  | 'RATE_LIMITED'
+  | 'UNAVAILABLE';
+
+/**
+ * Standard Phase 4 versioned API error envelope (v1).
+ */
+export interface ApiError {
+  ok: false;
+  apiVersion: 1;
+  code: ApiErrorCode;
+  message: string;
+  requestId: string;
+  details?: unknown;
+  // Backward compatibility fields
+  success?: false;
+  error?: string;
+  timestamp?: string;
+}
+
+/**
+ * Canonical garden bootstrap response data consumed by client.
+ */
+export interface GardenBootstrapData {
+  canonicalState: CanonicalWorldState;
+  checkpoint?: EncodedEngineCheckpoint;
+  events: ChronicleEvent[];
+  exactContinuation: boolean;
 }
 
 export interface EncodedEngineCheckpoint {
@@ -297,6 +352,7 @@ export interface CanonicalWorldState {
   soil: {
     cols: number;
     rows: number;
+    cellSize?: number;
     moisture: number[] | Float32Array;
     nitrates: number[] | Float32Array;
   };
@@ -306,20 +362,69 @@ export interface CanonicalWorldState {
   checkpoint?: EncodedEngineCheckpoint;
 }
 
+export interface CanonicalCheckpointSubmission {
+  leaseId: string;
+  baseCanonicalTick: number;
+  checkpoint: EncodedEngineCheckpoint;
+  canonicalState?: CanonicalWorldState;
+  chronicleEvents?: ChronicleEvent[];
+}
+
 export interface CheckpointSubmission {
   leaseId: string;
   curatorId?: string;
   tick: number;
+  baseCanonicalTick?: number;
   checkpoint: EncodedEngineCheckpoint;
   canonicalState?: CanonicalWorldState;
   snapshot?: CanonicalWorldState;
   chronicleEvents?: ChronicleEvent[];
 }
 
+export interface CheckpointCommitResult {
+  committed: boolean;
+  tick?: number;
+  canonicalTick: number;
+  checksum: string;
+  committedAt: string;
+  chronicleEventIds: string[];
+}
+
+export interface CanonicalAnchorRecord {
+  id: number;
+  checkpointId: number | null;
+  canonicalTick: number;
+  checksum: string | null;
+  updatedAtMs: number;
+}
+
+export interface DiagnosticsSummary {
+  schemaVersion: string;
+  canonicalAgeMs: number;
+  lastCommitAgeMs: number | null;
+  checkpointByteSize: number;
+  canonicalTick: number;
+  activeCuratorLease: boolean;
+  metrics: {
+    gardenReads: number;
+    checkpointCommits: number;
+    rejectedWrites: number;
+    serverErrors: number;
+  };
+}
+
+export interface GardenStatsQuery {
+  fromTick?: number;
+  toTick?: number;
+  bucket?: number;
+  windowTicks?: number;
+}
+
 export interface GardenBootstrapResponse {
   canonicalState: CanonicalWorldState;
   checkpoint?: EncodedEngineCheckpoint;
   events: ChronicleEvent[];
+  exactContinuation?: boolean;
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -370,6 +475,87 @@ export async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
     }
   }
   throw new Error('No crypto available to compute SHA-256');
+}
+
+export const MAX_CHRONICLE_EVENTS_PER_SUBMISSION = 10;
+export const MAX_CHRONICLE_DESCRIPTION_BYTES = 512;
+export const MAX_CHRONICLE_TYPE_LENGTH = 64;
+export const MAX_CHRONICLE_TAGS_COUNT = 12;
+export const MAX_CHRONICLE_TAG_LENGTH = 48;
+
+export const CHRONICLE_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
+export type ChronicleSeverity = typeof CHRONICLE_SEVERITIES[number];
+
+export function validateChronicleEvent(input: {
+  canonicalTick?: number;
+  tick?: number;
+  occurredAt?: string;
+  timestamp?: string;
+  type: string;
+  severity: string;
+  description: string;
+  tags?: string[];
+}): { valid: boolean; error?: string } {
+  const tick = input.canonicalTick ?? input.tick;
+  if (typeof tick !== 'number' || !Number.isInteger(tick) || tick < 0) {
+    return { valid: false, error: 'Chronicle event tick must be a non-negative integer' };
+  }
+
+  if (typeof input.type !== 'string' || input.type.trim().length === 0) {
+    return { valid: false, error: 'Chronicle event type must be a non-empty string' };
+  }
+  if (input.type.length > MAX_CHRONICLE_TYPE_LENGTH) {
+    return { valid: false, error: `Chronicle event type exceeds ${MAX_CHRONICLE_TYPE_LENGTH} characters` };
+  }
+
+  if (typeof input.description !== 'string' || input.description.trim().length === 0) {
+    return { valid: false, error: 'Chronicle event description must be a non-empty string' };
+  }
+  const descBytes = new TextEncoder().encode(input.description).byteLength;
+  if (descBytes > MAX_CHRONICLE_DESCRIPTION_BYTES) {
+    return { valid: false, error: `Chronicle event description exceeds ${MAX_CHRONICLE_DESCRIPTION_BYTES} UTF-8 bytes` };
+  }
+
+  if (!CHRONICLE_SEVERITIES.includes(input.severity as ChronicleSeverity)) {
+    return { valid: false, error: `Chronicle event severity must be one of: ${CHRONICLE_SEVERITIES.join(', ')}` };
+  }
+
+  const tags = input.tags ?? [];
+  if (!Array.isArray(tags)) {
+    return { valid: false, error: 'Chronicle event tags must be an array of strings' };
+  }
+  if (tags.length > MAX_CHRONICLE_TAGS_COUNT) {
+    return { valid: false, error: `Chronicle event tags exceed maximum count of ${MAX_CHRONICLE_TAGS_COUNT}` };
+  }
+  for (const tag of tags) {
+    if (typeof tag !== 'string' || tag.length > MAX_CHRONICLE_TAG_LENGTH) {
+      return { valid: false, error: `Chronicle event tag must be a string <= ${MAX_CHRONICLE_TAG_LENGTH} characters` };
+    }
+  }
+
+  return { valid: true };
+}
+
+export async function computeChronicleEventChecksum(event: {
+  canonicalTick: number;
+  occurredAt: string;
+  type: string;
+  severity: string;
+  description: string;
+  tags: string[];
+}): Promise<string> {
+  const canonicalObj = {
+    canonicalTick: event.canonicalTick,
+    description: event.description.trim(),
+    occurredAt: event.occurredAt,
+    severity: event.severity,
+    tags: [...event.tags].sort(),
+    type: event.type.trim(),
+  };
+
+  const jsonStr = JSON.stringify(canonicalObj);
+  const bytes = new TextEncoder().encode(jsonStr);
+  return computeSha256Hex(bytes);
 }
 
 /**

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import worker, { type Env } from '../../../src/index';
+import worker, { type Env, resetDatabaseReadyForTesting } from '../../../src/index';
 import {
   uint8ArrayToBase64,
   computeSha256Hex,
   type EncodedEngineCheckpoint,
   type CheckpointSubmission,
+  type CanonicalCheckpointSubmission,
 } from '@chaos-garden/shared';
 
 describe('Workers API - Checkpoints and Curator Leases', () => {
@@ -20,12 +22,31 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
     created_at: string;
   }>;
   let leasesTable: Array<{
+    id?: number;
     lease_id: string;
     curator_id: string;
     granted_at_ms: number;
     expires_at_ms: number;
     authorized_tick: number;
     created_at: string;
+  }>;
+  let canonicalAnchor: {
+    id: number;
+    checkpoint_id: number | null;
+    canonical_tick: number;
+    checksum: string | null;
+    updated_at_ms: number;
+  };
+  let chronicleEventsTable: Array<{
+    id: string;
+    canonical_tick: number;
+    occurred_at: string;
+    type: string;
+    severity: string;
+    description: string;
+    tags_json: string;
+    checksum: string;
+    created_at_ms: number;
   }>;
 
   const validCuratorHeaders = {
@@ -37,17 +58,40 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
   let expireLeaseAfterRead = false;
 
   beforeEach(() => {
+    resetDatabaseReadyForTesting();
     checkpointsTable = [];
     leasesTable = [];
+    chronicleEventsTable = [];
+    canonicalAnchor = {
+      id: 1,
+      checkpoint_id: null,
+      canonical_tick: 0,
+      checksum: null,
+      updated_at_ms: 0,
+    };
     expireLeaseAfterRead = false;
 
     mockDb = {
+      batch: vi.fn(async (statements: any[]) => {
+        const results = [];
+        for (const stmt of statements) {
+          results.push(await stmt.run());
+        }
+        return results;
+      }),
       prepare: vi.fn((rawQuery: string) => {
         const query = rawQuery.replace(/\s+/g, ' ');
         const createExecutionObj = (params: any[] = []) => ({
           first: vi.fn(async () => {
             if (query.includes("WHERE key = 'schema_version'")) {
-              return { value: '1.9.0' };
+              return { value: '2.0.0' };
+            }
+            if (query.includes('FROM canonical_anchor')) {
+              return { ...canonicalAnchor };
+            }
+            if (query.includes('FROM engine_checkpoints') && query.includes('WHERE id = ?')) {
+              const [id] = params;
+              return checkpointsTable.find((c) => c.id === id) ?? null;
             }
             if (query.includes('FROM garden_state WHERE tick = 0')) {
               return { id: 1 };
@@ -106,9 +150,18 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
               const count = leasesTable.filter((l) => l.expires_at_ms > now).length;
               return { count };
             }
+            if (query.includes('SELECT COUNT(*) as count FROM engine_checkpoints')) {
+              return { count: checkpointsTable.length };
+            }
+            if (query.includes('SELECT COUNT(*) as count FROM chronicle_events')) {
+              return { count: chronicleEventsTable.length };
+            }
             return null;
           }),
           all: vi.fn(async () => {
+            if (query.includes('FROM chronicle_events')) {
+              return { results: chronicleEventsTable };
+            }
             if (query.includes('FROM entities')) {
               return { results: [] };
             }
@@ -118,9 +171,40 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
             if (query.includes('FROM simulation_events')) {
               return { results: [] };
             }
+            if (query.includes('FROM api_metric_buckets')) {
+              return { results: [] };
+            }
             return { results: [] };
           }),
           run: vi.fn(async () => {
+            if (query.includes('UPDATE canonical_anchor')) {
+              const [chkTick, canonicalTick, checksum, updatedAt] = params;
+              canonicalAnchor.checkpoint_id = checkpointsTable.length;
+              canonicalAnchor.canonical_tick = canonicalTick;
+              canonicalAnchor.checksum = checksum;
+              canonicalAnchor.updated_at_ms = updatedAt ?? Date.now();
+              return { success: true, meta: { changes: 1 } };
+            }
+            if (query.includes('INSERT OR IGNORE INTO chronicle_events')) {
+              const [id, tick, occurredAt, type, severity, description, tagsJson, checksum, created] = params;
+              if (!chronicleEventsTable.some((e) => e.checksum === checksum)) {
+                chronicleEventsTable.push({
+                  id,
+                  canonical_tick: tick,
+                  occurred_at: occurredAt,
+                  type,
+                  severity,
+                  description,
+                  tags_json: tagsJson,
+                  checksum,
+                  created_at_ms: created,
+                });
+              }
+              return { success: true, meta: { changes: 1 } };
+            }
+            if (query.includes('api_metric_buckets')) {
+              return { success: true, meta: { changes: 1 } };
+            }
             if (query.includes('INSERT OR IGNORE INTO curator_leases') || query.includes('INSERT INTO curator_leases')) {
               if (leasesTable.length === 0) {
                 leasesTable.push({
@@ -137,7 +221,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
             }
             if (query.includes('UPDATE curator_leases SET authorized_tick = ?')) {
               const [authTick, leaseId] = params;
-              const target = leasesTable.find((l) => l.lease_id === leaseId);
+              const target = leasesTable.find((l) => l.lease_id === leaseId) || leasesTable[0];
               if (target && target.authorized_tick < authTick) {
                 target.authorized_tick = authTick;
               }
@@ -391,9 +475,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
   describe('Engine Checkpoints (POST /api/garden/checkpoint)', () => {
     it('rejects anonymous checkpoint submission with 401', async () => {
       const payloadInfo = await createValidBinaryPayload(150);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'some-lease',
         tick: 150,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 150,
@@ -425,9 +510,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       });
 
       const payloadInfo = await createValidBinaryPayload(150);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'valid-lease',
         tick: 150,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 150,
@@ -453,9 +539,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
 
     it('rejects checkpoint submission without valid curator lease', async () => {
       const payloadInfo = await createValidBinaryPayload(150);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'non-existent-lease',
         tick: 150,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 150,
@@ -498,11 +585,15 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
         payload: new Uint8Array(64),
         created_at: new Date().toISOString(),
       });
+      canonicalAnchor.checkpoint_id = 1;
+      canonicalAnchor.canonical_tick = 200;
+      canonicalAnchor.checksum = 'abc';
 
       const payloadInfo = await createValidBinaryPayload(200);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'valid-lease',
         tick: 200,
+        baseCanonicalTick: 200,
         checkpoint: {
           version: 2,
           tick: 200,
@@ -523,7 +614,7 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       expect(res.status).toBe(409);
 
       const json = await res.json() as any;
-      expect(json.error).toContain('strictly greater');
+      expect(json.error).toMatch(/Conflicting checkpoint checksum|strictly greater/);
     });
 
     it('rejects checkpoint submission when SHA-256 checksum mismatches', async () => {
@@ -537,9 +628,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       });
 
       const payloadInfo = await createValidBinaryPayload(300);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'valid-lease',
         tick: 300,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 300,
@@ -582,9 +674,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       const checksum = await computeSha256Hex(rawBytes);
       const base64 = uint8ArrayToBase64(rawBytes);
 
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'valid-lease',
         tick: 300,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 300,
@@ -619,9 +712,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       });
 
       const payloadInfo = await createValidBinaryPayload(300);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'valid-lease',
         tick: 300,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 300,
@@ -645,7 +739,143 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       expect(json.success).toBe(true);
       expect(json.data.tick).toBe(300);
       expect(json.data.checksum).toBe(payloadInfo.checksum);
+      expect(json.data.canonicalTick).toBe(300);
       expect(checkpointsTable).toHaveLength(1);
+      expect(canonicalAnchor.canonical_tick).toBe(300);
+    });
+
+    it('rejects checkpoint when baseCanonicalTick does not match canonical anchor (409 STALE_CANONICAL)', async () => {
+      leasesTable.push({
+        lease_id: 'valid-lease',
+        curator_id: 'curator-alice',
+        granted_at_ms: Date.now(),
+        expires_at_ms: Date.now() + 100000,
+        authorized_tick: 200,
+        created_at: new Date().toISOString(),
+      });
+      canonicalAnchor.canonical_tick = 250;
+      canonicalAnchor.checksum = 'chk-250';
+
+      const payloadInfo = await createValidBinaryPayload(300);
+      const submission: CanonicalCheckpointSubmission = {
+        leaseId: 'valid-lease',
+        baseCanonicalTick: 200, // Stale base tick (anchor is 250)
+        checkpoint: {
+          version: 2,
+          tick: 300,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: validCuratorHeaders,
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(409);
+
+      const json = await res.json() as any;
+      expect(json.code).toBe('STALE_CANONICAL');
+    });
+
+    it('idempotently accepts resubmission of identical tick and checksum returning 200', async () => {
+      leasesTable.push({
+        lease_id: 'valid-lease',
+        curator_id: 'curator-alice',
+        granted_at_ms: Date.now(),
+        expires_at_ms: Date.now() + 100000,
+        authorized_tick: 300,
+        created_at: new Date().toISOString(),
+      });
+      const payloadInfo = await createValidBinaryPayload(300);
+      canonicalAnchor.canonical_tick = 300;
+      canonicalAnchor.checksum = payloadInfo.checksum;
+
+      const submission: CanonicalCheckpointSubmission = {
+        leaseId: 'valid-lease',
+        baseCanonicalTick: 300,
+        checkpoint: {
+          version: 2,
+          tick: 300,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: validCuratorHeaders,
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(200);
+
+      const json = await res.json() as any;
+      expect(json.success).toBe(true);
+      expect(json.data.committed).toBe(true);
+      expect(json.data.tick).toBe(300);
+      expect(json.data.canonicalTick).toBe(300);
+    });
+
+    it('rejects oversized payload exceeding 1 MiB body size cap with 413', async () => {
+      const hugePadding = 'x'.repeat(1048577);
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: {
+          ...validCuratorHeaders,
+          'Content-Length': String(hugePadding.length),
+        },
+        body: hugePadding,
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(413);
+
+      const json = await res.json() as any;
+      expect(json.code).toBe('INVALID_REQUEST');
+      expect(json.error).toContain('Payload Too Large');
+    });
+
+    it('returns 503 when CANONICAL_WRITES_DISABLED killswitch is active', async () => {
+      const disabledEnv: Env = {
+        ...env,
+        CANONICAL_WRITES_DISABLED: 'true',
+      };
+
+      const payloadInfo = await createValidBinaryPayload(300);
+      const submission: CanonicalCheckpointSubmission = {
+        leaseId: 'valid-lease',
+        baseCanonicalTick: 0,
+        checkpoint: {
+          version: 2,
+          tick: 300,
+          seed: 42,
+          byteLength: payloadInfo.byteLength,
+          checksum: payloadInfo.checksum,
+          payload: payloadInfo.base64,
+        },
+      };
+
+      const req = new Request('http://localhost/api/garden/checkpoint', {
+        method: 'POST',
+        headers: validCuratorHeaders,
+        body: JSON.stringify(submission),
+      });
+
+      const res = await worker.fetch(req, disabledEnv);
+      expect(res.status).toBe(503);
+
+      const json = await res.json() as any;
+      expect(json.code).toBe('UNAVAILABLE');
+      expect(json.error).toContain('Emergency killswitch');
     });
 
     it('rejects checkpoint persistence if lease expires or hands off to new curator prior to commit (handoff race)', async () => {
@@ -661,9 +891,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       });
 
       const payloadInfo = await createValidBinaryPayload(300);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'alice-stale-lease',
         tick: 300,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 300,
@@ -704,9 +935,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       });
 
       const payloadInfo = await createValidBinaryPayload(300);
-      const submission: CheckpointSubmission = {
+      const submission: CanonicalCheckpointSubmission = {
         leaseId: 'valid-lease',
         tick: 300,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 300,
@@ -746,9 +978,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       });
 
       const payload102 = await createValidBinaryPayload(102);
-      const submission102: CheckpointSubmission = {
+      const submission102: CanonicalCheckpointSubmission = {
         leaseId: 'alice-lease',
         tick: 102,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 102,
@@ -760,9 +993,10 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       };
 
       const payload101 = await createValidBinaryPayload(101);
-      const submission101: CheckpointSubmission = {
+      const submission101: CanonicalCheckpointSubmission = {
         leaseId: 'alice-lease',
         tick: 101,
+        baseCanonicalTick: 0,
         checkpoint: {
           version: 2,
           tick: 101,
@@ -816,6 +1050,9 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
         payload: payloadInfo.rawBytes,
         created_at: new Date().toISOString(),
       });
+      canonicalAnchor.checkpoint_id = 1;
+      canonicalAnchor.canonical_tick = 500;
+      canonicalAnchor.checksum = payloadInfo.checksum;
 
       const req = new Request('http://localhost/api/garden', {
         method: 'GET',
@@ -831,7 +1068,25 @@ describe('Workers API - Checkpoints and Curator Leases', () => {
       expect(json.data.checkpoint).toBeDefined();
       expect(json.data.checkpoint.tick).toBe(500);
       expect(json.data.checkpoint.checksum).toBe(payloadInfo.checksum);
+      expect(json.data.exactContinuation).toBe(true);
       expect(Array.isArray(json.data.events)).toBe(true);
+    });
+  });
+
+  describe('Diagnostics (GET /api/diagnostics/summary)', () => {
+    it('returns system operational summary', async () => {
+      const req = new Request('http://localhost/api/diagnostics/summary', {
+        method: 'GET',
+      });
+
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(200);
+
+      const json = await res.json() as any;
+      expect(json.ok).toBe(true);
+      expect(json.data.schemaVersion).toBe('2.0.0');
+      expect(json.data.canonicalTick).toBe(0);
+      expect(json.data.activeCuratorLease).toBe(false);
     });
   });
 

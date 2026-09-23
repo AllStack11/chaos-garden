@@ -15,7 +15,7 @@ import { queryFirst, executeRaw } from "./connection";
  * Current schema version.
  * Increment this when making schema changes.
  */
-export const CURRENT_SCHEMA_VERSION = "1.9.0";
+export const CURRENT_SCHEMA_VERSION = "2.0.0";
 
 /**
  * Check if the database schema is up to date.
@@ -91,6 +91,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.0.0") {
       await migrateToV1_1_0(db);
       await migrateToV1_3_0(db);
@@ -101,6 +102,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.1.0") {
       await migrateToV1_3_0(db);
       await migrateToV1_4_0(db);
@@ -110,6 +112,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.3.0") {
       await migrateToV1_4_0(db);
       await migrateToV1_5_0(db);
@@ -118,6 +121,7 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.4.0") {
       await migrateToV1_5_0(db);
       await migrateToV1_5_1(db);
@@ -125,26 +129,34 @@ export async function runMigrations(db: D1Database): Promise<boolean> {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.5.0") {
       await migrateToV1_5_1(db);
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.5.1") {
       await migrateToV1_6_0(db);
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.6.0") {
       await migrateToV1_7_0(db);
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.7.0") {
       await migrateToV1_8_0(db);
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
     } else if (currentVersion === "1.8.0") {
       await migrateToV1_9_0(db);
+      await migrateToV2_0_0(db);
+    } else if (currentVersion === "1.9.0") {
+      await migrateToV2_0_0(db);
     } else if (currentVersion !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Unsupported schema version "${currentVersion}"`);
     }
@@ -619,6 +631,125 @@ async function migrateToV1_9_0(db: D1Database): Promise<void> {
 }
 
 /**
+ * Migration to version 2.0.0.
+ * Introduces canonical_anchor, chronicle_events, and api_metric_buckets tables.
+ * Seeds canonical_anchor (id = 1) from the latest engine checkpoint if present.
+ */
+export async function migrateToV2_0_0(db: D1Database): Promise<void> {
+  console.log("Running migration to v2.0.0...");
+
+  // 1. Create canonical_anchor
+  const createAnchorResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS canonical_anchor (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      checkpoint_id INTEGER,
+      canonical_tick INTEGER NOT NULL DEFAULT 0,
+      checksum TEXT,
+      updated_at_ms INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (checkpoint_id) REFERENCES engine_checkpoints(id)
+    )`,
+  );
+  if (!createAnchorResult.success) {
+    throw new Error(
+      `Failed to create canonical_anchor table: ${createAnchorResult.error}`,
+    );
+  }
+
+  // 2. Create chronicle_events
+  const createChronicleResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS chronicle_events (
+      id TEXT PRIMARY KEY,
+      canonical_tick INTEGER NOT NULL,
+      occurred_at TEXT NOT NULL,
+      type TEXT NOT NULL,
+      severity TEXT NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+      description TEXT NOT NULL,
+      tags_json TEXT NOT NULL,
+      checksum TEXT NOT NULL UNIQUE,
+      created_at_ms INTEGER NOT NULL
+    )`,
+  );
+  if (!createChronicleResult.success) {
+    throw new Error(
+      `Failed to create chronicle_events table: ${createChronicleResult.error}`,
+    );
+  }
+
+  const createChronicleIdxResult = await executeRaw(
+    db,
+    `CREATE INDEX IF NOT EXISTS idx_chronicle_events_tick ON chronicle_events(canonical_tick DESC)`,
+  );
+  if (!createChronicleIdxResult.success) {
+    throw new Error(
+      `Failed to create idx_chronicle_events_tick: ${createChronicleIdxResult.error}`,
+    );
+  }
+
+  // 3. Create api_metric_buckets
+  const createMetricsResult = await executeRaw(
+    db,
+    `CREATE TABLE IF NOT EXISTS api_metric_buckets (
+      bucket_start_ms INTEGER PRIMARY KEY,
+      garden_reads INTEGER NOT NULL DEFAULT 0,
+      checkpoint_commits INTEGER NOT NULL DEFAULT 0,
+      rejected_writes INTEGER NOT NULL DEFAULT 0,
+      server_errors INTEGER NOT NULL DEFAULT 0
+    )`,
+  );
+  if (!createMetricsResult.success) {
+    throw new Error(
+      `Failed to create api_metric_buckets table: ${createMetricsResult.error}`,
+    );
+  }
+
+  // 4. Seed canonical_anchor if not already seeded
+  const existingAnchor = await queryFirst<{ id: number }>(
+    db,
+    "SELECT id FROM canonical_anchor WHERE id = 1",
+  );
+
+  if (!existingAnchor) {
+    const latestCheckpoint = await queryFirst<{
+      id: number;
+      tick: number;
+      checksum: string;
+    }>(
+      db,
+      "SELECT id, tick, checksum FROM engine_checkpoints ORDER BY tick DESC LIMIT 1",
+    );
+
+    const now = Date.now();
+    if (latestCheckpoint) {
+      await executeRaw(
+        db,
+        `INSERT OR IGNORE INTO canonical_anchor (id, checkpoint_id, canonical_tick, checksum, updated_at_ms)
+         VALUES (1, ${latestCheckpoint.id}, ${latestCheckpoint.tick}, '${latestCheckpoint.checksum}', ${now})`,
+      );
+    } else {
+      await executeRaw(
+        db,
+        `INSERT OR IGNORE INTO canonical_anchor (id, checkpoint_id, canonical_tick, checksum, updated_at_ms)
+         VALUES (1, NULL, 0, NULL, ${now})`,
+      );
+    }
+  }
+
+  // 5. Update system_metadata
+  const versionResult = await executeRaw(
+    db,
+    `INSERT OR REPLACE INTO system_metadata (key, value, updated_at)
+     VALUES ('schema_version', '2.0.0', datetime('now'))`,
+  );
+  if (!versionResult.success) {
+    throw new Error(`Failed to set schema version: ${versionResult.error}`);
+  }
+
+  console.log("Migration to v2.0.0 complete");
+}
+
+/**
  * Initialize the database on first run.
  * Creates schema and seeds initial data.
  *
@@ -652,6 +783,7 @@ export async function initializeDatabase(db: D1Database): Promise<boolean> {
     await migrateToV1_7_0(db);
     await migrateToV1_8_0(db);
     await migrateToV1_9_0(db);
+    await migrateToV2_0_0(db);
 
     console.log("Database initialization complete");
     return true;

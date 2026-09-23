@@ -15,7 +15,7 @@ Designed to run at **$0.00/month** on Cloudflare free-tier infrastructure.
 | **Phase 1** | **Shared Contracts (`@chaos-garden/shared`)** | Taxonomy, vector math, PRNG, stride protocol, soil/weather types, diagnostics, API contracts | ✅ **COMPLETED** |
 | **Phase 2** | **Simulation Engine (`@chaos-garden/engine`)** | Standalone ECS, SoA pooling, Boid steering, 2D soil grid, Flight Recorder, headless CLI | ✅ **COMPLETED** |
 | **Phase 3** | **Client App (`@chaos-garden/client`)** | Vite + Svelte 5 (Runes) + PixiJS v8 + Web Audio API + Web Worker bridge | ✅ **COMPLETED** |
-| **Phase 4** | **Cloudflare Backend (`@chaos-garden/server`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics | 📋 Queued |
+| **Phase 4** | **Cloudflare Backend (`@chaos-garden/workers`)** | Streamlined Worker API, D1 migrations, curator lease consensus, diagnostics | ✅ **COMPLETED** |
 
 ---
 
@@ -185,20 +185,28 @@ PR #4 delivers the Vite + Svelte 5 + PixiJS v8 browser terrarium on the remediat
 
 ---
 
-### Phase 4: Cloudflare Server & Canonical World (`packages/server`)
+### ✅ Phase 4: Cloudflare Server & Canonical World (`workers`)
 
-Streamline Cloudflare Workers and D1 database to serve as the source of truth for the canonical global terrarium.
+**Detailed specification:** [`phase_4_server_design.md`](phase_4_server_design.md). Delivered on feature branch `feat/workers-phase4-canonical`.
 
-- **API Routes** ([`packages/server/src/index.ts`]):
-  - `GET /api/garden`: Returns current canonical garden snapshot and latest chronicle milestones.
-  - `POST /api/garden/checkpoint`: Validates and commits authorized curator checkpoints to D1.
-  - `POST /api/garden/curator-lease`: Grants or renews a temporary curator lease (2-min TTL).
-  - `GET /api/garden/stats`: Historical timeseries analytics for the dashboard.
-  - `GET /api/diagnostics/summary` & `/api/diagnostics/logs`: Machine-readable diagnostic feeds.
-  - `GET /api/health`: Service health and D1 connectivity.
-- **Optimized D1 Schema** ([`packages/server/schema.sql`]):
-  - Stores compact serialized macro snapshot blobs to keep daily D1 writes $<300$/day ($<0.3\%$ of free tier).
-  - Rolling 500-snapshot ring buffer keeping database storage $<50$ MB ($<1\%$ of free tier).
+Streamlined Cloudflare Workers and D1 database to serve as the high-integrity source of truth for the canonical global terrarium.
+
+- **Canonical Persistence & Fencing**:
+  - `canonical_anchor` (singleton `id = 1`) maintaining atomic monotonic progression pointers.
+  - CAS single-curator lease authorization (`curator_leases` singleton `id = 1`) with monotonic write fencing (`baseCanonicalTick`).
+  - Strict 1 MiB payload cap and deterministic SHA-256 payload integrity validation.
+  - Idempotent resubmission acceptance (returns HTTP 200 without duplicate rows).
+- **Chronicle Event Deduplication**:
+  - `chronicle_events` table with unique deterministic event checksums (`sha256(canonicalTick + occurredAt + type + severity + description + tagsJson)`).
+- **Hourly Metrics Aggregation**:
+  - `api_metric_buckets` table capturing hourly write/read request counters and failure codes.
+- **Unified Versioned HTTP Contract**:
+  - Standardized v1 response envelopes (`ok: true, apiVersion: 1, serverTime, data`, typed stable error codes: `UNAUTHENTICATED`, `FORBIDDEN`, `LEASE_CONFLICT`, `STALE_CANONICAL`, `INVALID_CHECKPOINT`, `INVALID_REQUEST`, `NOT_FOUND`, `RATE_LIMITED`, `UNAVAILABLE`).
+  - Sanitized health and diagnostics endpoints preventing database error and stack trace leakage.
+- **Client Synchronization**:
+  - `CuratorSession` and `LocalPersistence` handle envelope unpacking, `baseCanonicalTick` fencing, and `exactContinuation` verification.
+- **Automated D1 v2.0.0 Migration**:
+  - Zero-downtime, idempotent schema migration from `1.9.0` to `2.0.0` preserving historical checkpoints.
 
 ---
 
