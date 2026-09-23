@@ -79,4 +79,71 @@ describe('canonical bootstrap', () => {
       expect(await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").bind(table).first<{ name: string }>()).toBeNull();
     }
   });
+
+  it('cleanses legacy checkpoints at tick 900 during cutover and commits new canonical snapshot from scheduled worker', async () => {
+    await db.prepare("CREATE TABLE IF NOT EXISTS system_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))") .run();
+    await db.prepare("INSERT OR REPLACE INTO system_metadata (key, value) VALUES ('schema_version', '1.9.0')").run();
+
+    await db.prepare(`CREATE TABLE IF NOT EXISTS engine_checkpoints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tick INTEGER NOT NULL UNIQUE,
+      engine_version INTEGER NOT NULL,
+      seed INTEGER NOT NULL,
+      checksum TEXT NOT NULL,
+      payload BLOB NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+
+    await db.prepare(`INSERT INTO engine_checkpoints (tick, engine_version, seed, checksum, payload)
+      VALUES (900, 1, 42, 'legacy-checkpoint-900', X'01020304')`).run();
+
+    await db.prepare(`CREATE TABLE IF NOT EXISTS curator_leases (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      lease_id TEXT NOT NULL,
+      curator_id TEXT NOT NULL,
+      granted_at_ms INTEGER NOT NULL,
+      expires_at_ms INTEGER NOT NULL,
+      authorized_tick INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    await db.prepare(`INSERT OR REPLACE INTO curator_leases (id, lease_id, curator_id, granted_at_ms, expires_at_ms, authorized_tick)
+      VALUES (1, 'legacy-lease', 'browser-curator', 1000, 999999999999, 900)`).run();
+
+    const legacyRow = await db.prepare('SELECT tick FROM engine_checkpoints WHERE tick = 900').first<{ tick: number }>();
+    expect(legacyRow?.tick).toBe(900);
+
+    await migrateToCanonicalSchema(db);
+
+    const remainingCheckpoints = await db.prepare('SELECT COUNT(*) as count FROM engine_checkpoints').first<{ count: number }>();
+    expect(remainingCheckpoints?.count).toBe(0);
+
+    const anchor = await getCanonicalAnchor(db);
+    expect(anchor?.canonicalTick).toBe(0);
+    expect(anchor?.checkpointId).toBeNull();
+
+    const leaseRow = await db.prepare('SELECT * FROM curator_leases WHERE id = 1').first<{ curator_id: string; authorized_tick: number }>();
+    expect(leaseRow?.curator_id).toBe('none');
+    expect(leaseRow?.authorized_tick).toBe(0);
+
+    await worker.scheduled({ cron: '*/15 * * * *' }, { DB: db });
+
+    const newAnchor = await getCanonicalAnchor(db);
+    expect(newAnchor?.canonicalTick).toBe(900);
+    expect(newAnchor?.checkpointId).not.toBeNull();
+
+    const response = await worker.fetch(new Request('https://garden.test/api/garden'), { DB: db });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { data: { exactContinuation: boolean; checkpoint?: { tick: number } } };
+    expect(body.data.exactContinuation).toBe(true);
+    expect(body.data.checkpoint?.tick).toBe(900);
+
+    await migrateToCanonicalSchema(db);
+    const preservedAnchor = await getCanonicalAnchor(db);
+    expect(preservedAnchor?.canonicalTick).toBe(900);
+    expect(preservedAnchor?.checkpointId).toBe(newAnchor?.checkpointId);
+    const preservedCheckpoints = await db.prepare('SELECT COUNT(*) as count FROM engine_checkpoints').first<{ count: number }>();
+    expect(preservedCheckpoints?.count).toBe(1);
+  });
 });
+

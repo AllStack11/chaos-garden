@@ -1,5 +1,11 @@
 -- Idempotent Phase 4 cutover. This is intentionally destructive to retired
--- persistence tables, but preserves all already-canonical snapshots.
+-- persistence tables and pre-v3 checkpoints, but preserves all already-canonical v3 data.
+
+CREATE TABLE IF NOT EXISTS system_metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 CREATE TABLE IF NOT EXISTS engine_checkpoints (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,10 +67,39 @@ CREATE TABLE IF NOT EXISTS canonical_commit_guards (
   id INTEGER PRIMARY KEY CHECK (id = 1)
 );
 
-CREATE TABLE IF NOT EXISTS system_metadata (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+UPDATE canonical_anchor
+SET checkpoint_id = NULL,
+    canonical_tick = 0,
+    checksum = NULL,
+    updated_at_ms = 0
+WHERE id = 1 AND NOT EXISTS (
+  SELECT 1 FROM system_metadata WHERE key = 'schema_version' AND value = '3.0.0'
+);
+
+UPDATE curator_leases
+SET lease_id = 'initial',
+    curator_id = 'none',
+    granted_at_ms = 0,
+    expires_at_ms = 0,
+    authorized_tick = 0,
+    updated_at = datetime('now')
+WHERE id = 1 AND NOT EXISTS (
+  SELECT 1 FROM system_metadata WHERE key = 'schema_version' AND value = '3.0.0'
+);
+
+DELETE FROM canonical_world_states
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_metadata WHERE key = 'schema_version' AND value = '3.0.0'
+);
+
+DELETE FROM chronicle_events
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_metadata WHERE key = 'schema_version' AND value = '3.0.0'
+);
+
+DELETE FROM engine_checkpoints
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_metadata WHERE key = 'schema_version' AND value = '3.0.0'
 );
 
 DROP TABLE IF EXISTS simulation_events;

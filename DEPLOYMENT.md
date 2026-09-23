@@ -23,6 +23,7 @@ npm run db:init:remote
 ```
 
 This command executes `workers/schema.sql` against the selected D1 database. It initializes canonical tables and singleton rows; the first scheduled Worker execution creates the primordial canonical checkpoint.
+This command executes `workers/canonical-cutover.sql` against the selected D1 database. It initializes canonical tables and singleton rows, cleanses legacy pre-v3 records, and prepares the database for the first scheduled Worker execution to create the primordial canonical checkpoint.
 
 ## 2. Deploy the Worker
 
