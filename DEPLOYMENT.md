@@ -1,6 +1,6 @@
 # Chaos Garden deployment
 
-Chaos Garden currently deploys only the Worker-owned canonical ecosystem. The Astro frontend has been removed; a separately built offline-capable observer will add Pages deployment later.
+Chaos Garden deploys the Worker-owned canonical ecosystem and its read-only Vite/Svelte observer to Cloudflare Pages.
 
 ## Prerequisites
 
@@ -38,11 +38,23 @@ https://<worker-url>/api/health
 
 The Worker advances the canonical world every 15 minutes. Its public API is read-only: `/api/garden` and `/api/health`.
 
-## 3. Post-deployment checks
+## 3. Deploy the frontend
+
+The client build reads `VITE_API_BASE_URL` to reach the Worker from its Pages origin.
+Set it to the Worker URL (without `/api`), then deploy the built client to the
+Cloudflare Pages project:
+
+```bash
+VITE_API_BASE_URL=https://chaos-garden-api.saadmankabir95.workers.dev npm run client:build
+npx wrangler pages deploy packages/client/dist --project-name chaos-garden-frontend --branch main
+```
+
+## 4. Post-deployment checks
 
 - `GET /api/health` returns HTTP 200 after schema initialization.
 - After the next cron invocation, `GET /api/garden` returns an exact canonical continuation.
 - The cron trigger is `*/15 * * * *` in the Worker dashboard.
+- `https://chaos-garden-frontend.pages.dev` loads the browser client.
 
 ## GitHub Actions
 
@@ -55,6 +67,8 @@ Configure these repository secrets for deployment:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_PAGES_PROJECT_NAME`
+- `PUBLIC_API_URL` (the Worker URL without `/api`)
 
 The deployment workflow deliberately does not run the D1 cutover. Run
 `npm run db:init:remote` as a planned, one-time schema operation before the
