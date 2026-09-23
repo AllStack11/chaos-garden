@@ -225,6 +225,28 @@ export class LocalPersistence {
     }
   }
 
+  /**
+   * Returns the local continuation furthest ahead in simulated time. When two
+   * branches share a tick, prefer the most recently captured one.
+   */
+  async loadMostAdvancedLocalBranch(): Promise<LocalBranchPersistenceRecord | null> {
+    const branches = await this.loadLocalBranches();
+    if (branches.length === 0) return null;
+
+    let mostAdvanced = branches[0];
+    for (let index = 1; index < branches.length; index += 1) {
+      const candidate = branches[index];
+      if (
+        candidate.baseCheckpointTick > mostAdvanced.baseCheckpointTick ||
+        (candidate.baseCheckpointTick === mostAdvanced.baseCheckpointTick &&
+          candidate.capturedAtMs > mostAdvanced.capturedAtMs)
+      ) {
+        mostAdvanced = candidate;
+      }
+    }
+    return mostAdvanced;
+  }
+
   async deleteLocalBranch(branchId: string): Promise<void> {
     try {
       const db = await this.getDB();
@@ -264,7 +286,10 @@ export class LocalPersistence {
       }
     }
 
-    // 2. Try remote Cloudflare D1 API
+    // 2. Try remote Cloudflare D1 API. A server snapshot remains the shared
+    // baseline, but a browser must not move its own local timeline backwards
+    // on refresh while that baseline is behind its autosaved branch.
+    let remoteEnvelope: GardenBootstrapResponse | null = null;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -285,24 +310,49 @@ export class LocalPersistence {
 
         if (this.isExactCanonicalEnvelope(envelope)) {
           await this.saveCanonical(envelope);
-
-          return {
-            source: 'API',
-            envelope,
-            candidate: {
-              kind: 'canonical',
-              checkpoint: envelope.checkpoint,
-              canonicalState: envelope.canonicalState,
-            },
-            data: JSON.stringify(envelope),
-          };
+          remoteEnvelope = envelope;
         }
       }
     } catch (err) {
       console.warn('[LocalPersistence] Remote API unreachable, falling back to local storage:', err);
     }
 
-    // 3. Fall back to local canonical IndexedDB cache
+    // 3. Resume a locally autosaved branch when it is ahead of the latest
+    // canonical snapshot. This is the normal refresh path for a local sandbox.
+    const mostAdvancedLocalBranch = await this.loadMostAdvancedLocalBranch();
+    const remoteTick = remoteEnvelope?.checkpoint?.tick ?? -1;
+    if (mostAdvancedLocalBranch && mostAdvancedLocalBranch.baseCheckpointTick >= remoteTick) {
+      this.setActiveBranch(mostAdvancedLocalBranch.branchId, mostAdvancedLocalBranch.label);
+      return {
+        source: 'INDEXED_DB_BRANCH',
+        branchRecord: mostAdvancedLocalBranch,
+        candidate: {
+          kind: 'localBranch',
+          branchId: mostAdvancedLocalBranch.branchId,
+          label: mostAdvancedLocalBranch.label,
+          checkpoint: mostAdvancedLocalBranch.checkpoint,
+          canonicalState: mostAdvancedLocalBranch.canonicalState,
+        },
+        data: mostAdvancedLocalBranch.canonicalState
+          ? JSON.stringify(mostAdvancedLocalBranch.canonicalState)
+          : null,
+      };
+    }
+
+    if (remoteEnvelope) {
+      return {
+        source: 'API',
+        envelope: remoteEnvelope,
+        candidate: {
+          kind: 'canonical',
+          checkpoint: remoteEnvelope.checkpoint,
+          canonicalState: remoteEnvelope.canonicalState,
+        },
+        data: JSON.stringify(remoteEnvelope),
+      };
+    }
+
+    // 4. Fall back to local canonical IndexedDB cache
     const cachedCanonical = await this.loadCanonical();
     if (cachedCanonical && this.isExactCanonicalEnvelope(cachedCanonical.bootstrapEnvelope)) {
       const envelope = cachedCanonical.bootstrapEnvelope;
@@ -319,7 +369,7 @@ export class LocalPersistence {
       };
     }
 
-    // 4. Primordial fallback
+    // 5. Primordial fallback
     return {
       source: 'PRIMORDIAL',
       data: null,
@@ -337,7 +387,7 @@ export class LocalPersistence {
       clearInterval(this.autosaveTimer);
     }
 
-    this.autosaveTimer = setInterval(async () => {
+    const saveActiveBranch = async (): Promise<void> => {
       try {
         const { checkpoint, canonicalState } = await bridge.requestSnapshot();
         await this.saveLocalBranch(
@@ -349,6 +399,13 @@ export class LocalPersistence {
       } catch (err) {
         console.warn('[LocalPersistence] Autosave tick failed:', err);
       }
+    };
+
+    // Create a recovery point as soon as the simulation has booted, rather
+    // than leaving a new session unprotected until its first interval fires.
+    void saveActiveBranch();
+    this.autosaveTimer = setInterval(() => {
+      void saveActiveBranch();
     }, intervalMs);
 
     return () => {

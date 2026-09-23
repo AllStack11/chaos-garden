@@ -177,6 +177,83 @@ describe("LocalPersistence Unit Tests (Phase 3 Dual-Store)", () => {
     expect(result.candidate?.canonicalState?.tick).toBe(300);
   });
 
+  it("resumes the most advanced local branch instead of moving time backwards on refresh", async () => {
+    const remoteEnvelope: GardenBootstrapResponse = {
+      canonicalState: {
+        id: 1,
+        tick: 450,
+        epoch: 1,
+        timestamp: "2026-09-22T00:00:00Z",
+        seed: 42,
+        atmospheric: { ...DEFAULT_ATMOSPHERIC_STATE },
+        populationSummary: { plants: 10, herbivores: 5, carnivores: 2, fungi: 3, deadMatterCount: 0, totalLiving: 20, totalBiomass: 1500, allTimeBirths: 0, allTimeDeaths: 0 },
+        entities: [],
+        deadMatter: [],
+        soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] },
+        checksum: "sha-450",
+      },
+      checkpoint: { version: 1, tick: 450, seed: 42, byteLength: 64, checksum: "sha-450", payload: "payload450" },
+      events: [],
+      exactContinuation: true,
+    };
+    const localBranch: LocalBranchPersistenceRecord = {
+      kind: "localBranch",
+      branchId: "branch_resume",
+      label: "Local Session",
+      capturedAtMs: 2000,
+      baseCheckpointTick: 720,
+      baseCheckpointChecksum: "sha-720",
+      codecVersion: 1,
+      checkpoint: { version: 1, tick: 720, seed: 42, byteLength: 64, checksum: "sha-720", payload: "payload720" },
+      byteSize: 200,
+    };
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ success: true, data: remoteEnvelope }),
+    })) as unknown as typeof fetch;
+    persistence.saveCanonical = vi.fn(async () => {});
+    vi.spyOn(persistence, "loadMostAdvancedLocalBranch").mockResolvedValue(localBranch);
+
+    const result = await persistence.bootload("/api/garden");
+
+    expect(result.source).toBe("INDEXED_DB_BRANCH");
+    expect(result.candidate?.checkpoint?.tick).toBe(720);
+    expect(persistence.getActiveBranchId()).toBe("branch_resume");
+  });
+
+  it("uses a newer server checkpoint when the local branch is behind it", async () => {
+    const localBranch: LocalBranchPersistenceRecord = {
+      kind: "localBranch",
+      branchId: "branch_old",
+      label: "Old Local Session",
+      capturedAtMs: 1000,
+      baseCheckpointTick: 200,
+      baseCheckpointChecksum: "sha-200",
+      codecVersion: 1,
+      checkpoint: { version: 1, tick: 200, seed: 42, byteLength: 64, checksum: "sha-200", payload: "payload200" },
+      byteSize: 200,
+    };
+    const remoteEnvelope: GardenBootstrapResponse = {
+      canonicalState: {
+        id: 1, tick: 450, epoch: 1, timestamp: "2026-09-22T00:00:00Z", seed: 42,
+        atmospheric: { ...DEFAULT_ATMOSPHERIC_STATE },
+        populationSummary: { plants: 10, herbivores: 5, carnivores: 2, fungi: 3, deadMatterCount: 0, totalLiving: 20, totalBiomass: 1500, allTimeBirths: 0, allTimeDeaths: 0 },
+        entities: [], deadMatter: [], soil: { cols: 10, rows: 10, cellSize: 16, moisture: [], nitrates: [] }, checksum: "sha-450",
+      },
+      checkpoint: { version: 1, tick: 450, seed: 42, byteLength: 64, checksum: "sha-450", payload: "payload450" }, events: [], exactContinuation: true,
+    };
+
+    globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ data: remoteEnvelope }) })) as unknown as typeof fetch;
+    persistence.saveCanonical = vi.fn(async () => {});
+    vi.spyOn(persistence, "loadMostAdvancedLocalBranch").mockResolvedValue(localBranch);
+
+    const result = await persistence.bootload("/api/garden");
+
+    expect(result.source).toBe("API");
+    expect(result.candidate?.checkpoint?.tick).toBe(450);
+  });
+
   it("loads explicit local branch when selectedBranchId is passed", async () => {
     const branchCheckpoint: EncodedEngineCheckpoint = {
       version: 1,

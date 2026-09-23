@@ -140,8 +140,8 @@
     const status = await bridge.init(42, 1600, 1200, bootResult.candidate);
     gardenState.bootstrapMode = status.mode;
 
-    // 30-second autosave
-    localPersistence.startAutosave(bridge, 30000);
+    // Keep local sandbox progress recoverable across a browser refresh.
+    localPersistence.startAutosave(bridge, 5000);
   });
 
   onDestroy(() => {
