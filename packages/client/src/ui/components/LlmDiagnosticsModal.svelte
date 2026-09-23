@@ -2,10 +2,58 @@
   import GlassPanel from '../shared/GlassPanel.svelte';
   import { curatorState } from '../../state/curatorState.svelte.js';
   import { gardenState } from '../../state/gardenState.svelte.js';
+  import type { WorkerBridge } from '../../worker/WorkerBridge.js';
+  import type { DiagnosticSnapshot } from '@chaos-garden/shared';
+
+  interface Props {
+    bridge?: WorkerBridge | null;
+  }
+
+  let { bridge }: Props = $props();
 
   let copied = $state(false);
+  let diagnosticData = $state<DiagnosticSnapshot | null>(null);
+  let isLoading = $state(false);
+
+  $effect(() => {
+    if (curatorState.isDiagnosticsOpen && bridge) {
+      isLoading = true;
+      bridge
+        .requestDiagnostics()
+        .then((data) => {
+          diagnosticData = data;
+          isLoading = false;
+        })
+        .catch((err) => {
+          console.warn('[LlmDiagnosticsModal] Failed to fetch diagnostics:', err);
+          isLoading = false;
+        });
+    }
+  });
 
   function generatePrompt(): string {
+    if (diagnosticData) {
+      const d = diagnosticData;
+      return `### Chaos Garden Flight Recorder Diagnostic Snapshot
+- **Tick**: ${d.tick} | **Timestamp**: ${d.timestamp}
+- **Performance**: TPS: ${d.tps} | Tick Duration: ${d.tickDurationMs.toFixed(3)}ms
+- **Populations**:
+  - Plants: ${d.populations.plants}
+  - Herbivores: ${d.populations.herbivores}
+  - Carnivores: ${d.populations.carnivores}
+  - Fungi: ${d.populations.fungi}
+  - Total Living: ${d.populations.totalLiving} | Total Biomass: ${Math.round(d.populations.totalBiomass)}
+- **Ecological Vitals**:
+  - Predator/Prey Ratio: ${d.vitals.predatorPreyRatio.toFixed(3)}
+  - Avg Energy: ${d.vitals.avgEnergy.toFixed(1)} | Avg Health: ${d.vitals.avgHealth.toFixed(1)}
+  - Biodiversity Index: ${d.vitals.biodiversityIndex.toFixed(2)}
+  - Soil Moisture: ${(d.vitals.soilAverageMoisture * 100).toFixed(1)}% | Soil Nitrates: ${(d.vitals.soilAverageNitrates * 100).toFixed(1)}%
+  - Arid Land: ${(d.vitals.aridLandPercentage * 100).toFixed(1)}%
+- **Recent Anomalies**: ${d.recentAnomalies && d.recentAnomalies.length > 0 ? JSON.stringify(d.recentAnomalies, null, 2) : 'None (All systems nominal)'}
+- **Selected Organism**: ${gardenState.selectedEntity ? JSON.stringify(gardenState.selectedEntity) : 'None'}
+- **Request**: Please analyze the ecological stability, trophic balance, and recommend optimal curator interventions.`;
+    }
+
     const pop = gardenState.populations;
     return `### Chaos Garden Simulation Health Report
 - **Tick**: ${gardenState.tick} | **TPS**: ${gardenState.tps} | **Speed**: ${gardenState.speedMultiplier}x
@@ -38,6 +86,7 @@
           <div>
             <h3 class="font-bold text-base text-emerald-400">1-Click AI Diagnostic Export</h3>
             <p class="text-xs text-slate-400">Copy structured simulation context to pair with Claude, Gemini, or ChatGPT.</p>
+            <p class="text-xs text-slate-400">Copy structured Flight Recorder context to pair with Claude, Gemini, or ChatGPT.</p>
           </div>
         </div>
         <button
@@ -51,6 +100,11 @@
       <!-- Preview Box -->
       <div class="bg-slate-950/80 p-3.5 rounded-lg border border-slate-800 font-mono text-xs text-slate-300 max-h-56 overflow-y-auto whitespace-pre-wrap leading-relaxed">
         {generatePrompt()}
+        {#if isLoading}
+          <div class="text-slate-500 italic">Querying World Flight Recorder diagnostics...</div>
+        {:else}
+          {generatePrompt()}
+        {/if}
       </div>
 
       <!-- Actions -->

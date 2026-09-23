@@ -3,21 +3,21 @@
  *
  * Runs the @chaos-garden/engine World at a fixed timestep on an isolated thread.
  * Streams zero-copy binary render frames to the main thread via Transferable ArrayBuffers.
+ * Implements atomic candidate World verification, spatial picking, and World-owned curator mutations.
  */
 
 import {
   World,
-  type WorldOptions,
 } from '@chaos-garden/engine';
 import {
   DEFAULT_SIMULATION_CONFIG,
   EntityTypeCode,
-  type Vector2D,
 } from '@chaos-garden/shared';
 import type {
   ClientWorkerInboundMessage,
   ClientWorkerOutboundMessage,
-  SelectedEntityVitals,
+  BootstrapContinuationMode,
+  BootstrapStatusMessage,
 } from './types.js';
 import { SoilBufferPool } from './SoilBufferPool.js';
 
@@ -27,191 +27,15 @@ let isRunning = false;
 
 let targetTps = 60;
 let speedMultiplier = 1.0;
-let selectedEntityIdHash: number | null = null;
+let selectedEntityId: number | null = null;
 const soilPool = new SoilBufferPool();
-
 
 // Telemetry & soil rate counters
 let lastTelemetryTime = 0;
 let lastSoilUpdateTime = 0;
-let lastTickTime = performance.now();
 let tickCounter = 0;
 let measuredTps = 60;
 let tpsMeasurementStartTime = performance.now();
-
-function spawnCreature(
-  type: EntityTypeCode,
-  position: Vector2D,
-  worldInstance: World,
-): void {
-  const idx = worldInstance.pool.allocate();
-  if (idx === -1) return;
-
-  const prng = worldInstance.prng;
-  const angle = prng() * Math.PI * 2;
-  const idHash = (Math.floor(prng() * 1000000) + 1) & 0x00ffffff;
-
-  let baseSize = 8;
-  let pigment = 120;
-  let speed = 0;
-  let force = 0;
-  let threshold = 60;
-
-  switch (type) {
-    case EntityTypeCode.PLANT:
-      baseSize = 6;
-      pigment = 120;
-      speed = 0;
-      force = 0;
-      threshold = worldInstance.config.plantReproductionThreshold;
-      break;
-    case EntityTypeCode.HERBIVORE:
-      baseSize = 8;
-      pigment = 200;
-      speed = 22;
-      force = 4;
-      threshold = worldInstance.config.herbivoreReproductionThreshold;
-      break;
-    case EntityTypeCode.CARNIVORE:
-      baseSize = 12;
-      pigment = 0;
-      speed = 30;
-      force = 6;
-      threshold = worldInstance.config.carnivoreReproductionThreshold;
-      break;
-    case EntityTypeCode.FUNGUS:
-      baseSize = 5;
-      pigment = 280;
-      speed = 0;
-      force = 0;
-      threshold = worldInstance.config.fungusReproductionThreshold;
-      break;
-  }
-
-  worldInstance.storage.initEntity(idx, {
-    idHash: idHash === 0 ? 1 : idHash,
-    typeCode: type,
-    x: position.x,
-    y: position.y,
-    vx: Math.cos(angle) * (speed * 0.5),
-    vy: Math.sin(angle) * (speed * 0.5),
-    rotation: angle,
-    size: baseSize + (prng() * 2 - 1),
-    pigment,
-    energy: 80,
-    health: 100,
-    generation: 1,
-    parentIndex: -1,
-    bornAtTick: worldInstance.tick,
-    lifespan: 1500 + Math.floor(prng() * 500),
-    metabolismRate: worldInstance.config.baseEnergyCostPerTick,
-    reproductionThreshold: threshold,
-    mutationRate: worldInstance.config.mutationMagnitude,
-    photosynthesisRate: type === EntityTypeCode.PLANT ? 1.2 : 0,
-    seedDispersionRadius: type === EntityTypeCode.PLANT ? 50 : 0,
-    moistureAffinity: 0.5,
-    maxSpeed: speed,
-    maxForce: force,
-    perceptionRadius: type === EntityTypeCode.PLANT ? 0 : 60,
-    fleeRadius: type === EntityTypeCode.HERBIVORE ? 90 : 0,
-    flockingWeight: type === EntityTypeCode.HERBIVORE ? 0.8 : 0.4,
-    packWeight: type === EntityTypeCode.CARNIVORE ? 1.2 : 0,
-    decompositionRate: type === EntityTypeCode.FUNGUS ? 1.0 : 0,
-  });
-}
-
-function applyCuratorBrush(
-  action: 'WATER_SOIL' | 'DROP_NUTRIENT',
-  center: Vector2D,
-  amount: number = 0.4,
-  radius: number = 32,
-): void {
-  if (!world) return;
-  const soil = world.soil;
-  const step = soil.cellSize;
-  const halfSteps = Math.ceil(radius / step);
-
-  for (let dy = -halfSteps; dy <= halfSteps; dy++) {
-    for (let dx = -halfSteps; dx <= halfSteps; dx++) {
-      const px = center.x + dx * step;
-      const py = center.y + dy * step;
-      const dist = Math.hypot(px - center.x, py - center.y);
-      if (dist <= radius) {
-        const falloff = 1 - dist / radius;
-        const deposit = amount * falloff;
-        if (action === 'WATER_SOIL') {
-          soil.addMoisture(px, py, deposit);
-        } else {
-          soil.depositNitrates(px, py, deposit);
-        }
-      }
-    }
-  }
-}
-
-function getSelectedVitals(): SelectedEntityVitals | null {
-  if (!world || selectedEntityIdHash === null) return null;
-
-  const count = world.pool.denseCount;
-  const dense = world.pool.denseEntities;
-  const storage = world.storage;
-
-  for (let i = 0; i < count; i++) {
-    const idx = dense[i];
-    if (storage.idHashes[idx] === selectedEntityIdHash) {
-      const typeCode = storage.typeCodes[idx] as EntityTypeCode;
-      let kingdomName = 'Organism';
-      let speciesName = 'Primordial';
-
-      switch (typeCode) {
-        case EntityTypeCode.PLANT:
-          kingdomName = 'Flora';
-          speciesName = 'Photosynthetic Alga';
-          break;
-        case EntityTypeCode.HERBIVORE:
-          kingdomName = 'Herbivore';
-          speciesName = 'Amoebic Boid';
-          break;
-        case EntityTypeCode.CARNIVORE:
-          kingdomName = 'Carnivore';
-          speciesName = 'Predatory Dart';
-          break;
-        case EntityTypeCode.FUNGUS:
-          kingdomName = 'Fungus';
-          speciesName = 'Hyphal Mycelium';
-          break;
-      }
-
-      const vx = storage.velocitiesX[idx];
-      const vy = storage.velocitiesY[idx];
-
-      return {
-        idHash: selectedEntityIdHash,
-        name: `${speciesName} #${selectedEntityIdHash.toString(16).toUpperCase()}`,
-        species: kingdomName,
-        age: storage.ages[idx],
-        maxLifespan: storage.maxLifespans[idx],
-        energy: Math.round(storage.energies[idx] * 10) / 10,
-        health: Math.round(storage.healths[idx] * 10) / 10,
-        generation: storage.generations[idx],
-        type: typeCode,
-        pigment: storage.pigments[idx],
-        speed: Math.round(Math.hypot(vx, vy) * 10) / 10,
-        maxSpeed: storage.maxSpeeds[idx],
-        perceptionRadius: storage.perceptionRadii[idx],
-        reproductionThreshold: storage.reproductionThresholds[idx],
-        metabolismRate: storage.metabolismRates[idx],
-        parentIndex: storage.parentIndices[idx],
-        x: Math.round(storage.positionsX[idx]),
-        y: Math.round(storage.positionsY[idx]),
-      };
-    }
-  }
-
-  // If organism died, clear selection
-  selectedEntityIdHash = null;
-  return null;
-}
 
 function simulationLoop(): void {
   if (!isRunning || !world) return;
@@ -277,7 +101,11 @@ function simulationLoop(): void {
     }
 
     const census = world.getPopulationSummary();
-    const vitals = getSelectedVitals();
+    const vitals = selectedEntityId !== null ? world.getEntityVitals(selectedEntityId) : null;
+    if (selectedEntityId !== null && vitals === null) {
+      // Entity died or deallocated
+      selectedEntityId = null;
+    }
 
     const telemetryMessage: ClientWorkerOutboundMessage = {
       type: 'TELEMETRY_PULSE',
@@ -306,7 +134,6 @@ function simulationLoop(): void {
 function startLoop(): void {
   if (isRunning) return;
   isRunning = true;
-  lastTickTime = performance.now();
   tpsMeasurementStartTime = performance.now();
   tickCounter = 0;
   simulationLoop();
@@ -326,7 +153,9 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
   switch (msg.type) {
     case 'INIT': {
       stopLoop();
-      world = new World({
+      selectedEntityId = null;
+
+      const candidateWorld = new World({
         seed: msg.seed,
         config: {
           ...DEFAULT_SIMULATION_CONFIG,
@@ -334,46 +163,75 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
           gardenHeight: msg.height,
         },
       });
-      soilPool.init(world.soil.cols, world.soil.rows);
 
-      let hydrated = false;
-      if (msg.initialStateJson) {
+      let mode: BootstrapContinuationMode = 'primordial';
+      let success = true;
+      let failureCode: BootstrapStatusMessage['failureCode'] = undefined;
+      let errorDetails: string | undefined = undefined;
+
+      if (msg.candidate?.checkpoint) {
         try {
-          const parsed = JSON.parse(msg.initialStateJson);
-          const stateData =
-            parsed && typeof parsed === 'object' && 'data' in parsed
-              ? parsed.data
-              : parsed;
-
-          // 1. Prefer bit-exact binary checkpoint if present (integrity-checked SHA-256 validation)
-          if (
-            stateData &&
-            typeof stateData === 'object' &&
-            'checkpoint' in stateData &&
-            stateData.checkpoint
-          ) {
-            hydrated = await world.hydrateEngineCheckpoint(stateData.checkpoint);
+          const hydrated = await candidateWorld.hydrateEngineCheckpoint(msg.candidate.checkpoint);
+          if (hydrated) {
+            mode = 'exact';
+            world = candidateWorld;
+          } else {
+            failureCode = 'CHECKSUM_MISMATCH';
+            errorDetails = 'Checkpoint checksum verification or binary decoding failed';
           }
-
-          // 2. Fall back to high-level canonical state snapshot
-          if (!hydrated) {
-            const canonicalState =
-              stateData && typeof stateData === 'object' && 'canonicalState' in stateData
-                ? stateData.canonicalState
-                : stateData;
-            hydrated = world.hydrateCanonicalState(canonicalState);
+        } catch (err: unknown) {
+          failureCode = 'DECODE_ERROR';
+          errorDetails = err instanceof Error ? err.message : String(err);
+        }
+      } else if (msg.candidate?.canonicalState) {
+        try {
+          const hydrated = candidateWorld.hydrateCanonicalState(msg.candidate.canonicalState);
+          if (hydrated) {
+            mode = 'legacy';
+            world = candidateWorld;
+          } else {
+            failureCode = 'HYDRATION_FAILED';
+            errorDetails = 'Canonical state hydration failed';
           }
-        } catch (e) {
-          console.warn(
-            '[SimulationWorker] Failed to hydrate initialStateJson, falling back to primordial seed:',
-            e,
-          );
+        } catch (err: unknown) {
+          failureCode = 'DECODE_ERROR';
+          errorDetails = err instanceof Error ? err.message : String(err);
         }
       }
 
-      if (!hydrated) {
+      // If hydration failed or primordial requested, fall back cleanly
+      if (mode === 'primordial' || failureCode !== undefined) {
+        if (failureCode !== undefined) {
+          world = new World({
+            seed: msg.seed,
+            config: {
+              ...DEFAULT_SIMULATION_CONFIG,
+              gardenWidth: msg.width,
+              gardenHeight: msg.height,
+            },
+          });
+          mode = 'primordial';
+          success = false;
+        } else {
+          world = candidateWorld;
+        }
         world.seedPrimordialEcosystem();
       }
+
+      const activeWorld = world!;
+      soilPool.init(activeWorld.soil.cols, activeWorld.soil.rows);
+
+      const statusMsg: BootstrapStatusMessage = {
+        type: 'BOOTSTRAP_STATUS',
+        requestId: msg.requestId,
+        mode,
+        success,
+        tick: activeWorld.tick,
+        failureCode,
+        errorDetails,
+      };
+      self.postMessage(statusMsg);
+
       startLoop();
       break;
     }
@@ -400,38 +258,60 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
       break;
     }
 
+    case 'PICK_ENTITY_AT_WORLD_POSITION': {
+      const entityId = world
+        ? world.pickEntityAt({ x: msg.x, y: msg.y }, msg.maxRadius ?? 32)
+        : null;
+      self.postMessage({
+        type: 'PICK_RESULT',
+        requestId: msg.requestId,
+        entityId,
+      });
+      break;
+    }
+
     case 'SELECT_ENTITY': {
-      selectedEntityIdHash = msg.idHash;
+      selectedEntityId = msg.entityId;
       break;
     }
 
     case 'CURATOR_ACTION': {
       if (!world) break;
-      const { action, position, amount } = msg;
-      if (action === 'WATER_SOIL' || action === 'DROP_NUTRIENT') {
-        applyCuratorBrush(action, position, amount ?? 0.4);
-      } else if (action === 'SPAWN_PLANT') {
-        spawnCreature(EntityTypeCode.PLANT, position, world);
-      } else if (action === 'SPAWN_HERBIVORE') {
-        spawnCreature(EntityTypeCode.HERBIVORE, position, world);
-      } else if (action === 'SPAWN_CARNIVORE') {
-        spawnCreature(EntityTypeCode.CARNIVORE, position, world);
-      } else if (action === 'SPAWN_FUNGUS') {
-        spawnCreature(EntityTypeCode.FUNGUS, position, world);
+      const { action, position, amount, entityId } = msg;
+      if (action === 'WATER_SOIL' && position) {
+        world.waterSoil(position, amount ?? 0.4);
+      } else if (action === 'DROP_NUTRIENT' && position) {
+        world.fertilizeSoil(position, amount ?? 0.4);
+      } else if (action === 'SPAWN_PLANT' && position) {
+        world.spawnOrganism(EntityTypeCode.PLANT, position);
+      } else if (action === 'SPAWN_HERBIVORE' && position) {
+        world.spawnOrganism(EntityTypeCode.HERBIVORE, position);
+      } else if (action === 'SPAWN_CARNIVORE' && position) {
+        world.spawnOrganism(EntityTypeCode.CARNIVORE, position);
+      } else if (action === 'SPAWN_FUNGUS' && position) {
+        world.spawnOrganism(EntityTypeCode.FUNGUS, position);
+      } else if (action === 'CULL_ENTITY' && entityId !== undefined) {
+        world.terminateOrganism(entityId);
+        if (selectedEntityId === entityId) {
+          selectedEntityId = null;
+        }
       }
       break;
     }
 
     case 'REQUEST_SNAPSHOT': {
       if (!world) break;
-      const canonicalState = world.exportCanonicalState();
       const checkpoint = await world.exportEngineCheckpoint();
+      const canonicalState = world.exportCanonicalState();
       self.postMessage({
         type: 'SNAPSHOT_PAYLOAD',
         stateJson: JSON.stringify({
           canonicalState,
           checkpoint,
         }),
+        requestId: msg.requestId,
+        checkpoint,
+        canonicalState,
       });
       break;
     }
@@ -442,9 +322,10 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
       self.postMessage({
         type: 'DIAGNOSTICS_PAYLOAD',
         diagnosticsJson: JSON.stringify(diagnostics),
+        requestId: msg.requestId,
+        diagnostics,
       });
       break;
     }
   }
 };
-

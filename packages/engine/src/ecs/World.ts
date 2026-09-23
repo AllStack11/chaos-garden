@@ -18,6 +18,8 @@ import {
   type EncodedEngineCheckpoint,
   type TransferableRenderFrame,
   type Entity,
+  type Vector2D,
+  type SelectedEntityVitals,
   getEntityTypeCode,
   getEntityTypeFromCode,
   DEFAULT_ATMOSPHERIC_STATE,
@@ -373,6 +375,255 @@ export class World implements EntityIdAllocator {
       allTimeBirths: 0,
       allTimeDeaths: 0,
     };
+  }
+
+  /**
+   * Public curator API: Spawns a new organism with a monotonic durable ID and origin parentage.
+   * Returns the durable entityId, or -1 if the pool is full.
+   */
+  spawnOrganism(type: EntityTypeCode, position: Vector2D): number {
+    const idx = this.pool.allocate();
+    if (idx === -1) return -1;
+
+    const prng = this.prng;
+    const angle = prng() * Math.PI * 2;
+    const entityId = this.allocateEntityId();
+    const idHash = (entityId & 0x00ffffff) || 1;
+
+    let baseSize = 8;
+    let pigment = 120;
+    let speed = 0;
+    let force = 0;
+    let threshold = 60;
+
+    switch (type) {
+      case EntityTypeCode.PLANT:
+        baseSize = 6;
+        pigment = 120;
+        speed = 0;
+        force = 0;
+        threshold = this.config.plantReproductionThreshold;
+        break;
+      case EntityTypeCode.HERBIVORE:
+        baseSize = 8;
+        pigment = 200;
+        speed = 22;
+        force = 4;
+        threshold = this.config.herbivoreReproductionThreshold;
+        break;
+      case EntityTypeCode.CARNIVORE:
+        baseSize = 12;
+        pigment = 0;
+        speed = 30;
+        force = 6;
+        threshold = this.config.carnivoreReproductionThreshold;
+        break;
+      case EntityTypeCode.FUNGUS:
+        baseSize = 5;
+        pigment = 280;
+        speed = 0;
+        force = 0;
+        threshold = this.config.fungusReproductionThreshold;
+        break;
+    }
+
+    this.storage.initEntity(idx, {
+      idHash,
+      entityId,
+      parentEntityId: 0,
+      typeCode: type,
+      x: position.x,
+      y: position.y,
+      vx: Math.cos(angle) * (speed * 0.5),
+      vy: Math.sin(angle) * (speed * 0.5),
+      rotation: angle,
+      size: baseSize + (prng() * 2 - 1),
+      pigment,
+      energy: 80,
+      health: 100,
+      generation: 1,
+      parentIndex: -1,
+      bornAtTick: this._tick,
+      lifespan: 1500 + Math.floor(prng() * 500),
+      metabolismRate: this.config.baseEnergyCostPerTick,
+      reproductionThreshold: threshold,
+      mutationRate: this.config.mutationMagnitude,
+      photosynthesisRate: type === EntityTypeCode.PLANT ? 1.2 : 0,
+      seedDispersionRadius: type === EntityTypeCode.PLANT ? 50 : 0,
+      moistureAffinity: 0.5,
+      maxSpeed: speed,
+      maxForce: force,
+      perceptionRadius: type === EntityTypeCode.PLANT ? 0 : 60,
+      fleeRadius: type === EntityTypeCode.HERBIVORE ? 90 : 0,
+      flockingWeight: type === EntityTypeCode.HERBIVORE ? 0.8 : 0.4,
+      packWeight: type === EntityTypeCode.CARNIVORE ? 1.2 : 0,
+      decompositionRate: type === EntityTypeCode.FUNGUS ? 1.0 : 0,
+    });
+
+    return entityId;
+  }
+
+  /**
+   * Public curator API: Terminates an active organism by its durable entity ID.
+   * Returns true if the entity was found and freed, false otherwise.
+   */
+  terminateOrganism(entityId: number): boolean {
+    const activeCount = this.pool.denseCount;
+    const dense = this.pool.denseEntities;
+    const ids = this.storage.entityIds;
+
+    for (let i = 0; i < activeCount; i++) {
+      const idx = dense[i];
+      if (ids[idx] === entityId) {
+        this.storage.healths[idx] = 0;
+        this.storage.energies[idx] = 0;
+        this.pool.free(idx);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Public curator API: Deposits soil moisture around a coordinate with linear falloff.
+   */
+  waterSoil(center: Vector2D, amount: number = 0.4, radius: number = 32): void {
+    const soil = this.soil;
+    const step = soil.cellSize;
+    const halfSteps = Math.ceil(radius / step);
+
+    for (let dy = -halfSteps; dy <= halfSteps; dy++) {
+      for (let dx = -halfSteps; dx <= halfSteps; dx++) {
+        const px = center.x + dx * step;
+        const py = center.y + dy * step;
+        const dist = Math.hypot(px - center.x, py - center.y);
+        if (dist <= radius) {
+          const falloff = 1 - dist / radius;
+          soil.addMoisture(px, py, amount * falloff);
+        }
+      }
+    }
+  }
+
+  /**
+   * Public curator API: Deposits soil nitrates around a coordinate with linear falloff.
+   */
+  fertilizeSoil(center: Vector2D, amount: number = 0.4, radius: number = 32): void {
+    const soil = this.soil;
+    const step = soil.cellSize;
+    const halfSteps = Math.ceil(radius / step);
+
+    for (let dy = -halfSteps; dy <= halfSteps; dy++) {
+      for (let dx = -halfSteps; dx <= halfSteps; dx++) {
+        const px = center.x + dx * step;
+        const py = center.y + dy * step;
+        const dist = Math.hypot(px - center.x, py - center.y);
+        if (dist <= radius) {
+          const falloff = 1 - dist / radius;
+          soil.depositNitrates(px, py, amount * falloff);
+        }
+      }
+    }
+  }
+
+  /**
+   * Deterministically finds the nearest entity within maxRadius using toroidal distance.
+   * Returns the stable entityId or null if no entity is in range.
+   */
+  pickEntityAt(position: Vector2D, maxRadius: number = 32): number | null {
+    const activeCount = this.pool.denseCount;
+    const dense = this.pool.denseEntities;
+    const posX = this.storage.positionsX;
+    const posY = this.storage.positionsY;
+    const entityIds = this.storage.entityIds;
+    const w = this.config.gardenWidth;
+    const h = this.config.gardenHeight;
+
+    let nearestEntityId: number | null = null;
+    let minDistanceSq = maxRadius * maxRadius;
+
+    for (let i = 0; i < activeCount; i++) {
+      const idx = dense[i];
+      let dx = Math.abs(posX[idx] - position.x);
+      let dy = Math.abs(posY[idx] - position.y);
+      if (dx > w * 0.5) dx = w - dx;
+      if (dy > h * 0.5) dy = h - dy;
+
+      const dSq = dx * dx + dy * dy;
+      if (dSq <= minDistanceSq) {
+        if (dSq < minDistanceSq || (nearestEntityId !== null && entityIds[idx] < nearestEntityId)) {
+          minDistanceSq = dSq;
+          nearestEntityId = entityIds[idx];
+        }
+      }
+    }
+
+    return nearestEntityId;
+  }
+
+  /**
+   * Retrieves the detailed vitals of an active organism by its durable entityId.
+   * Returns null if no active entity matches the ID.
+   */
+  getEntityVitals(entityId: number): SelectedEntityVitals | null {
+    const activeCount = this.pool.denseCount;
+    const dense = this.pool.denseEntities;
+    const storage = this.storage;
+
+    for (let i = 0; i < activeCount; i++) {
+      const idx = dense[i];
+      if (storage.entityIds[idx] === entityId) {
+        const typeCode = storage.typeCodes[idx] as EntityTypeCode;
+        let speciesName = "Primordial";
+        let kingdomName = "Organism";
+
+        switch (typeCode) {
+          case EntityTypeCode.PLANT:
+            kingdomName = "Flora";
+            speciesName = "Photosynthetic Alga";
+            break;
+          case EntityTypeCode.HERBIVORE:
+            kingdomName = "Herbivore";
+            speciesName = "Amoebic Boid";
+            break;
+          case EntityTypeCode.CARNIVORE:
+            kingdomName = "Carnivore";
+            speciesName = "Predatory Dart";
+            break;
+          case EntityTypeCode.FUNGUS:
+            kingdomName = "Fungus";
+            speciesName = "Hyphal Mycelium";
+            break;
+        }
+
+        const vx = storage.velocitiesX[idx];
+        const vy = storage.velocitiesY[idx];
+
+        return {
+          entityId,
+          parentEntityId: storage.parentEntityIds[idx],
+          idHash: storage.idHashes[idx],
+          name: `${speciesName} #${entityId}`,
+          species: kingdomName,
+          age: storage.ages[idx],
+          maxLifespan: storage.maxLifespans[idx],
+          energy: Math.round(storage.energies[idx] * 10) / 10,
+          health: Math.round(storage.healths[idx] * 10) / 10,
+          generation: storage.generations[idx],
+          type: typeCode,
+          pigment: storage.pigments[idx],
+          speed: Math.round(Math.hypot(vx, vy) * 10) / 10,
+          maxSpeed: storage.maxSpeeds[idx],
+          perceptionRadius: storage.perceptionRadii[idx],
+          reproductionThreshold: storage.reproductionThresholds[idx],
+          metabolismRate: storage.metabolismRates[idx],
+          x: Math.round(storage.positionsX[idx]),
+          y: Math.round(storage.positionsY[idx]),
+        };
+      }
+    }
+
+    return null;
   }
 
   /**

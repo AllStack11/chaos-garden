@@ -5,7 +5,7 @@
  * Fully decoupled from the 60 FPS render loop; updates only via 4-10 Hz TelemetryPulse.
  */
 
-import type { SelectedEntityVitals, TelemetryPulse } from '../worker/types.js';
+import type { SelectedEntityVitals, TelemetryPulse, BootstrapContinuationMode } from '../worker/types.js';
 
 export class GardenState {
   tick = $state(0);
@@ -13,6 +13,7 @@ export class GardenState {
   targetTps = $state(60);
   speedMultiplier = $state(1.0); // 0 = paused, 0.5, 1, 2, 5, 10
   isPaused = $derived(this.speedMultiplier === 0);
+  bootstrapMode = $state<BootstrapContinuationMode | null>(null);
 
   populations = $state({
     plants: 0,
@@ -73,4 +74,3 @@ export class GardenState {
 }
 
 export const gardenState = new GardenState();
-

@@ -133,5 +133,53 @@ describe('ProceduralSoundscape Unit Tests', () => {
     await soundscape.resume();
     expect(soundscape.state).toBe('running');
   });
+
+  it('triggers parametric micro-chimes and curator sound effects', async () => {
+    const soundscape = new ProceduralSoundscape();
+    await soundscape.unlock();
+
+    expect(() => {
+      soundscape.sfx.playBirth();
+      soundscape.sfx.playDeath();
+      soundscape.sfx.playSpeciation();
+      soundscape.sfx.playWaterDrop();
+      soundscape.sfx.playNutrientSparkle();
+      soundscape.sfx.playClick();
+    }).not.toThrow();
+  });
+
+  it('adapts trophic harmonizer chords across ecological kingdom balances', async () => {
+    const soundscape = new ProceduralSoundscape();
+    await soundscape.unlock();
+
+    expect(() => {
+      // Flora dominant (>0.6)
+      soundscape.harmonizer.updateHarmony(0.75, 0.15, 0.1);
+      // Carnivore dominant (>0.3)
+      soundscape.harmonizer.updateHarmony(0.2, 0.35, 0.45);
+      // Balanced ecosystem
+      soundscape.harmonizer.updateHarmony(0.4, 0.4, 0.2);
+    }).not.toThrow();
+  });
+
+  it('modulates weather noise filters and diurnal ambient drone sunlight', async () => {
+    const soundscape = new ProceduralSoundscape();
+    await soundscape.unlock();
+
+    expect(() => {
+      soundscape.weather.setWeather(0.7, 0.4);
+      soundscape.drone.setSunlight(0.2);
+      soundscape.drone.setSunlight(0.9);
+    }).not.toThrow();
+  });
+
+  it('destroys all audio nodes cleanly upon teardown', async () => {
+    const soundscape = new ProceduralSoundscape();
+    await soundscape.unlock();
+
+    expect(() => {
+      soundscape.destroy();
+    }).not.toThrow();
+  });
 });
 

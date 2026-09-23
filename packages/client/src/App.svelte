@@ -61,22 +61,28 @@
     }
   }
 
-  function handleFeedEntity(idHash: number): void {
+  function handleFeedEntity(entityId: number): void {
     if (gardenState.selectedEntity && bridge) {
       bridge.dispatchCuratorAction('DROP_NUTRIENT', {
-        x: gardenState.selectedEntity.x,
-        y: gardenState.selectedEntity.y,
-      }, 0.5);
+        position: {
+          x: gardenState.selectedEntity.x,
+          y: gardenState.selectedEntity.y,
+        },
+        amount: 0.5,
+      });
       audio?.sfx.playNutrientSparkle();
     }
   }
 
-  function handleCullEntity(idHash: number): void {
+  function handleCullEntity(entityId: number): void {
+    bridge?.dispatchCuratorAction('CULL_ENTITY', { entityId });
+    bridge?.selectEntity(null);
     audio?.sfx.playDeath();
     gardenState.selectedEntity = null;
   }
 
   function handleCloseInspector(): void {
+    bridge?.selectEntity(null);
     gardenState.selectedEntity = null;
     curatorState.isFollowCamActive = false;
     viewport?.camera.disengageFollow();
@@ -129,7 +135,8 @@
 
     // Offline-first bootloader
     const bootResult = await localPersistence.bootload();
-    bridge.init(42, 1600, 1200, bootResult.data ?? undefined);
+    const status = await bridge.init(42, 1600, 1200, bootResult.candidate);
+    gardenState.bootstrapMode = status.mode;
 
     // 30-second autosave
     localPersistence.startAutosave(bridge, 30000);
@@ -191,5 +198,5 @@
   <ChronicleDrawer />
 
   <!-- 1-Click AI Diagnostics Modal -->
-  <LlmDiagnosticsModal />
+  <LlmDiagnosticsModal {bridge} />
 </main>
