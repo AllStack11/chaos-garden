@@ -159,17 +159,17 @@ Create a framework-agnostic, zero-dependency ECS simulation engine capable of ru
 
 ---
 
-### Phase 3: Client Application (`packages/client`) — DESIGN COMPLETE, READY FOR IMPLEMENTATION
+### Phase 3: Client Application (`packages/client`) — COMPLETED IN PR #4
 
 👉 **Detailed Specification**: [`docs/phase_3_client_design.md`](phase_3_client_design.md)
 
-Replace legacy Astro frontend with a Vite + Svelte 5 + PixiJS v8 single-page application.
+PR #4 delivers the Vite + Svelte 5 + PixiJS v8 browser terrarium on the remediated engine and shared contracts. The client owns presentation and input only; the Web Worker retains simulation, checkpoint, and diagnostics ownership.
 
 - **PixiJS v8 Viewport & Renderers** ([`packages/client/src/renderer/`]):
   - `GardenViewport.ts`: DPR-aware setup, smooth pan/zoom camera controls.
-  - `OrganismGraphics.ts`: Batched bioluminescent rendering for all 4 kingdoms with membrane pulsations (< 5 draw calls).
+  - `OrganismLayer.ts`: Batched bioluminescent rendering for all 4 kingdoms.
   - `SoilLayer.ts`: Single GPU dynamic texture with bilinear fragment shader (1 draw call).
-  - `PostProcessVeil.ts`: Fullscreen additive bloom and weather lighting tints.
+  - `AtmosphericVeil.ts`: Fullscreen additive bloom and weather lighting tints.
 - **Generative Soundscape** ([`packages/client/src/audio/`]):
   - 100% synthesized Web Audio API procedural soundscape reacting to daylight, weather, and biodiversity with zero audio assets.
 - **Power & Offline Management** ([`packages/client/src/power/`, `packages/client/src/storage/`]):
@@ -179,9 +179,9 @@ Replace legacy Astro frontend with a Vite + Svelte 5 + PixiJS v8 single-page app
   - `App.svelte`: Root shell wiring Web Worker bridge, PixiJS canvas, and Svelte HUD.
   - `CuratorToolbar.svelte`: Play/Pause, speed scrubber (1x–10x), soft curator tools (nutrient drop, water soil), follow-cam.
   - `EntityInspector.svelte`: Real-time creature vitals, genome readouts, lineage tree.
-  - `StatsDashboard.svelte`: Historical timeseries, trophic biomass pyramids, biodiversity indices.
-  - `JournalDrawer.svelte`: Chronicle of evolutionary milestones.
-  - `LlmInspectorModal.svelte`: 1-click Flight Recorder diagnostic dump generator for LLMs.
+  - `StatsHUD.svelte`: Throttled population and performance counters.
+  - `ChronicleDrawer.svelte`: Chronicle of evolutionary milestones.
+  - `LlmDiagnosticsModal.svelte`: 1-click Flight Recorder diagnostic dump generator for LLMs.
 
 ---
 

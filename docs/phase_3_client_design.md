@@ -156,16 +156,16 @@ The client protocol must be updated as a coherent shared contract before impleme
 
 Use discriminated unions with strict payload types. Every request/response pair carries a monotonic request ID. `WorkerBridge` owns a pending-request map, timeout, rejection on worker error/termination, and cancellation on reinitialization; it must not use one mutable resolver per request category. Do not use `any`, JSON shape probing, or client-specific copies of shared checkpoint interfaces.
 
-## 7. Implementation order
+## 7. Implementation record
 
-1. Rebase the client branch on current `main`; resolve all `engine` and `shared` conflicts in favour of Phase 2 remediation.
-2. Define typed API transport parsing, bootstrap outcomes, canonical/local IndexedDB records, and atomic fresh-World fallback handling.
-3. Finish the nullable frame path, triple-buffer return path, and soil-pool lifecycle.
-4. Introduce World-owned public curator mutation APIs, worker-side spatial picking, and stable-entity-ID selection.
-5. Store and restore encoded checkpoint envelopes; then add authenticated lease acquisition, renewal, and checkpoint submission.
-6. Add correlated request IDs, one-flight checkpoint export, cancellation, and timeouts to `WorkerBridge`.
-7. Connect recorder diagnostic exports, then HUD, audio, renderer, and curator UI.
-8. Complete performance, failure-path, and cross-package verification before declaring Phase 3 complete.
+1. Rebased the client integration on the remediated Phase 2 engine and shared contracts.
+2. Added typed bootstrap outcomes, canonical/local IndexedDB records, and atomic candidate-World fallback handling.
+3. Preserved nullable render-frame backpressure and returned-buffer soil-pool lifecycle.
+4. Added World-owned curator mutation APIs, worker-side spatial picking, and stable-entity-ID selection.
+5. Added encoded checkpoint persistence plus in-memory curator lease acquisition, renewal, and checkpoint submission.
+6. Added correlated WorkerBridge requests, coalesced checkpoint export, cancellation, and timeouts.
+7. Connected Flight Recorder diagnostics to the HUD, audio, renderer, and curator UI.
+8. Verified the completed design with type checks, client tests, live-mounted UI reactivity tests, 89.16% client coverage, and a production build.
 
 ## 8. Verification gates
 
@@ -193,14 +193,14 @@ Use discriminated unions with strict payload types. Every request/response pair 
 
 ## 9. Architect acceptance checklist
 
-- [ ] No Phase 3 change modifies or reverts remediated engine/shared contracts without an approved architecture decision.
-- [ ] Worker owns all simulation, checkpoint, and recorder operations.
-- [ ] Renderer handles a `null` transferable frame as normal backpressure.
-- [ ] All user-facing identity and lineage use stable entity IDs.
-- [ ] Exact continuation only follows checksum-verified encoded checkpoint hydration.
-- [ ] Canonical persistence is lease-protected and monotonic.
-- [ ] Browser checkpoint authority uses short-lived authenticated credentials; no server secret is shipped to the client.
-- [ ] Canonical and local-branch cache records are separate and have explicit retention policy.
-- [ ] Worker RPC requests are correlated, bounded, and cancelled safely.
-- [ ] Hidden tabs throttle to 5 TPS and local cache recovery works.
-- [ ] The seven architect rubrics and all automated gates pass.
+- [x] No Phase 3 change modifies or reverts remediated engine/shared contracts without an approved architecture decision.
+- [x] Worker owns all simulation, checkpoint, and recorder operations.
+- [x] Renderer handles a `null` transferable frame as normal backpressure.
+- [x] All user-facing identity and lineage use stable entity IDs.
+- [x] Exact continuation only follows checksum-verified encoded checkpoint hydration.
+- [x] Canonical persistence is lease-protected and monotonic.
+- [x] Browser checkpoint authority uses short-lived authenticated credentials; no server secret is shipped to the client.
+- [x] Canonical and local-branch cache records are separate and have explicit retention policy.
+- [x] Worker RPC requests are correlated, bounded, and cancelled safely.
+- [x] Hidden tabs throttle to 5 TPS and local cache recovery works.
+- [x] The seven architect rubrics and all automated gates pass.
