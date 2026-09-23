@@ -9,6 +9,9 @@ import type { WorkerBridge } from '../worker/WorkerBridge.js';
 import type { GardenViewport } from '../renderer/GardenViewport.js';
 import type { ProceduralSoundscape } from '../audio/ProceduralSoundscape.js';
 import { curatorSession } from '../storage/CuratorSession.js';
+import { NORMAL_OBSERVER_TPS } from '@chaos-garden/shared';
+
+const BACKGROUND_OBSERVER_TPS = NORMAL_OBSERVER_TPS / 10;
 
 export interface VisibilityManagerOptions {
   bridge: WorkerBridge;
@@ -33,8 +36,8 @@ export class VisibilityManager {
     this.bridge = options.bridge;
     this.viewport = options.viewport ?? null;
     this.audio = options.audio;
-    this.backgroundTps = options.backgroundTps ?? 5;
-    this.foregroundTps = options.foregroundTps ?? 60;
+    this.backgroundTps = options.backgroundTps ?? BACKGROUND_OBSERVER_TPS;
+    this.foregroundTps = options.foregroundTps ?? NORMAL_OBSERVER_TPS;
 
     this.setupListeners();
   }
@@ -61,7 +64,7 @@ export class VisibilityManager {
     if (this.isBackground) return;
     this.isBackground = true;
 
-    // 1. Throttle Web Worker to 5 TPS
+    // 1. Reduce the observer clock while the tab is hidden.
     this.bridge.setThrottle(this.backgroundTps);
 
     // 2. Stop PixiJS rendering ticker (drops GPU draw calls to 0)
@@ -78,8 +81,7 @@ export class VisibilityManager {
     if (!this.isBackground) return;
     this.isBackground = false;
 
-    // 1. Restore Web Worker to 60 TPS
-    // 1. Restore Web Worker to target TPS
+    // 1. Restore the normal observer clock.
     this.bridge.setThrottle(this.foregroundTps);
 
     // 2. Restart PixiJS rendering ticker

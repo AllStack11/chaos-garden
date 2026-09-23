@@ -6,11 +6,12 @@
  */
 
 import type { SelectedEntityVitals, TelemetryPulse, BootstrapContinuationMode } from '../worker/types.js';
+import { NORMAL_OBSERVER_TPS } from '@chaos-garden/shared';
 
 export class GardenState {
   tick = $state(0);
-  tps = $state(60);
-  targetTps = $state(60);
+  tps = $state(NORMAL_OBSERVER_TPS);
+  targetTps = $state(NORMAL_OBSERVER_TPS);
   speedMultiplier = $state(1.0); // 0 = paused, 0.5, 1, 2, 5, 10
   isPaused = $derived(this.speedMultiplier === 0);
   bootstrapMode = $state<BootstrapContinuationMode | null>(null);

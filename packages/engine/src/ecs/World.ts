@@ -23,6 +23,7 @@ import {
   getEntityTypeCode,
   getEntityTypeFromCode,
   DEFAULT_ATMOSPHERIC_STATE,
+  SIMULATED_TICKS_PER_DAY,
 } from "@chaos-garden/shared";
 import { EntityPool } from "./EntityPool.js";
 import { ComponentStorage } from "./ComponentStorage.js";
@@ -771,7 +772,7 @@ export class World implements EntityIdAllocator {
       });
     }
 
-    const sunlight = 0.5 + 0.5 * Math.sin((this._tick / 1200) * Math.PI * 2);
+    const sunlight = 0.5 + 0.5 * Math.sin((this._tick / SIMULATED_TICKS_PER_DAY) * Math.PI * 2);
 
     const soilState = {
       cols: this.soil.cols,

@@ -15,6 +15,7 @@
   import { gardenState } from './state/gardenState.svelte.js';
   import { curatorState, type CuratorTool } from './state/curatorState.svelte.js';
   import type { GardenViewport } from './renderer/GardenViewport.js';
+  import { SIMULATED_TICKS_PER_DAY } from '@chaos-garden/shared';
 
   let bridge = $state<WorkerBridge | null>(null);
   let audio = $state<ProceduralSoundscape | null>(null);
@@ -124,7 +125,7 @@
         );
 
         // Modulate diurnal daylight cycle
-        const sunlight = 0.5 + 0.5 * Math.sin((pulse.tick / 1200) * Math.PI * 2);
+        const sunlight = 0.5 + 0.5 * Math.sin((pulse.tick / SIMULATED_TICKS_PER_DAY) * Math.PI * 2);
         viewport?.updateAtmosphere(sunlight, 0.0);
         audio?.drone.setSunlight(sunlight);
       },

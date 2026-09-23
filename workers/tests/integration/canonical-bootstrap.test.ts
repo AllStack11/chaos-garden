@@ -80,7 +80,7 @@ describe('canonical bootstrap', () => {
     }
   });
 
-  it('cleanses legacy checkpoints at tick 900 during cutover and commits new canonical snapshot from scheduled worker', async () => {
+  it('cleanses legacy checkpoints at tick 900 during cutover and commits a current-rate canonical snapshot', async () => {
     await db.prepare("CREATE TABLE IF NOT EXISTS system_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')))") .run();
     await db.prepare("INSERT OR REPLACE INTO system_metadata (key, value) VALUES ('schema_version', '1.9.0')").run();
 
@@ -129,18 +129,18 @@ describe('canonical bootstrap', () => {
     await worker.scheduled({ cron: '*/15 * * * *' }, { DB: db });
 
     const newAnchor = await getCanonicalAnchor(db);
-    expect(newAnchor?.canonicalTick).toBe(900);
+    expect(newAnchor?.canonicalTick).toBe(300);
     expect(newAnchor?.checkpointId).not.toBeNull();
 
     const response = await worker.fetch(new Request('https://garden.test/api/garden'), { DB: db });
     expect(response.status).toBe(200);
     const body = await response.json() as { data: { exactContinuation: boolean; checkpoint?: { tick: number } } };
     expect(body.data.exactContinuation).toBe(true);
-    expect(body.data.checkpoint?.tick).toBe(900);
+    expect(body.data.checkpoint?.tick).toBe(300);
 
     await migrateToCanonicalSchema(db);
     const preservedAnchor = await getCanonicalAnchor(db);
-    expect(preservedAnchor?.canonicalTick).toBe(900);
+    expect(preservedAnchor?.canonicalTick).toBe(300);
     expect(preservedAnchor?.checkpointId).toBe(newAnchor?.checkpointId);
     const preservedCheckpoints = await db.prepare('SELECT COUNT(*) as count FROM engine_checkpoints').first<{ count: number }>();
     expect(preservedCheckpoints?.count).toBe(1);

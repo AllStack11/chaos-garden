@@ -1,9 +1,10 @@
 <script lang="ts">
   import GlassPanel from '../shared/GlassPanel.svelte';
   import { gardenState } from '../../state/gardenState.svelte.js';
+  import { SIMULATED_TICKS_PER_DAY } from '@chaos-garden/shared';
 
-  let simulatedDays = $derived(Math.floor(gardenState.tick / 1200));
-  let simulatedHours = $derived(Math.floor((gardenState.tick % 1200) / 50));
+  let simulatedDays = $derived(Math.floor(gardenState.tick / SIMULATED_TICKS_PER_DAY));
+  let simulatedHours = $derived(Math.floor((gardenState.tick % SIMULATED_TICKS_PER_DAY) / 50));
 
   let plantPercent = $derived((gardenState.plantRatio * 100).toFixed(1));
   let herbivorePercent = $derived((gardenState.herbivoreRatio * 100).toFixed(1));

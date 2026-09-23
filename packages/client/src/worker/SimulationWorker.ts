@@ -10,6 +10,7 @@ import {
   World,
 } from '@chaos-garden/engine';
 import {
+  NORMAL_OBSERVER_TPS,
   DEFAULT_SIMULATION_CONFIG,
   EntityTypeCode,
 } from '@chaos-garden/shared';
@@ -25,7 +26,7 @@ let world: World | null = null;
 let timerId: ReturnType<typeof setTimeout> | null = null;
 let isRunning = false;
 
-let targetTps = 60;
+let targetTps = NORMAL_OBSERVER_TPS;
 let speedMultiplier = 1.0;
 let selectedEntityId: number | null = null;
 const soilPool = new SoilBufferPool();
@@ -41,15 +42,15 @@ function simulationLoop(): void {
   if (!isRunning || !world) return;
 
   const now = performance.now();
-  const dt = 1 / targetTps;
+  // Calendar pacing is independent from physics integration. Slowing the
+  // observer clock must not turn one engine step into several seconds of
+  // movement, metabolism, or diffusion.
+  const dt = 1 / DEFAULT_SIMULATION_CONFIG.targetTps;
 
   // Step simulation when unpaused
   if (speedMultiplier > 0) {
-    const substeps = Math.max(1, Math.round(speedMultiplier));
-    for (let s = 0; s < substeps; s++) {
-      world.step(dt);
-      tickCounter++;
-    }
+    world.step(dt);
+    tickCounter++;
   }
 
   // 1. Send transferable render frame (60 FPS) with backpressure skip
@@ -126,7 +127,8 @@ function simulationLoop(): void {
 
   // Schedule next tick with dynamic compensation
   const elapsed = performance.now() - now;
-  const interval = 1000 / targetTps;
+  const effectiveTps = targetTps * speedMultiplier;
+  const interval = effectiveTps > 0 ? 1000 / effectiveTps : 1000;
   const delay = Math.max(1, interval - elapsed);
   timerId = setTimeout(simulationLoop, delay);
 }
@@ -254,7 +256,7 @@ self.onmessage = async (event: MessageEvent<ClientWorkerInboundMessage>) => {
     }
 
     case 'SET_THROTTLE': {
-      targetTps = Math.max(1, msg.targetTps);
+      targetTps = Math.max(0.01, msg.targetTps);
       break;
     }
 

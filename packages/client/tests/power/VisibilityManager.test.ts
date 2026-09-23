@@ -25,7 +25,7 @@ describe('VisibilityManager Unit Tests', () => {
     };
   });
 
-  it('throttles to 5 TPS, stops ticker and suspends audio on tab background', () => {
+  it('slows the observer clock, stops ticker and suspends audio on tab background', () => {
     const manager = new VisibilityManager({
       bridge: mockBridge,
       viewport: mockViewport,
@@ -35,12 +35,12 @@ describe('VisibilityManager Unit Tests', () => {
     manager.onEnterBackground();
 
     expect(manager.isThrottled).toBe(true);
-    expect(mockBridge.setThrottle).toHaveBeenCalledWith(5);
+    expect(mockBridge.setThrottle).toHaveBeenCalledWith(1 / 30);
     expect(mockViewport.stopTicker).toHaveBeenCalled();
     expect(mockAudio.suspend).toHaveBeenCalled();
   });
 
-  it('restores to 60 TPS, resumes ticker and audio on tab foreground', () => {
+  it('restores the normal observer clock, ticker and audio on tab foreground', () => {
     const manager = new VisibilityManager({
       bridge: mockBridge,
       viewport: mockViewport,
@@ -51,7 +51,7 @@ describe('VisibilityManager Unit Tests', () => {
     manager.onEnterForeground();
 
     expect(manager.isThrottled).toBe(false);
-    expect(mockBridge.setThrottle).toHaveBeenCalledWith(60);
+    expect(mockBridge.setThrottle).toHaveBeenCalledWith(1 / 3);
     expect(mockViewport.startTicker).toHaveBeenCalled();
     expect(mockAudio.resume).toHaveBeenCalled();
   });

@@ -1,5 +1,6 @@
 // `npm run deploy` builds this workspace dependency before Wrangler bundles.
 import { World } from '../../packages/engine/dist/index.js';
+import { CANONICAL_TICKS_PER_SCHEDULE } from '@chaos-garden/shared';
 import type { D1Database, ScheduledEvent } from './types/worker';
 import { CURRENT_SCHEMA_VERSION } from './db/migrations';
 import {
@@ -21,7 +22,6 @@ export interface Env {
 
 const WORKER_CURATOR_ID = 'worker-curator';
 const WORKER_LEASE_ID = 'worker-canonical-lease';
-const SIMULATION_TICKS_PER_SCHEDULE = 900;
 let databaseReadyPromise: Promise<void> | null = null;
 
 export function resetDatabaseReadyForTesting(): void {
@@ -111,7 +111,7 @@ export async function advanceCanonicalGarden(db: D1Database): Promise<void> {
     world = new World();
     world.seedPrimordialEcosystem();
   }
-  for (let tick = 0; tick < SIMULATION_TICKS_PER_SCHEDULE; tick += 1) world.step();
+  for (let tick = 0; tick < CANONICAL_TICKS_PER_SCHEDULE; tick += 1) world.step();
   const checkpoint = await world.exportEngineCheckpoint();
   const canonicalState = world.exportCanonicalState() as unknown as import('@chaos-garden/shared').CanonicalWorldState;
   canonicalState.checksum = checkpoint.checksum;
