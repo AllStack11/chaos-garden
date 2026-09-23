@@ -11,7 +11,7 @@ import { base64ToUint8Array, computeChronicleEventChecksum, uint8ArrayToBase64, 
 import type { D1Database } from "../types/worker";
 import { executeBatch, executeQuery, queryAll, queryFirst } from "./connection";
 
-/** 500 quarter-hour snapshots bound canonical storage to roughly two weeks. */
+/** 500 quarter-hour snapshots retain roughly 5.2 days of canonical history. */
 export const MAX_RETAINED_CANONICAL_SNAPSHOTS = 500;
 
 interface CheckpointRow {

@@ -54,25 +54,11 @@ chaos-garden/
 
 ## Cloudflare Deployment Notes
 
-- Deploy the Worker first so the current production API URL is known before deploying the frontend.
 - Production Worker deploy command: `npm run deploy:workers`
-- Frontend deploys must set `PUBLIC_API_URL` to the live Worker URL used by Pages at build time.
-- **Cross-Platform Deploy Commands**:
-  - **macOS / Linux / POSIX**:
-    ```bash
-    PUBLIC_API_URL="https://chaos-garden-api.saadmankabir95.workers.dev" npm run build -w @chaos-garden/client
-    npx wrangler pages deploy packages/client/dist --project-name chaos-garden-frontend
-    ```
-  - **Windows PowerShell**:
-    ```powershell
-    $env:PUBLIC_API_URL="https://chaos-garden-api.saadmankabir95.workers.dev"; npm run build -w @chaos-garden/client
-    npx wrangler pages deploy packages/client/dist --project-name chaos-garden-frontend
-    ```
+- No frontend is deployed while the new offline-capable observer is built separately. Its deployment process will be documented with that project.
 - Verify deploys after release:
   - Worker health: `GET https://<worker-url>/api/health`
-  - Frontend: confirm the deployed Pages URL returns HTTP `200`
 - Current production Worker URL: `https://chaos-garden-api.saadmankabir95.workers.dev`
-- Current Pages project name: `chaos-garden-frontend`
 
 ---
 

@@ -5,30 +5,26 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "workers",
-    "frontend"
+    "workers"
   ],
   "scripts": {
-    "dev": "concurrently -n \"🌿 WORKERS,🎨 FRONTEND\" -c \"cyan,magenta\" \"wrangler dev -e dev -w @chaos-garden/workers --config workers/wrangler.local.jsonc --persist-to workers/.wrangler/local-state\" \"npm run dev -w @chaos-garden/frontend\"",
+    "dev": "npm run backend",
     "backend": "wrangler dev -e dev -w @chaos-garden/workers --config workers/wrangler.local.jsonc --persist-to workers/.wrangler/local-state",
-    "frontend": "npm run dev -w @chaos-garden/frontend",
     "db:init:local": "npm run db:init:local -w @chaos-garden/workers",
     "db:init:remote": "npm run db:init:remote -w @chaos-garden/workers",
     "client:dev": "npm run dev -w @chaos-garden/client",
     "client:build": "npm run build -w @chaos-garden/client",
-    "test:all": "npm run test -w @chaos-garden/shared && npm run test -w @chaos-garden/engine && npm run test -w @chaos-garden/client && npm run test:ci -w @chaos-garden/workers && npm run test -w @chaos-garden/frontend",
-    "type-check:all": "npm run type-check -w @chaos-garden/shared && npm run type-check -w @chaos-garden/engine && npm run type-check -w @chaos-garden/client && npm run type-check -w @chaos-garden/workers && npm run type-check -w @chaos-garden/frontend",
+    "test:all": "npm run test -w @chaos-garden/shared && npm run test -w @chaos-garden/engine && npm run test -w @chaos-garden/client && npm run test:ci -w @chaos-garden/workers",
+    "type-check:all": "npm run type-check -w @chaos-garden/shared && npm run type-check -w @chaos-garden/engine && npm run type-check -w @chaos-garden/client && npm run type-check -w @chaos-garden/workers",
     "sim:run": "npm run sim:run -w @chaos-garden/engine --",
     "audit:sim": "npm run audit:sim -w @chaos-garden/engine",
     "deploy:workers": "npm run deploy -w @chaos-garden/workers",
     "deploy:workers:with-db-init": "npm run db:init:remote && npm run deploy:workers",
-    "deploy:frontend": "npm run deploy -w @chaos-garden/frontend",
-    "clean": "npm run clean -w @chaos-garden/workers && npm run clean -w @chaos-garden/frontend",
+    "clean": "npm run clean -w @chaos-garden/workers",
     "prepare": "npm run type-check:all"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
-    "concurrently": "^8.2.2",
     "wrangler": "^4.62.0"
   },
   "engines": {

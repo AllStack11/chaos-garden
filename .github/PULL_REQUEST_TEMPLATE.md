@@ -4,7 +4,7 @@
 - [ ] `@chaos-garden/shared`
 - [ ] `@chaos-garden/engine`
 - [ ] `@chaos-garden/workers` (Server / D1)
-- [ ] `@chaos-garden/frontend` (Client / PixiJS / Svelte 5)
+- [ ] `@chaos-garden/client` (Client foundation / PixiJS / Svelte 5)
 - [ ] Repository / Tooling / Docs
 
 ---

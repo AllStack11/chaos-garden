@@ -1,190 +1,58 @@
 # Chaos Garden
 
-Chaos Garden is a persistent ecosystem simulator with an Astro frontend and a Cloudflare Workers backend. Plants, herbivores, carnivores, and fungi evolve on a 2D canvas while the simulation continues on a 15-minute cron, stores history in Cloudflare D1, and exposes live state plus analytics through a small HTTP API.
+Chaos Garden is a deterministic ecosystem curated exclusively by a scheduled Cloudflare Worker. No web frontend is currently shipped; a separately built, offline-capable read-only observer will consume the public API.
 
-## What the app includes
+## Runtime model
 
-- A full-screen canvas garden rendered in the browser with entity selection, ambient effects, and responsive overlays
-- A Worker-driven simulation tick that advances weather, aging, feeding, reproduction, death, decomposition, and persistence
-- Four entity families: plants, herbivores, carnivores, and fungi
-- Historical analytics with derived insights, event severity breakdowns, biodiversity trends, and food-web pressure views
-- A journal/event overlay for browsing recent simulation activity
-- Deterministic local seeding and a production seeding script tuned for a more sustainable remote baseline
+1. Every 15 minutes, the scheduled Worker hydrates the canonical engine checkpoint.
+2. It advances a fixed deterministic batch of simulation ticks.
+3. It atomically persists the next checkpoint, canonical world state, and anchor pointer in D1.
+4. `GET /api/garden` serves the anchored state; no browser mutation, curator lease, authentication, or checkpoint endpoint is exposed.
 
-## Stack
+The Worker uses an internal singleton lease and an anchor compare-and-swap fence to prevent overlapping cron executions from advancing the canonical garden twice.
 
-- `frontend/`: Astro 5 + TypeScript + Tailwind
-- `workers/`: Cloudflare Workers + TypeScript
-- `shared/`: shared TypeScript contracts
-- Database: Cloudflare D1 (SQLite)
+## Packages
 
-## Architecture
+- `packages/shared/` — contracts, PRNG, math, binary checkpoint protocol, and chronicle utilities.
+- `packages/engine/` — deterministic ECS simulation.
+- `packages/client/` — reusable browser simulation and persistence components; not part of the currently deployed product.
+- `workers/` — Cloudflare Worker API, scheduled canonical advancement, and D1 persistence.
 
-```text
-frontend/
-  src/pages/index.astro          app shell
-  src/components/                canvas + overlays
-  src/services/                  API client and garden service
+## D1 retention and storage
 
-workers/
-  src/index.ts                   HTTP API + cron entry
-  src/simulation/                tick loop, creatures, environment
-  src/db/                        queries, migrations, simulation lock
-  scripts/                       local and remote D1 initialization
+The database keeps the latest **500** canonical checkpoints. At the 15-minute cron cadence this represents about **5.2 days** of history.
 
-shared/
-  types.ts                       cross-layer contracts
-```
-
-### Runtime flow
-
-1. The Worker cron runs every 15 minutes.
-2. The tick updates weather and environment state.
-3. Living entities age and receive environmental effects.
-4. Species behaviors run in trophic order.
-5. Deaths become dead matter when enough energy remains.
-6. The new garden state, events, and cleanup are persisted to D1.
-7. The frontend polls the API on the same 15-minute cadence and refreshes health every minute.
-
-## Key simulation behavior
-
-- Garden size is `800 x 600`
-- Max living population is capped at `500`
-- Weather is stateful and can transition through `CLEAR`, `OVERCAST`, `RAIN`, `STORM`, `DROUGHT`, and `FOG`
-- Dead matter is tracked separately from living entities and expires after a TTL if fungi do not fully decompose it
-- Garden history is retained for `1000` ticks, which backs the analytics window
-- Wild recovery helpers can reintroduce missing trophic groups after extinction
+At the default 2,000-slot engine capacity, a checkpoint is approximately 342 KB and its persisted canonical-state JSON is approximately 661 KB. The 500-snapshot window therefore uses roughly **500 MB of payload storage**, plus SQLite/D1 index overhead. This is an accepted, bounded design budget within the 5 GB D1 storage allowance; monitor the actual D1 size after deployment.
 
 ## Local setup
 
-### Prerequisites
-
-- Node.js `>=18`
-- A local npm install at repo root
-
-### Install
+Prerequisites: Node.js 22.5+ and npm.
 
 ```bash
 npm install
-```
-
-### Configure the frontend API URL
-
-Create `frontend/.env` for local development:
-
-```bash
-PUBLIC_API_URL=http://localhost:8787
-```
-
-The frontend build expects `PUBLIC_API_URL` to be present.
-
-### Initialize the local D1 database
-
-```bash
 npm run db:init:local
-```
-
-This command:
-
-- Drops and recreates the local schema
-- Applies `workers/schema.sql`
-- Seeds a deterministic baseline population
-- Verifies required invariants after setup
-
-Useful variants:
-
-```bash
-npm run db:init:local -- --verify-only
-npm run db:init:local -- --schema-only
-npm run db:init:local -- --seed=42
-```
-
-### Run the app
-
-```bash
 npm run dev
 ```
 
-Local endpoints:
+Local Worker API: `http://localhost:8787`
 
-- Frontend: `http://localhost:4321`
-- Worker API: `http://localhost:8787`
+`db:init:local` executes the canonical schema. The first scheduled invocation seeds and commits the primordial canonical checkpoint.
 
-## API surface
+## API
 
-The Worker currently exposes:
+- `GET /api/garden` — current anchored canonical state, exact-continuation checkpoint, and recent chronicle events.
+- `GET /api/health` — Worker/D1 health, canonical tick, schema version, and internal lease activity.
 
-- `GET /api/garden`
-  Returns the latest `gardenState`, living `entities`, `deadMatter`, and recent `events`.
-- `GET /api/garden/stats?windowTicks=120`
-  Returns current state, history, event breakdowns, derived analytics, insights, and entity vitals.
-- `GET /api/health`
-  Returns service health plus the latest completed tick and configured tick interval.
+All public endpoints are read-only.
 
-Notes:
-
-- `windowTicks` is validated and supports `10` to `500`
-- Non-health endpoints are rate-limited
-- CORS is controlled through Worker vars
-
-## Frontend behavior
-
-The main page is a custom-element-driven garden shell with:
-
-- Canvas rendering for the live ecosystem
-- A weather/status layer
-- Entity selection details
-- A fullscreen stats overlay with historical charts and deterministic insights
-- A journal overlay with event filtering and gallery/signals views
-- A countdown to the next expected tick based on worker health data
-
-## Database and seeding
-
-`workers/schema.sql` creates:
-
-- `garden_state`
-- `entities`
-- `simulation_events`
-- `simulation_control`
-- `dead_matter`
-- `system_metadata`
-
-Important scripts:
-
-- `workers/scripts/init-local-db.js`
-  Deterministic local reset and seed workflow
-- `workers/scripts/init-remote-db-prod-v3.js`
-  Remote production reset and habitat-zoned sustainable seed workflow
-
-`npm run db:init:remote` is destructive for the target remote D1 database.
-
-## Testing and verification
-
-Useful commands:
+## Verification
 
 ```bash
 npm run type-check:all
 npm run test:all
-npm run test -w @chaos-garden/workers
-npm run test:integration -w @chaos-garden/workers
-npm run test -w @chaos-garden/frontend
+npm run sim:run -- --seed=42 --ticks=500 --headless
 ```
-
-The repo includes:
-
-- Shared contract tests
-- Worker unit tests for creatures, environment, DB helpers, and tick orchestration
-- Worker integration tests for simulation sustainability and D1 behavior
-- Frontend service, audio, rendering, and stats tests
 
 ## Deployment
 
-For deployment steps, use [DEPLOYMENT.md](DEPLOYMENT.md).
-
-At a high level:
-
-1. Create the D1 database and wire its `database_id` into `workers/wrangler.jsonc`
-2. Run `npm run db:init:remote`
-3. Deploy the Worker with `npm run deploy:workers`
-4. Set `PUBLIC_API_URL` for the frontend deployment
-5. Deploy the frontend with `npm run deploy:frontend`
+See [DEPLOYMENT.md](DEPLOYMENT.md). The current deployment is Worker-only; frontend deployment will be added with the replacement observer.
